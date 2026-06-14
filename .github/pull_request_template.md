@@ -4,6 +4,31 @@ Describe the changes introduced by this PR and the reasoning behind them.
 ## Related Issues
 Closes # (issue number)
 
+## Change Type
+
+* [ ] Bug fix
+* [ ] Feature
+* [ ] Documentation
+* [ ] Safety / API boundary
+* [ ] Release / packaging
+* [ ] GitHub infrastructure
+
+## Risk Level
+
+* [ ] Read-only / docs only
+* [ ] Local tooling only
+* [ ] FL Studio readback affected
+* [ ] FL Studio write path affected
+* [ ] Release / package publishing affected
+
+## Evidence
+
+* CI: 
+* Local tests: 
+* Safety audit: 
+* API evidence / probe: 
+* Docs build: 
+
 ## Checklist
 - [ ] My code follows the project's engineering standards (English comments & commits).
 - [ ] All safety guidelines in `AGENTS.md` and `docs/ENGINEERING_STANDARDS.md` are satisfied.
