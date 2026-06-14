@@ -55,6 +55,8 @@ from .tools import project_organizer as project_organizer_tools
 from .tools import resources as resource_defs
 from .tools import routing as routing_tools
 from .tools import transport as transport_tools
+from .tools import workflow_context as workflow_context_tools
+from . import prompts as prompt_defs
 
 logger = logging.getLogger("fls_pilot")
 
@@ -234,6 +236,8 @@ def build_server() -> FastMCP:
     mix_doctor_tools.register(mcp)  # Mix Review: diagnose whole mix + gated adjustments
     patterns_playlist_tools.register(mcp)  # Phase 3: Patterns & Playlist pack
     knowledgebase_tools.register(mcp)  # KB Tools
+    workflow_context_tools.register(mcp)  # Workflow context: read-only fl_get_workflow_context
+    prompt_defs.register(mcp)  # MCP Prompts: guided workflow templates
     for name in sorted(_LEGACY_LOW_LEVEL_TOOLS):
         mcp.local_provider.remove_tool(name)
     return mcp
