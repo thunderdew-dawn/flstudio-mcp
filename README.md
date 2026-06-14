@@ -46,6 +46,68 @@ The highest-value entry points for day-to-day production work are:
 7. **Audio Analyzer:** Analyze external audio files for tempo/key and extract melodies to MIDI when optional audio extras are installed.
 8. **Project Preflight & Health Overview:** Combine mix review, routing review, organization checks, and cleanup suggestions into an export-readiness report.
 
+## MCP Prompts, Context Resources & Knowledgebase
+
+fls-pilot exposes three clean layers for AI agents:
+
+| Layer | How to use | Examples |
+|-------|-----------|---------|
+| **Prompts** | Start here — guides the agent step-by-step | `mix_review`, `routing_review`, `project_preflight` |
+| **Resources** | Pull for context before acting | `fl://agent-briefing`, `fls://capabilities/write-safety` |
+| **Tools** | Execute analysis or write actions | `fl_review_mix`, `kb_search`, `fl_apply_mix_adjustment` |
+
+> **Key safety rule**: Prompts do **not** execute write tools automatically.
+> A prompt is a guided template. Every write action still requires explicit
+> user confirmation before execution.
+
+### MCP Prompts (11 total)
+
+**Runtime / user-facing:**
+`mix_review` · `routing_review` · `project_organizer` · `project_preflight` ·
+`plugin_chain_planner` · `composition_scale_writer` · `audio_to_midi_or_reference_analysis`
+
+**Dev / agent tooling:**
+`api_probe` · `bug_triage` · `implementation_slice` · `release_prepare`
+
+All prompt content lives in `docs/agents/prompts/` — the single source of truth.
+
+### New Context Resources
+
+**Static doc resources** (compact Markdown excerpts):
+
+| URI | Content |
+|-----|---------|
+| `fls://docs/safety-contract` | Safety rules and boundaries |
+| `fls://docs/api-capability-audit` | FL API capability audit excerpt |
+| `fls://docs/default-safe-ux` | Write-safe UX protocol |
+| `fls://docs/runtime-usage` | Startup protocol and tool-choice matrix |
+| `fls://docs/knowledgebase-protocol` | When and how to record findings |
+| `fls://docs/tool-policy` | Tool hierarchy and forbidden patterns |
+
+**Capability resources** (always-available, no bridge required):
+
+| URI | Content |
+|-----|---------|
+| `fls://capabilities/supported` | Confirmed-supported workflows and tools |
+| `fls://capabilities/not-possible` | Hard FL API limits with workarounds |
+| `fls://capabilities/api-limits` | Numerical and structural API limits |
+| `fls://capabilities/write-safety` | Write protocol, approval gates, snapshot rules |
+
+### New Knowledgebase Tools
+
+| Tool | Purpose |
+|------|---------|
+| `kb_search_structured(query)` | Structured search results (path, title, snippet, confidence) |
+| `kb_get_many(paths)` | Fetch multiple KB files in one call |
+| `kb_get_workflow_pack(workflow)` | Curated KB excerpts for a workflow |
+| `kb_get_capability(intent)` | Quick capability check for a user intent |
+| `kb_explain_limit(intent)` | Hard-limit explanation with workaround |
+| `fl_get_workflow_context(workflow)` | Read-only workflow orientation (resources, tools, approval gates) |
+
+> All KB tools are backwards-compatible. `kb_search(query)` still returns a plain string.
+
+
+
 ## Requirements
 
 - **Windows 10/11** (tested on Windows 11) or **macOS 12+** (Intel & Apple Silicon)
