@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import ipaddress
 import json
 import os
@@ -22,9 +23,9 @@ from importlib import resources
 from pathlib import Path
 from typing import Any
 
-from . import doctor
-from .connection import DEFAULT_TCP_HOST, DEFAULT_TCP_PORT, TCPBridge
-from .status import collect_status as collect_status_report
+from . import doctor, kb_policy, protocol
+from . import project_templates as templates
+from .connection import DEFAULT_TCP_HOST, DEFAULT_TCP_PORT, TCPBridge, fetch_all_pages
 from .runtime_config import (
     DEFAULT_CONTROL_CENTER_HOST,
     DEFAULT_CONTROL_CENTER_PORT,
@@ -34,6 +35,7 @@ from .runtime_config import (
     find_available_tcp_port,
     tcp_port_status,
 )
+from .status import collect_status as collect_status_report
 
 STATIC_PACKAGE = "fls_pilot.control_center_static"
 MAX_LOG_LINES = 80
@@ -556,6 +558,727 @@ def setup_report(state: ControlCenterState) -> str:
     return "\n".join(lines) + "\n"
 
 
+ROUTING_POLICY_RULE_IDS = [
+    "preserve_existing_structure_first",
+    "channel_rack_workflow_requires_routing_inference",
+    "routing_ui_guidance_vs_mcp_write",
+    "send_effects_for_shared_space",
+]
+
+
+def _run_routing_audit(state: ControlCenterState) -> dict[str, Any]:
+    """Run the read-only Routing Audit workflow for the Control Center UI."""
+    with state.lock:
+        daemon_host, daemon_port = _selected_daemon_endpoint(state)
+
+    bridge = None
+    try:
+        bridge = TCPBridge(daemon_host, daemon_port)
+        wait = getattr(bridge, "wait_for_heartbeat", None)
+        if callable(wait):
+            wait(timeout=1.0)
+        alive = bool(getattr(bridge, "is_alive", lambda: False)())
+        if not alive:
+            return _routing_unavailable_report(
+                "No fresh FL Studio controller heartbeat. Open FL Studio and refresh "
+                "the connection."
+            )
+
+        channel_payload = fetch_all_pages(
+            bridge,
+            protocol.CMD_CHANNEL_ROUTING_SUMMARY,
+            "channels",
+        )
+        routing_payload = fetch_all_pages(
+            bridge,
+            protocol.CMD_MIXER_GET_ROUTING_ALL,
+            "routing",
+        )
+        channels = _payload_rows(channel_payload, "channels")
+        routing = _payload_rows(routing_payload, "routing")
+        template_context = templates.classify_topology(routing, routing, channels)
+        unused_probe = _probe_unused_mixer_tracks(
+            bridge,
+            tracks=routing,
+            channels=channels,
+            template_context=template_context,
+        )
+        return _build_routing_audit_report(
+            channels=channels,
+            routing=routing,
+            template_context=template_context,
+            unused_mixer_tracks=unused_probe["tracks"],
+            unused_mixer_track_truncated=unused_probe["truncated"],
+            unused_mixer_track_probe_failed=unused_probe["probe_failed"],
+        )
+    except Exception as exc:
+        return _routing_unavailable_report(f"{type(exc).__name__}: {exc}")
+    finally:
+        if bridge is not None:
+            with contextlib.suppress(Exception):
+                bridge.close()
+
+
+def _routing_unavailable_report(message: str) -> dict[str, Any]:
+    return {
+        "ok": False,
+        "state": "unavailable",
+        "workflow": "routing_audit",
+        "title": "Routing Audit",
+        "generated_at": _now_iso(),
+        "error": message,
+        "summary": {
+            "health_score": 0,
+            "health_label": "Unavailable",
+            "channels": 0,
+            "mixer_tracks": 0,
+            "routes": 0,
+            "direct_to_master": 0,
+            "unrouted_channels": 0,
+            "dead_end_tracks": 0,
+            "unused_mixer_tracks": 0,
+        },
+        "findings": [
+            {
+                "id": "routing_unavailable",
+                "severity": "warning",
+                "title": "Routing data unavailable",
+                "detail": message,
+                "count": 1,
+            }
+        ],
+        "graph": {"nodes": [], "links": [], "omitted_source_count": 0},
+        "details": {
+            "channels": [],
+            "tracks": [],
+            "routes": [],
+            "policy_notes": [
+                "Routing Audit is read-only and does not modify FL Studio project state."
+            ],
+            "kb_policy_refs": kb_policy.rule_refs(ROUTING_POLICY_RULE_IDS),
+        },
+        "safety": {"read_only": True, "project_changes": False},
+    }
+
+
+def _build_routing_audit_report(
+    *,
+    channels: list[dict[str, Any]],
+    routing: list[dict[str, Any]],
+    template_context: dict[str, Any] | None = None,
+    unused_mixer_tracks: list[dict[str, Any]] | None = None,
+    unused_mixer_track_truncated: bool = False,
+    unused_mixer_track_probe_failed: bool = False,
+) -> dict[str, Any]:
+    unrouted_automation_clips = 0
+    filtered_channels = []
+    for c in channels:
+        ctype = _channel_type_label(c).lower()
+        target = _as_int(c.get("target_mixer_track"))
+        if ("automation" in ctype or "autoclip" in ctype) and (target is None or target == 0):
+            unrouted_automation_clips += 1
+        else:
+            filtered_channels.append(c)
+    channels = filtered_channels
+
+    template_context = template_context or templates.classify_topology(routing, routing, channels)
+    track_by_index = {
+        idx: dict(row)
+        for row in routing
+        if (idx := _as_int(row.get("i", row.get("index")))) is not None
+    }
+    routes_by_src: dict[int, list[dict[str, Any]]] = {
+        idx: _normalise_routes(row.get("routes_to") or [])
+        for idx, row in track_by_index.items()
+    }
+    incoming_by_dst: dict[int, list[int]] = {}
+    route_rows: list[dict[str, Any]] = []
+    for src, routes in routes_by_src.items():
+        for route in routes:
+            dst = _as_int(route.get("dst"))
+            if dst is None:
+                continue
+            incoming_by_dst.setdefault(dst, []).append(src)
+            route_rows.append(
+                {
+                    "src": src,
+                    "src_name": _track_name(track_by_index, src),
+                    "dst": dst,
+                    "dst_name": route.get("dst_name") or _track_name(track_by_index, dst),
+                    "level": route.get("level"),
+                }
+            )
+
+    targeted_tracks: dict[int, list[dict[str, Any]]] = {}
+    unrouted_channels: list[dict[str, Any]] = []
+    direct_to_master: list[dict[str, Any]] = []
+    dead_end_tracks: dict[int, dict[str, Any]] = {}
+
+    for channel in channels:
+        ctype = _channel_type_label(channel)
+        target = _as_int(channel.get("target_mixer_track"))
+        if target is None or target == 0:
+            if ctype != "unknown":
+                unrouted_channels.append(_channel_summary(channel, route_state="unrouted"))
+            continue
+
+        targeted_tracks.setdefault(target, []).append(channel)
+        target_routes = routes_by_src.get(target, [])
+        if not target_routes:
+            dead_end_tracks[target] = {
+                "track": target,
+                "name": _track_name(track_by_index, target),
+                "channels": len(targeted_tracks.get(target, [])),
+            }
+            continue
+
+        routes_to_master = any(_as_int(route.get("dst")) == 0 for route in target_routes)
+        if (
+            routes_to_master
+            and ctype == "genplug"
+            and not templates.is_template_bus(template_context, target)
+        ):
+            direct_to_master.append(
+                {
+                    **_channel_summary(channel, route_state="direct_to_master"),
+                    "mixer_track": target,
+                    "mixer_name": _track_name(track_by_index, target),
+                }
+            )
+
+    bus_indices = {
+        idx
+        for idx, row in track_by_index.items()
+        if idx != 0
+        and (
+            idx in incoming_by_dst
+            or templates.is_template_bus(template_context, idx)
+            or _looks_like_bus_name(row.get("name"))
+        )
+    }
+    if unused_mixer_tracks is None:
+        unused_mixer_tracks = _candidate_unused_mixer_tracks(
+            tracks=routing,
+            channels=channels,
+            template_context=template_context,
+        )
+
+    graph = _build_routing_graph(
+        channels=channels,
+        track_by_index=track_by_index,
+        routes_by_src=routes_by_src,
+        bus_indices=bus_indices,
+    )
+    health_score = _routing_health_score(
+        direct_count=len(direct_to_master),
+        unrouted_count=len(unrouted_channels),
+        dead_end_count=len(dead_end_tracks),
+        unused_count=len(unused_mixer_tracks),
+    )
+
+    findings = _routing_findings(
+        direct_to_master=direct_to_master,
+        unrouted_channels=unrouted_channels,
+        dead_end_tracks=list(dead_end_tracks.values()),
+        unused_mixer_tracks=unused_mixer_tracks,
+        template_context=template_context,
+        unused_probe_failed=unused_mixer_track_probe_failed,
+    )
+
+    track_details = []
+    for idx, _row in sorted(track_by_index.items()):
+        track_details.append(
+            {
+                "track": idx,
+                "name": _track_name(track_by_index, idx),
+                "role": templates.role_for(template_context, idx) or (
+                    "bus" if idx in bus_indices else ("master" if idx == 0 else "insert")
+                ),
+                "incoming_count": len(incoming_by_dst.get(idx, [])),
+                "targeted_channel_count": len(targeted_tracks.get(idx, [])),
+                "routes_to": routes_by_src.get(idx, []),
+            }
+        )
+
+    return {
+        "ok": True,
+        "state": "live",
+        "workflow": "routing_audit",
+        "title": "Routing Audit",
+        "generated_at": _now_iso(),
+        "summary": {
+            "health_score": health_score,
+            "health_label": _routing_health_label(health_score),
+            "channels": len(channels),
+            "unrouted_automation_clips": unrouted_automation_clips,
+            "mixer_tracks": len(track_by_index),
+            "routes": len(route_rows),
+            "direct_to_master": len(direct_to_master),
+            "unrouted_channels": len(unrouted_channels),
+            "dead_end_tracks": len(dead_end_tracks),
+            "unused_mixer_tracks": len(unused_mixer_tracks),
+            "unused_mixer_track_truncated": unused_mixer_track_truncated,
+        },
+        "findings": findings,
+        "graph": graph,
+        "details": {
+            "channels": [
+                _channel_summary(
+                    channel,
+                    route_state=_channel_route_state(channel, routes_by_src),
+                )
+                for channel in channels
+            ],
+            "tracks": track_details,
+            "routes": route_rows,
+            "template_context": templates.compact_context(template_context),
+            "policy_notes": [
+                "Preserve recognizable existing routing structure before proposing cleanup.",
+                "Infer Channel Rack to Mixer relationships from channel target tracks.",
+                (
+                    "Treat plugin insertion, external inputs, and UI drag-and-drop routing "
+                    "as manual guidance."
+                ),
+                "This Control Center audit is read-only; it does not apply cleanup changes.",
+            ],
+            "kb_policy_refs": kb_policy.rule_refs(ROUTING_POLICY_RULE_IDS),
+        },
+        "safety": {"read_only": True, "project_changes": False},
+    }
+
+
+def _payload_rows(payload: Any, key: str) -> list[dict[str, Any]]:
+    if not isinstance(payload, dict):
+        return []
+    rows = payload.get(key)
+    if not isinstance(rows, list):
+        return []
+    return [dict(row) for row in rows if isinstance(row, dict)]
+
+
+def _probe_unused_mixer_tracks(
+    bridge: Any,
+    *,
+    tracks: list[dict[str, Any]],
+    channels: list[dict[str, Any]],
+    template_context: dict[str, Any],
+    max_plugin_checks: int = 60,
+) -> dict[str, Any]:
+    candidates = _candidate_unused_mixer_tracks(
+        tracks=tracks,
+        channels=channels,
+        template_context=template_context,
+    )
+    unused = []
+    probe_failed = False
+    for row in candidates[:max_plugin_checks]:
+        track = _as_int(row.get("track"))
+        if track is None:
+            continue
+        try:
+            slots = bridge.call(protocol.CMD_PLUGIN_LIST, {"track": track}).get("slots") or []
+        except Exception:
+            probe_failed = True
+            break
+        if not slots:
+            unused.append(row)
+    return {
+        "tracks": unused,
+        "truncated": len(candidates) > max_plugin_checks,
+        "probe_failed": probe_failed,
+    }
+
+
+def _candidate_unused_mixer_tracks(
+    *,
+    tracks: list[dict[str, Any]],
+    channels: list[dict[str, Any]],
+    template_context: dict[str, Any],
+) -> list[dict[str, Any]]:
+    targeted = {
+        target
+        for channel in channels
+        if (target := _as_int(channel.get("target_mixer_track"))) is not None
+    }
+    incoming: dict[int, list[int]] = {}
+    for row in tracks:
+        src = _as_int(row.get("i", row.get("index")))
+        if src is None:
+            continue
+        for route in _normalise_routes(row.get("routes_to") or []):
+            dst = _as_int(route.get("dst"))
+            if dst is not None:
+                incoming.setdefault(dst, []).append(src)
+
+    unused = []
+    for row in tracks:
+        idx = _as_int(row.get("i", row.get("index")))
+        if idx in (None, 0) or idx in targeted:
+            continue
+        if incoming.get(idx) or templates.is_reserved_placeholder(template_context, idx):
+            continue
+        if not _is_default_mixer_name(idx, row.get("name")):
+            continue
+        unused.append({"track": idx, "name": _display_track_name(idx, row.get("name"))})
+    return unused
+
+
+def _build_routing_graph(
+    *,
+    channels: list[dict[str, Any]],
+    track_by_index: dict[int, dict[str, Any]],
+    routes_by_src: dict[int, list[dict[str, Any]]],
+    bus_indices: set[int],
+    max_sources: int = 18,
+) -> dict[str, Any]:
+    nodes: dict[str, dict[str, Any]] = {}
+    links: list[dict[str, Any]] = []
+
+    def add_node(node_id: str, **data: Any) -> None:
+        nodes.setdefault(node_id, {"id": node_id, **data})
+
+    def add_link(src: str, dst: str, kind: str, label: str | None = None) -> None:
+        links.append({"from": src, "to": dst, "kind": kind, "label": label})
+
+    add_node("master", label=_track_name(track_by_index, 0), column="master", kind="master")
+    add_node("unrouted", label="Unrouted", column="buses", kind="unrouted")
+    add_node("dead_end", label="No Output", column="buses", kind="dead_end")
+
+    problem_channel_ids = set()
+    for channel in channels:
+        target = _as_int(channel.get("target_mixer_track"))
+        channel_id = _channel_node_id(channel)
+        if target in (None, 0) or not routes_by_src.get(target):
+            problem_channel_ids.add(channel_id)
+            continue
+        if any(_as_int(route.get("dst")) == 0 for route in routes_by_src.get(target, [])):
+            problem_channel_ids.add(channel_id)
+
+    sorted_channels = sorted(
+        channels,
+        key=lambda c: (
+            _channel_node_id(c) not in problem_channel_ids,
+            _as_int(c.get("channel")) if _as_int(c.get("channel")) is not None else 9999,
+            str(c.get("name") or ""),
+        ),
+    )
+    visible_channels = sorted_channels[:max_sources]
+    visible_channel_ids = {_channel_node_id(channel) for channel in visible_channels}
+
+    for idx in sorted(bus_indices):
+        add_node(
+            f"track:{idx}",
+            label=_track_name(track_by_index, idx),
+            column="buses",
+            kind="bus",
+            track=idx,
+        )
+
+    for channel in visible_channels:
+        source_id = _channel_node_id(channel)
+        target = _as_int(channel.get("target_mixer_track"))
+        add_node(
+            source_id,
+            label=_channel_name(channel),
+            column="sources",
+            kind=_channel_type_label(channel),
+            target_track=target,
+        )
+        if target is None or target == 0:
+            add_link(source_id, "unrouted", "unrouted")
+            continue
+
+        if target in bus_indices:
+            add_node(
+                f"track:{target}",
+                label=_track_name(track_by_index, target),
+                column="buses",
+                kind="bus",
+                track=target,
+            )
+            add_link(source_id, f"track:{target}", "audio")
+            continue
+
+        target_routes = routes_by_src.get(target, [])
+        if not target_routes:
+            add_link(source_id, "dead_end", "dead_end")
+            continue
+
+        for route in target_routes:
+            dst = _as_int(route.get("dst"))
+            if dst is None:
+                continue
+            if dst == 0:
+                add_link(source_id, "master", "direct")
+            else:
+                add_node(
+                    f"track:{dst}",
+                    label=_track_name(track_by_index, dst),
+                    column="buses",
+                    kind="bus",
+                    track=dst,
+                )
+                add_link(source_id, f"track:{dst}", "send" if _route_is_send(route) else "audio")
+
+    for idx in sorted(bus_indices):
+        src_id = f"track:{idx}"
+        for route in routes_by_src.get(idx, []):
+            dst = _as_int(route.get("dst"))
+            if dst is None:
+                continue
+            if dst == 0:
+                add_link(src_id, "master", "audio")
+            elif f"track:{dst}" in nodes:
+                add_link(src_id, f"track:{dst}", "send" if _route_is_send(route) else "audio")
+
+    used_node_ids = {link["from"] for link in links} | {link["to"] for link in links}
+    kept_nodes = [
+        node for node_id, node in nodes.items()
+        if node_id in used_node_ids or node_id == "master"
+    ]
+    return {
+        "nodes": kept_nodes,
+        "links": links,
+        "omitted_source_count": max(0, len(channels) - len(visible_channel_ids)),
+    }
+
+
+def _routing_findings(
+    *,
+    direct_to_master: list[dict[str, Any]],
+    unrouted_channels: list[dict[str, Any]],
+    dead_end_tracks: list[dict[str, Any]],
+    unused_mixer_tracks: list[dict[str, Any]],
+    template_context: dict[str, Any],
+    unused_probe_failed: bool,
+) -> list[dict[str, Any]]:
+    findings = []
+    if direct_to_master:
+        findings.append(
+            {
+                "id": "generators_direct_to_master",
+                "severity": "warning",
+                "title": "Generators Direct to Master",
+                "detail": "Generator channels route through inserts that feed Master directly.",
+                "count": len(direct_to_master),
+                "items": direct_to_master[:8],
+            }
+        )
+    if unrouted_channels:
+        findings.append(
+            {
+                "id": "unrouted_channels",
+                "severity": "critical",
+                "title": "Unrouted Channels",
+                "detail": (
+                    "Channels without a usable mixer target may be silent or bypass "
+                    "bus processing."
+                ),
+                "count": len(unrouted_channels),
+                "items": unrouted_channels[:8],
+            }
+        )
+    if dead_end_tracks:
+        findings.append(
+            {
+                "id": "dead_end_tracks",
+                "severity": "critical",
+                "title": "Mixer Paths Without Output",
+                "detail": "Targeted mixer inserts have no outgoing route in the routing matrix.",
+                "count": len(dead_end_tracks),
+                "items": dead_end_tracks[:8],
+            }
+        )
+    if unused_mixer_tracks:
+        findings.append(
+            {
+                "id": "unused_mixer_tracks",
+                "severity": "warning",
+                "title": "Unused Mixer Inserts",
+                "detail": (
+                    "Default mixer inserts with no channels, incoming routes, or "
+                    "plugin slots."
+                ),
+                "count": len(unused_mixer_tracks),
+                "items": unused_mixer_tracks[:8],
+            }
+        )
+    if unused_probe_failed:
+        findings.append(
+            {
+                "id": "unused_probe_limited",
+                "severity": "info",
+                "title": "Unused Insert Probe Limited",
+                "detail": "Plugin slot readback failed during unused-insert verification.",
+                "count": 1,
+            }
+        )
+    compact_template = templates.compact_context(template_context)
+    if compact_template:
+        findings.append(
+            {
+                "id": "template_context",
+                "severity": "ok",
+                "title": "Template Context Detected",
+                "detail": f"{compact_template.get('template_name')} routing profile is recognized.",
+                "count": 1,
+            }
+        )
+    if not findings:
+        findings.append(
+            {
+                "id": "routing_clear",
+                "severity": "ok",
+                "title": "No Routing Blockers Detected",
+                "detail": (
+                    "The current read-only audit did not find direct blockers in the "
+                    "routing matrix."
+                ),
+                "count": 0,
+            }
+        )
+    return findings
+
+
+def _routing_health_score(
+    *,
+    direct_count: int,
+    unrouted_count: int,
+    dead_end_count: int,
+    unused_count: int,
+) -> int:
+    penalty = (
+        direct_count * 7
+        + unrouted_count * 12
+        + dead_end_count * 14
+        + unused_count * 3
+    )
+    return max(0, min(100, 100 - penalty))
+
+
+def _routing_health_label(score: int) -> str:
+    if score >= 90:
+        return "Good"
+    if score >= 75:
+        return "Needs Review"
+    return "At Risk"
+
+
+def _channel_route_state(
+    channel: dict[str, Any],
+    routes_by_src: dict[int, list[dict[str, Any]]],
+) -> str:
+    target = _as_int(channel.get("target_mixer_track"))
+    if target is None or target == 0:
+        return "unrouted"
+    routes = routes_by_src.get(target, [])
+    if not routes:
+        return "no_output"
+    if any(_as_int(route.get("dst")) == 0 for route in routes):
+        return "direct_to_master"
+    return "bus_routed"
+
+
+def _channel_summary(channel: dict[str, Any], *, route_state: str) -> dict[str, Any]:
+    return {
+        "channel": _as_int(channel.get("channel")),
+        "name": _channel_name(channel),
+        "type": _channel_type_label(channel),
+        "target_mixer_track": _as_int(channel.get("target_mixer_track")),
+        "target_name": channel.get("target_name"),
+        "route_state": route_state,
+    }
+
+
+def _normalise_routes(routes: list[Any]) -> list[dict[str, Any]]:
+    out = []
+    for route in routes:
+        if isinstance(route, dict):
+            dst = _as_int(route.get("dst", route.get("target")))
+            if dst is None:
+                continue
+            out.append(
+                {
+                    "dst": dst,
+                    "dst_name": route.get("dst_name") or route.get("target_name"),
+                    "level": route.get("level"),
+                }
+            )
+        else:
+            dst = _as_int(route)
+            if dst is not None:
+                out.append({"dst": dst, "dst_name": None, "level": None})
+    return out
+
+
+def _route_is_send(route: dict[str, Any]) -> bool:
+    level = route.get("level")
+    return isinstance(level, int | float) and level < 0.999
+
+
+def _channel_node_id(channel: dict[str, Any]) -> str:
+    idx = _as_int(channel.get("channel"))
+    if idx is not None:
+        return f"channel:{idx}"
+    return f"channel:{_channel_name(channel)}"
+
+
+def _channel_name(channel: dict[str, Any]) -> str:
+    name = str(channel.get("name") or "").strip()
+    idx = _as_int(channel.get("channel"))
+    if name:
+        return name
+    return f"Channel {idx}" if idx is not None else "Channel"
+
+
+def _channel_type_label(channel: dict[str, Any]) -> str:
+    raw = channel.get("type")
+    if isinstance(raw, dict):
+        return str(raw.get("label") or raw.get("name") or "unknown")
+    if raw:
+        return str(raw)
+    return "unknown"
+
+
+def _track_name(track_by_index: dict[int, dict[str, Any]], idx: int) -> str:
+    row = track_by_index.get(idx, {})
+    return _display_track_name(idx, row.get("name"))
+
+
+def _display_track_name(idx: int, name: Any) -> str:
+    text_value = str(name or "").strip()
+    if text_value:
+        return text_value
+    return "Master" if idx == 0 else f"Insert {idx}"
+
+
+def _looks_like_bus_name(name: Any) -> bool:
+    value = str(name or "").lower()
+    return any(token in value for token in ("bus", "group", "grp", "aux", "send", "stem"))
+
+
+def _is_default_mixer_name(idx: int | None, name: Any) -> bool:
+    if idx is None:
+        return False
+    value = str(name or "").strip()
+    if idx == 0:
+        return value in {"", "Master"}
+    return value in {"", f"Insert {idx}"}
+
+
+def _as_int(value: Any) -> int | None:
+    if isinstance(value, bool) or value is None:
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError:
+            return None
+    return None
+
+
 def create_server(state: ControlCenterState) -> ThreadingHTTPServer:
     handler = _handler_factory(state)
     return ThreadingHTTPServer((state.host, state.port), handler)
@@ -644,6 +1367,8 @@ def _handler_factory(state: ControlCenterState):
             elif self.path == "/api/setup/confirm-step":
                 step = str(body.get("step", ""))
                 self._json(_confirm_step(state, step))
+            elif self.path == "/api/workflows/routing-audit":
+                self._json(_run_routing_audit(state))
             else:
                 self._json({"ok": False, "error": "not found"}, status=HTTPStatus.NOT_FOUND)
 

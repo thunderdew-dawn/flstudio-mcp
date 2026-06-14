@@ -2,6 +2,11 @@
 const state = {
   status: null,
   report: "",
+  routingAudit: {
+    loading: false,
+    report: null,
+    error: null
+  },
   setupFeedback: {},
   actionFeedback: {},
   evidenceKeys: new Set()
@@ -138,6 +143,7 @@ function render() {
   renderRuntime();
   renderClients();
   renderProjectData();
+  renderRoutingAudit();
   renderLogsHistory();
   renderPorts();
   renderConnection();
@@ -1103,6 +1109,463 @@ function renderProjectData() {
   }
 }
 
+// ─── Routing Audit ───────────────────────────────────────────────────────────
+async function runRoutingAudit() {
+  state.routingAudit.loading = true;
+  state.routingAudit.error = null;
+  renderRoutingAudit();
+  try {
+    const result = await api("/api/workflows/routing-audit", {
+      method: "POST",
+      body: "{}"
+    });
+    state.routingAudit.report = result;
+    state.routingAudit.error = result?.ok === false
+      ? (result.error || "Routing Audit unavailable.")
+      : null;
+  } catch (error) {
+    state.routingAudit.error = `Routing Audit failed: ${error.message}`;
+  } finally {
+    state.routingAudit.loading = false;
+    renderRoutingAudit();
+  }
+}
+
+function renderRoutingAudit() {
+  const layout = document.getElementById("routing-audit-layout");
+  if (!layout) return;
+
+  const report = state.routingAudit.report;
+  const isLoading = state.routingAudit.loading;
+  const error = state.routingAudit.error;
+
+  const runButton = document.getElementById("run-routing-audit");
+  if (runButton) {
+    runButton.disabled = isLoading;
+    runButton.textContent = isLoading ? "Running..." : "Run Routing Audit";
+  }
+
+  renderRoutingFeedback(report, error, isLoading);
+  renderRoutingSummary(report, isLoading);
+  renderRoutingGraph(report);
+  renderRoutingFindings(report);
+  renderRoutingRisks(report);
+  renderRoutingTables(report);
+}
+
+function renderRoutingFeedback(report, error, isLoading) {
+  const feedback = document.getElementById("routing-audit-feedback");
+  if (!feedback) return;
+
+  feedback.className = "routing-audit-feedback";
+  if (isLoading) {
+    feedback.classList.add("is-loading");
+    feedback.textContent = "Routing Audit is reading FL Studio routing data...";
+    return;
+  }
+  if (error) {
+    feedback.classList.add("is-error");
+    feedback.textContent = error;
+    return;
+  }
+  if (report?.ok) {
+    feedback.classList.add("is-live");
+    const timestamp = new Date(report.generated_at || Date.now()).toLocaleTimeString();
+    feedback.textContent = `Last audit: ${timestamp}. No project changes were made.`;
+    return;
+  }
+  feedback.textContent = "Audit has not run yet.";
+}
+
+function renderRoutingSummary(report, isLoading) {
+  const summary = report?.summary || {};
+  const score = Number.isFinite(Number(summary.health_score))
+    ? Number(summary.health_score)
+    : null;
+  const label = summary.health_label || (report?.ok ? "Live" : "Idle");
+
+  text("routing-score-value", score == null ? "--" : `${Math.round(score)}%`);
+  text("routing-score-caption", isLoading ? "Reading" : label);
+  text("routing-score-label", label);
+  text("routing-automation-total", summary.unrouted_automation_clips ?? "--");
+  text("routing-channel-total", summary.channels ?? "--");
+  text("routing-track-total", summary.mixer_tracks ?? "--");
+  text("routing-route-total", summary.routes ?? "--");
+  text("routing-channel-count", summary.channels ?? 0);
+  text("routing-track-count", summary.mixer_tracks ?? 0);
+  text("routing-route-count", summary.routes ?? 0);
+  text("routing-findings-count", report?.findings?.length ?? 0);
+
+  const ring = document.getElementById("routing-score-ring");
+  if (ring) {
+    const clampedScore = score == null ? 0 : Math.max(0, Math.min(100, score));
+    ring.style.setProperty("--score", clampedScore);
+    ring.dataset.state = routingScoreState(score);
+  }
+
+  const mapState = document.getElementById("routing-map-state");
+  if (mapState) {
+    mapState.textContent = isLoading ? "Reading" : (report?.ok ? "Live" : "Idle");
+    mapState.className = `badge ${report?.ok ? "badge-ok" : "badge-neutral"}`;
+  }
+}
+
+function renderRoutingGraph(report) {
+  const columns = {
+    sources: document.getElementById("routing-graph-sources"),
+    buses: document.getElementById("routing-graph-buses"),
+    master: document.getElementById("routing-graph-master")
+  };
+  const svg = document.getElementById("routing-links");
+  for (const column of Object.values(columns)) {
+    if (column) column.innerHTML = "";
+  }
+  if (svg) svg.innerHTML = "";
+
+  const graph = report?.graph || {};
+  const nodes = Array.isArray(graph.nodes) ? graph.nodes : [];
+  if (!nodes.length) {
+    const empty = document.createElement("div");
+    empty.className = "routing-empty-state";
+    empty.textContent = report?.ok === false
+      ? "Routing graph unavailable."
+      : "No routing graph data.";
+    if (columns.sources) columns.sources.appendChild(empty);
+    return;
+  }
+
+  for (const node of nodes) {
+    const column = columns[node.column] || columns.sources;
+    if (!column) continue;
+    const item = document.createElement("div");
+    item.className = `routing-node ${routingNodeClass(node.kind)}`;
+    item.dataset.routingNodeId = node.id;
+
+    const dot = document.createElement("span");
+    dot.className = "routing-node-dot";
+    const label = document.createElement("strong");
+    label.textContent = safeString(node.label);
+    const meta = document.createElement("span");
+    meta.textContent = routingNodeMeta(node);
+    item.append(dot, label, meta);
+    column.appendChild(item);
+  }
+
+  const omitted = Number(graph.omitted_source_count || 0);
+  if (omitted > 0 && columns.sources) {
+    const more = document.createElement("div");
+    more.className = "routing-node routing-node-muted";
+    more.textContent = `+${omitted} more sources`;
+    columns.sources.appendChild(more);
+  }
+
+  scheduleRoutingLinkDraw(graph.links || []);
+}
+
+function scheduleRoutingLinkDraw(links) {
+  const schedule = window.requestAnimationFrame
+    || (typeof setTimeout === "function"
+      ? ((callback) => setTimeout(callback, 0))
+      : ((callback) => callback()));
+  schedule(() => drawRoutingGraphLinks(links));
+}
+
+function drawRoutingGraphLinks(links) {
+  const svg = document.getElementById("routing-links");
+  const map = document.getElementById("routing-map");
+  if (!svg || !map || typeof document.createElementNS !== "function") return;
+  if (typeof map.getBoundingClientRect !== "function") return;
+
+  svg.innerHTML = "";
+  const mapRect = map.getBoundingClientRect();
+  if (!mapRect.width || !mapRect.height) return;
+  svg.setAttribute("viewBox", `0 0 ${mapRect.width} ${mapRect.height}`);
+
+  const nodeMap = {};
+  document.querySelectorAll(".routing-node").forEach(node => {
+    if (node.dataset.routingNodeId) nodeMap[node.dataset.routingNodeId] = node;
+  });
+
+  for (const link of links) {
+    const src = nodeMap[link.from];
+    const dst = nodeMap[link.to];
+    if (!src || !dst || typeof src.getBoundingClientRect !== "function") continue;
+    const srcRect = src.getBoundingClientRect();
+    const dstRect = dst.getBoundingClientRect();
+    const x1 = srcRect.right - mapRect.left;
+    const y1 = srcRect.top + srcRect.height / 2 - mapRect.top;
+    const x2 = dstRect.left - mapRect.left;
+    const y2 = dstRect.top + dstRect.height / 2 - mapRect.top;
+    const distance = Math.max(54, Math.abs(x2 - x1) * 0.48);
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute(
+      "d",
+      `M ${x1} ${y1} C ${x1 + distance} ${y1}, ${x2 - distance} ${y2}, ${x2} ${y2}`
+    );
+    path.setAttribute("class", `routing-link routing-link-${link.kind || "audio"}`);
+    svg.appendChild(path);
+  }
+}
+
+function renderRoutingFindings(report) {
+  const list = document.getElementById("routing-finding-list");
+  if (!list) return;
+  list.innerHTML = "";
+  const findings = Array.isArray(report?.findings) ? report.findings : [];
+  if (!findings.length) {
+    list.appendChild(routingPlaceholder("Run an audit to populate findings."));
+    return;
+  }
+
+  for (const finding of findings) {
+    const row = document.createElement("div");
+    row.className = `routing-finding ${routingSeverityClass(finding.severity)}`;
+
+    const icon = document.createElement("span");
+    icon.className = "routing-finding-icon";
+    icon.textContent = routingSeverityIcon(finding.severity);
+
+    const body = document.createElement("div");
+    const title = document.createElement("strong");
+    title.textContent = safeString(finding.title);
+    const detail = document.createElement("span");
+    detail.textContent = safeString(finding.detail);
+    body.append(title, detail);
+
+    const count = document.createElement("span");
+    count.className = "routing-finding-count";
+    count.textContent = safeString(finding.count ?? 0);
+
+    row.append(icon, body, count);
+    list.appendChild(row);
+  }
+}
+
+function renderRoutingRisks(report) {
+  const list = document.getElementById("routing-risk-list");
+  if (!list) return;
+  list.innerHTML = "";
+
+  const summary = report?.summary || {};
+  const graph = report?.graph || {};
+  const rows = [
+    {
+      label: "Direct-to-Master channel paths",
+      value: summary.direct_to_master ?? 0,
+      state: Number(summary.direct_to_master || 0) ? "warning" : "ok"
+    },
+    {
+      label: "Unrouted channels",
+      value: summary.unrouted_channels ?? 0,
+      state: Number(summary.unrouted_channels || 0) ? "critical" : "ok"
+    },
+    {
+      label: "Mixer paths without output",
+      value: summary.dead_end_tracks ?? 0,
+      state: Number(summary.dead_end_tracks || 0) ? "critical" : "ok"
+    },
+    {
+      label: "Unused mixer inserts",
+      value: summary.unused_mixer_tracks ?? 0,
+      state: Number(summary.unused_mixer_tracks || 0) ? "warning" : "ok"
+    }
+  ];
+  if (Number(graph.omitted_source_count || 0) > 0) {
+    rows.push({
+      label: "Sources hidden from graph",
+      value: graph.omitted_source_count,
+      state: "info"
+    });
+  }
+
+  if (!report) {
+    list.appendChild(routingPlaceholder("No audit result yet."));
+    return;
+  }
+
+  for (const row of rows) {
+    const item = document.createElement("div");
+    item.className = `routing-risk-row ${routingSeverityClass(row.state)}`;
+    const label = document.createElement("span");
+    label.textContent = row.label;
+    const value = document.createElement("strong");
+    value.textContent = safeString(row.value);
+    item.append(label, value);
+    list.appendChild(item);
+  }
+}
+
+function renderRoutingTables(report) {
+  const channelBody = document.getElementById("routing-channel-table");
+  const routeBody = document.getElementById("routing-route-table");
+  const trackBody = document.getElementById("routing-track-table");
+  if (channelBody) {
+    channelBody.innerHTML = "";
+    const channels = Array.isArray(report?.details?.channels) ? report.details.channels : [];
+    if (!channels.length) {
+      appendRoutingTableEmpty(channelBody, 4, "No channel routing rows.");
+    } else {
+      for (const channel of channels) {
+        const row = document.createElement("tr");
+        appendCell(row, safeString(channel.name));
+        appendCell(row, safeString(channel.type));
+        appendCell(row, routingTargetLabel(channel));
+        appendCell(row, routingRouteStateLabel(channel.route_state), `route-state-${channel.route_state || "unknown"}`);
+        channelBody.appendChild(row);
+      }
+    }
+  }
+
+  if (trackBody) {
+    trackBody.innerHTML = "";
+    const tracks = Array.isArray(report?.details?.tracks) ? report.details.tracks : [];
+    if (!tracks.length) {
+      appendRoutingTableEmpty(trackBody, 5, "No mixer track rows.");
+    } else {
+      for (const track of tracks) {
+        const row = document.createElement("tr");
+        appendCell(row, `${safeString(track.name)} (${safeString(track.track)})`);
+        appendCell(row, routingTrackRoleLabel(track.role));
+        appendCell(row, safeString(track.incoming_count ?? 0));
+        appendCell(row, safeString(track.targeted_channel_count ?? 0));
+        appendCell(row, routingTrackOutputs(track.routes_to));
+        trackBody.appendChild(row);
+      }
+    }
+  }
+
+  if (routeBody) {
+    routeBody.innerHTML = "";
+    const routes = Array.isArray(report?.details?.routes) ? report.details.routes : [];
+    if (!routes.length) {
+      appendRoutingTableEmpty(routeBody, 3, "No mixer route rows.");
+    } else {
+      for (const route of routes) {
+        const row = document.createElement("tr");
+        appendCell(row, `${safeString(route.src_name)} (${safeString(route.src)})`);
+        appendCell(row, `${safeString(route.dst_name)} (${safeString(route.dst)})`);
+        appendCell(row, formatRouteLevel(route.level));
+        routeBody.appendChild(row);
+      }
+    }
+  }
+}
+
+function appendCell(row, value, className) {
+  const cell = document.createElement("td");
+  cell.textContent = value;
+  if (className) cell.className = className;
+  row.appendChild(cell);
+}
+
+function appendRoutingTableEmpty(body, colspan, message) {
+  const row = document.createElement("tr");
+  const cell = document.createElement("td");
+  cell.colSpan = colspan;
+  cell.className = "routing-table-empty";
+  cell.textContent = message;
+  row.appendChild(cell);
+  body.appendChild(row);
+}
+
+function routingPlaceholder(message) {
+  const node = document.createElement("div");
+  node.className = "routing-placeholder";
+  node.textContent = message;
+  return node;
+}
+
+function routingScoreState(score) {
+  if (score == null) return "idle";
+  if (score >= 90) return "ok";
+  if (score >= 75) return "warning";
+  return "critical";
+}
+
+function routingSeverityClass(severity) {
+  const value = String(severity || "").toLowerCase();
+  if (value === "critical") return "is-critical";
+  if (value === "warning") return "is-warning";
+  if (value === "ok") return "is-ok";
+  return "is-info";
+}
+
+function routingSeverityIcon(severity) {
+  const value = String(severity || "").toLowerCase();
+  if (value === "critical") return "!";
+  if (value === "warning") return "△";
+  if (value === "ok") return "✓";
+  return "i";
+}
+
+function routingNodeClass(kind) {
+  const value = String(kind || "").toLowerCase().replaceAll("_", "-");
+  if (value === "master") return "routing-node-master";
+  if (value === "bus") return "routing-node-bus";
+  if (value === "unrouted" || value === "dead-end") return "routing-node-alert";
+  return "routing-node-source";
+}
+
+function routingNodeMeta(node) {
+  if (node.kind === "master") return "Output";
+  if (node.kind === "bus") return node.track == null ? "Bus" : `Track ${node.track}`;
+  if (node.kind === "unrouted") return "No mixer target";
+  if (node.kind === "dead_end") return "No output route";
+  if (node.target_track == null) return safeString(node.kind);
+  return `Track ${node.target_track}`;
+}
+
+function routingTargetLabel(channel) {
+  const target = channel.target_mixer_track;
+  if (target == null || target === 0) return "None";
+  const name = safeString(channel.target_name);
+  return name === "N/A" || name === "Unavailable" ? `Track ${target}` : `${name} (${target})`;
+}
+
+function routingRouteStateLabel(stateValue) {
+  const labels = {
+    bus_routed: "Bus routed",
+    direct_to_master: "Direct to Master",
+    no_output: "No output",
+    unrouted: "Unrouted"
+  };
+  return labels[stateValue] || "Unknown";
+}
+
+function routingTrackRoleLabel(role) {
+  const labels = {
+    master: "Master",
+    bus: "Bus",
+    stem_bus: "Stem Bus",
+    premaster: "Premaster",
+    sidechain_control: "Sidechain",
+    template_reserved_placeholder: "Reserved",
+    insert: "Insert",
+    source: "Source",
+    utility: "Utility",
+    unknown: "Unknown"
+  };
+  return labels[role] || safeString(role);
+}
+
+function routingTrackOutputs(routes) {
+  if (!Array.isArray(routes) || !routes.length) return "None";
+  return routes
+    .map(route => {
+      const dst = route.dst == null ? "?" : route.dst;
+      const label = route.dst_name || (dst === 0 ? "Master" : `Track ${dst}`);
+      return `${safeString(label)} (${safeString(dst)})`;
+    })
+    .join(", ");
+}
+
+function formatRouteLevel(value) {
+  if (value == null || value === "") return "Full";
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return safeString(value);
+  return numeric.toFixed(3);
+}
+
 // ─── Logs & History ───────────────────────────────────────────────────────────
 function renderLogsHistory() {
   const container = document.getElementById("logs-history-content");
@@ -1407,6 +1870,7 @@ function selectPanel(targetId) {
     loadReport();
     renderSupportSummary();
   }
+  if (targetId === "producer_routing") renderRoutingAudit();
   if (targetId === "logs_history") renderLogsHistory();
   if (targetId === "ports") renderPorts();
 }
@@ -1463,8 +1927,23 @@ function wireEvents() {
     tab.addEventListener("click", () => selectPanel(tab.dataset.target));
   });
 
+  document.querySelectorAll(".nav-subgroup-header").forEach(header => {
+    header.addEventListener("click", () => {
+      const parent = header.closest(".nav-subgroup");
+      if (parent) {
+        parent.classList.toggle("open");
+      }
+    });
+  });
+
   const refreshButton = document.getElementById("refresh-button");
   if (refreshButton) refreshButton.addEventListener("click", refresh);
+
+  const runRoutingButton = document.getElementById("run-routing-audit");
+  if (runRoutingButton) runRoutingButton.addEventListener("click", runRoutingAudit);
+
+  const routingRefreshButton = document.getElementById("routing-refresh-status");
+  if (routingRefreshButton) routingRefreshButton.addEventListener("click", refresh);
 
   const setupButton = document.getElementById("disconnected-setup-button");
   if (setupButton) setupButton.addEventListener("click", () => selectPanel("setup"));
@@ -1498,7 +1977,9 @@ function wireEvents() {
 window.flsPilotControlCenter = {
   state,
   processAction,
+  runRoutingAudit,
   renderProjectData,
+  renderRoutingAudit,
   renderRuntime,
   renderOverview,
   renderConnectionCheck,

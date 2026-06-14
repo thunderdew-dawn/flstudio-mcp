@@ -340,3 +340,276 @@ function createHarness() {
 });
 """
     )
+
+
+def test_control_center_static_routing_audit_render() -> None:
+    _run_node_dom_check(
+        r"""
+const assert = require("assert");
+const fs = require("fs");
+const vm = require("vm");
+
+class ClassList {
+  constructor(element) {
+    this.element = element;
+    this.values = new Set();
+  }
+
+  setFromString(value) {
+    this.values = new Set(String(value || "").split(/\s+/).filter(Boolean));
+  }
+
+  sync() {
+    this.element._className = Array.from(this.values).join(" ");
+  }
+
+  add(name) {
+    this.values.add(name);
+    this.sync();
+  }
+
+  remove(name) {
+    this.values.delete(name);
+    this.sync();
+  }
+
+  contains(name) {
+    return this.values.has(name);
+  }
+}
+
+class Element {
+  constructor(tagName = "div", id = "") {
+    this.tagName = tagName.toUpperCase();
+    this.id = id;
+    this.children = [];
+    this.dataset = {};
+    this.disabled = false;
+    this.listeners = {};
+    this.parentElement = null;
+    this.textContent = "";
+    this.colSpan = 1;
+    this._className = "";
+    this.classList = new ClassList(this);
+    this.style = {
+      setProperty(name, value) {
+        this[name] = value;
+      }
+    };
+  }
+
+  set className(value) {
+    this._className = String(value || "");
+    this.classList.setFromString(this._className);
+  }
+
+  get className() {
+    return this._className;
+  }
+
+  append(...nodes) {
+    for (const node of nodes) this.appendChild(node);
+  }
+
+  appendChild(node) {
+    node.parentElement = this;
+    this.children.push(node);
+    return node;
+  }
+
+  addEventListener(name, handler) {
+    this.listeners[name] = handler;
+  }
+}
+
+function collect(root, predicate) {
+  const out = [];
+  function walk(node) {
+    if (predicate(node)) out.push(node);
+    for (const child of node.children || []) walk(child);
+  }
+  walk(root);
+  return out;
+}
+
+function textTree(root) {
+  let out = root.textContent || "";
+  for (const child of root.children || []) out += "\n" + textTree(child);
+  return out;
+}
+
+const elements = new Map();
+const root = new Element("div", "root");
+
+function register(id, tagName = "div") {
+  const element = new Element(tagName, id);
+  elements.set(id, element);
+  root.appendChild(element);
+  return element;
+}
+
+for (const id of [
+  "routing-audit-layout",
+  "run-routing-audit",
+  "routing-audit-feedback",
+  "routing-score-value",
+  "routing-score-caption",
+  "routing-score-label",
+  "routing-channel-total",
+  "routing-track-total",
+  "routing-route-total",
+  "routing-channel-count",
+  "routing-track-count",
+  "routing-route-count",
+  "routing-findings-count",
+  "routing-score-ring",
+  "routing-map-state",
+  "routing-graph-sources",
+  "routing-graph-buses",
+  "routing-graph-master",
+  "routing-links",
+  "routing-map",
+  "routing-finding-list",
+  "routing-risk-list",
+  "routing-channel-table",
+  "routing-route-table",
+  "routing-track-table"
+]) {
+  register(id, id.endsWith("-table") ? "tbody" : "div");
+}
+
+const document = {
+  createElement: (tagName) => new Element(tagName),
+  getElementById: (id) => elements.get(id) || null,
+  querySelectorAll: (selector) => {
+    if (selector === ".routing-node") {
+      return collect(root, (node) => node.classList.contains("routing-node"));
+    }
+    return [];
+  },
+  querySelector: () => null
+};
+
+const context = {
+  Blob,
+  URL,
+  clearInterval,
+  console,
+  document,
+  fetch: async () => ({
+    ok: true,
+    headers: { get: () => "application/json" },
+    json: async () => ({})
+  }),
+  navigator: { clipboard: { writeText: async () => undefined } },
+  setInterval,
+  window: { __FLS_PILOT_TEST__: true }
+};
+context.window.document = document;
+
+vm.createContext(context);
+vm.runInContext(fs.readFileSync(process.argv[1], "utf8"), context);
+
+const controls = context.window.flsPilotControlCenter;
+controls.state.routingAudit.report = {
+  ok: true,
+  state: "live",
+  generated_at: "2026-06-14T12:00:00Z",
+  summary: {
+    health_score: 81,
+    health_label: "Needs Review",
+    channels: 4,
+    mixer_tracks: 6,
+    routes: 3,
+    direct_to_master: 1,
+    unrouted_channels: 1,
+    dead_end_tracks: 1,
+    unused_mixer_tracks: 1
+  },
+  findings: [
+    {
+      id: "generators_direct_to_master",
+      severity: "warning",
+      title: "Generators Direct to Master",
+      detail: "Kick routes directly",
+      count: 1
+    },
+    {
+      id: "unrouted_channels",
+      severity: "critical",
+      title: "Unrouted Channels",
+      detail: "FX Riser has no target",
+      count: 1
+    }
+  ],
+  graph: {
+    nodes: [
+      { id: "channel:1", label: "Kick", column: "sources", kind: "genplug", target_track: 1 },
+      { id: "channel:2", label: "Vocal", column: "sources", kind: "audio", target_track: 3 },
+      { id: "track:10", label: "Vocal Bus", column: "buses", kind: "bus", track: 10 },
+      { id: "unrouted", label: "Unrouted", column: "buses", kind: "unrouted" },
+      { id: "master", label: "Master", column: "master", kind: "master" }
+    ],
+    links: [
+      { from: "channel:1", to: "master", kind: "direct" },
+      { from: "channel:2", to: "track:10", kind: "audio" },
+      { from: "track:10", to: "master", kind: "audio" }
+    ],
+    omitted_source_count: 0
+  },
+  details: {
+    channels: [
+      {
+        name: "Kick",
+        type: "genplug",
+        target_mixer_track: 1,
+        target_name: "Kick",
+        route_state: "direct_to_master"
+      },
+      {
+        name: "Vocal",
+        type: "audio",
+        target_mixer_track: 3,
+        target_name: "Vocal",
+        route_state: "bus_routed"
+      }
+    ],
+    routes: [
+      { src: 1, src_name: "Kick", dst: 0, dst_name: "Master", level: 1 },
+      { src: 3, src_name: "Vocal", dst: 10, dst_name: "Vocal Bus", level: 0.75 }
+    ],
+    tracks: [
+      {
+        track: 0,
+        name: "Master",
+        role: "master",
+        incoming_count: 2,
+        targeted_channel_count: 0,
+        routes_to: []
+      },
+      {
+        track: 10,
+        name: "Vocal Bus",
+        role: "bus",
+        incoming_count: 1,
+        targeted_channel_count: 0,
+        routes_to: [{ dst: 0, dst_name: "Master", level: 1 }]
+      }
+    ]
+  }
+};
+
+controls.renderRoutingAudit();
+
+assert.strictEqual(elements.get("run-routing-audit").disabled, false);
+assert.strictEqual(elements.get("routing-score-value").textContent, "81%");
+assert.match(textTree(elements.get("routing-graph-sources")), /Kick/);
+assert.match(textTree(elements.get("routing-graph-buses")), /Vocal Bus/);
+assert.match(textTree(elements.get("routing-graph-master")), /Master/);
+assert.match(textTree(elements.get("routing-finding-list")), /Generators Direct to Master/);
+assert.match(textTree(elements.get("routing-risk-list")), /Direct-to-Master channel paths/);
+assert.match(textTree(elements.get("routing-channel-table")), /Direct to Master/);
+assert.match(textTree(elements.get("routing-route-table")), /Vocal Bus/);
+assert.match(textTree(elements.get("routing-track-table")), /Vocal Bus/);
+"""
+    )

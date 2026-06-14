@@ -4,8 +4,9 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>fls-pilot Control Center — Setup & Diagnostics</title>
-  <meta name="description" content="fls-pilot Control Center: setup, diagnostics, service management, and AI client configuration for FL Studio Pilot." />
+  <title>FLS Pilot Control Center</title>
+  <meta name="description"
+    content="FLS Pilot Control Center: setup, diagnostics, service management, and Producer Tools." />
   <link rel="stylesheet" href="styles.css" />
 </head>
 
@@ -55,12 +56,28 @@
           <button class="nav-item" type="button" data-target="runtime" id="nav-runtime">
             <span aria-hidden="true">&#x25b6;</span><span>Services</span>
           </button>
-          <button class="nav-item" type="button" data-target="clients" id="nav-clients">
-            <span aria-hidden="true">&#x25a2;</span><span>AI Clients</span>
-          </button>
-          <button class="nav-item" type="button" data-target="support" id="nav-support">
-            <span aria-hidden="true">&#x26A0;</span><span>Support Report</span>
-          </button>
+
+          <!-- Subgroup: Support -->
+          <div class="nav-subgroup open">
+            <div class="nav-subgroup-header">
+              <span class="chevron" aria-hidden="true">&#x25b6;</span>
+              <span>Support</span>
+            </div>
+            <div class="nav-subgroup-items">
+              <button class="nav-item" type="button" data-target="clients" id="nav-clients">
+                <span aria-hidden="true">&#x25a2;</span><span>AI Clients</span>
+              </button>
+              <button class="nav-item" type="button" data-target="support" id="nav-support">
+                <span aria-hidden="true">&#x26A0;</span><span>Support Report</span>
+              </button>
+              <button class="nav-item" type="button" data-target="ports" id="nav-ports">
+                <span aria-hidden="true">&#x2316;</span><span>Ports</span>
+              </button>
+              <button class="nav-item" type="button" data-target="developer_config" id="nav-devconfig">
+                <span aria-hidden="true">&#x2318;</span><span>Developer Config</span>
+              </button>
+            </div>
+          </div>
         </div>
 
         <div class="nav-divider"></div>
@@ -68,48 +85,96 @@
         <!-- Group: Producer Tools -->
         <div class="nav-group">
           <span class="nav-group-title">Producer Tools</span>
-          <button class="nav-item nav-item-preview" type="button" data-target="producer_mix_review" id="nav-mix-review">
-            <span aria-hidden="true">&#x25f0;</span>
-            <span>Mix Review</span>
-            <span class="nav-badge badge-coming-soon">Coming Soon</span>
-          </button>
-          <button class="nav-item nav-item-preview" type="button" data-target="producer_low_end" id="nav-low-end">
-            <span aria-hidden="true">&#x25f0;</span>
-            <span>Low-End Analysis</span>
-            <span class="nav-badge badge-pro-preview">Pro Preview</span>
-          </button>
-          <button class="nav-item nav-item-preview" type="button" data-target="producer_routing" id="nav-routing">
-            <span aria-hidden="true">&#x25f0;</span>
-            <span>Routing Audit</span>
-            <span class="nav-badge badge-coming-soon">Coming Soon</span>
-          </button>
-          <button class="nav-item nav-item-preview" type="button" data-target="producer_organizer" id="nav-organizer">
-            <span aria-hidden="true">&#x25f0;</span>
-            <span>Project Organizer</span>
-            <span class="nav-badge badge-pro-preview">Pro Preview</span>
-          </button>
-          <button class="nav-item nav-item-preview" type="button" data-target="producer_safe_apply" id="nav-safe-apply">
-            <span aria-hidden="true">&#x25f0;</span>
-            <span>Safe Apply</span>
-            <span class="nav-badge badge-planned">Planned</span>
-          </button>
+
+          <!-- Subgroup: Project -->
+          <div class="nav-subgroup open">
+            <div class="nav-subgroup-header">
+              <span class="chevron" aria-hidden="true">&#x25b6;</span>
+              <span>Project</span>
+            </div>
+            <div class="nav-subgroup-items">
+              <button class="nav-item nav-item-preview" type="button" data-target="producer_health" id="nav-health">
+                <span aria-hidden="true">&#x25f0;</span>
+                <span>Health</span>
+                <span class="nav-badge badge-ok">ok</span>
+              </button>
+              <button class="nav-item nav-item-preview" type="button" data-target="producer_preflight"
+                id="nav-preflight">
+                <span aria-hidden="true">&#x25f0;</span>
+                <span>Preflight</span>
+                <span class="nav-badge badge-pro-preview">Preview</span>
+              </button>
+              <button class="nav-item nav-item-preview" type="button" data-target="producer_organizer"
+                id="nav-organizer">
+                <span aria-hidden="true">&#x25f0;</span>
+                <span>Organizer</span>
+                <span class="nav-badge badge-ok">ok</span>
+              </button>
+              <button class="nav-item nav-item-preview" type="button" data-target="producer_jam_2_project"
+                id="nav-jam-2-project">
+                <span aria-hidden="true">&#x25f0;</span>
+                <span>Jam 2 Project</span>
+                <span class="nav-badge badge-planned">Planned</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Subgroup: Mix Assistant -->
+          <div class="nav-subgroup open">
+            <div class="nav-subgroup-header">
+              <span class="chevron" aria-hidden="true">&#x25b6;</span>
+              <span>Mix Assistant</span>
+            </div>
+            <div class="nav-subgroup-items">
+              <button class="nav-item nav-item-preview" type="button" data-target="producer_mix_review"
+                id="nav-mix-review">
+                <span aria-hidden="true">&#x25f0;</span>
+                <span>Mix Review</span>
+                <span class="nav-badge badge-ok">ok</span>
+              </button>
+              <button class="nav-item nav-item-preview" type="button" data-target="producer_routing" id="nav-routing">
+                <span aria-hidden="true">&#x25f0;</span>
+                <span>Routing Audit</span>
+                <span class="nav-badge badge-ok">ok</span>
+              </button>
+              <button class="nav-item nav-item-preview" type="button" data-target="producer_low_end" id="nav-low-end">
+                <span aria-hidden="true">&#x25f0;</span>
+                <span>Low-End Analysis</span>
+                <span class="nav-badge badge-coming-soon">Upcoming</span>
+              </button>
+              <button class="nav-item nav-item-preview" type="button" data-target="producer_sidechaining"
+                id="nav-sidechaining">
+                <span aria-hidden="true">&#x25f0;</span>
+                <span>Sidechaining</span>
+                <span class="nav-badge badge-planned">Planned</span>
+              </button>
+              <button class="nav-item nav-item-preview" type="button" data-target="producer_plugin_assistant"
+                id="nav-plugin-assistant">
+                <span aria-hidden="true">&#x25f0;</span>
+                <span>Plugin Assistant</span>
+                <span class="nav-badge badge-planned">Planned</span>
+              </button>
+              <button class="nav-item nav-item-preview" type="button" data-target="producer_preset_assistant"
+                id="nav-preset-assistant">
+                <span aria-hidden="true">&#x25f0;</span>
+                <span>Preset Assistant</span>
+                <span class="nav-badge badge-planned">Planned</span>
+              </button>
+            </div>
+          </div>
+
         </div>
 
         <div class="nav-divider"></div>
 
-        <!-- Group: Advanced -->
+        <!-- Group: Review -->
         <div class="nav-group">
-          <span class="nav-group-title">Advanced</span>
+          <span class="nav-group-title">Review</span>
           <button class="nav-item" type="button" data-target="logs_history" id="nav-logs">
             <span aria-hidden="true">&#x2630;</span><span>Logs &amp; History</span>
           </button>
-          <button class="nav-item" type="button" data-target="ports" id="nav-ports">
-            <span aria-hidden="true">&#x2316;</span><span>Ports</span>
-          </button>
-          <button class="nav-item" type="button" data-target="developer_config" id="nav-devconfig">
-            <span aria-hidden="true">&#x2318;</span><span>Developer Config</span>
-          </button>
         </div>
+
       </nav>
 
       <div class="connection-card">
@@ -133,7 +198,7 @@
       <!-- Disconnected overlay -->
       <div id="disconnected-overlay" class="disconnected-overlay" style="display: none;">
         <div class="disconnected-content">
-          <p>FL Studio is not connected yet. Run Setup Doctor for the next safe step.</p>
+          <p>FLS Pilot is not connected yet. Run Setup Doctor for the next safe step.</p>
           <button class="ghost-button" id="disconnected-setup-button" type="button">Open Setup Doctor</button>
           <p class="disconnected-note">No project changes will be made.</p>
         </div>
@@ -143,7 +208,7 @@
       <section class="hero">
         <div>
           <h1>Setup Overview</h1>
-          <p>Connect FL Studio, verify the bridge, and prepare your AI client safely.</p>
+          <p>Connect to FL Studio, verify the bridge, and prepare your AI client safely.</p>
         </div>
       </section>
 
@@ -159,7 +224,9 @@
           <strong>Beta Status</strong>
           <span class="badge badge-beta">Beta</span>
         </div>
-        <p>This Control Center currently focuses on setup, diagnostics, safe connection checks, and AI&#8209;client configuration. Producer tools like Mix Review, Low&#8209;End Analysis, Routing Audit, and Project Organizer are planned for upcoming releases.</p>
+        <p>This FLS Pilot Control Center currently focuses on setup, diagnostics, safe connection checks,
+          AI&#8209;client
+          configuration. Other panels are still preview areas.</p>
       </div>
 
       <!-- Connection Details (collapsible) -->
@@ -217,7 +284,8 @@
               <li><span>Read-only mode</span><strong id="read-only-state">Active</strong></li>
               <li><span>Project changes</span><strong class="safety-disabled">Disabled</strong></li>
               <li><span>Dry-run</span><strong id="dry-run-state">Available</strong></li>
-              <li id="rollback-row" style="display: none;"><span>Rollback</span><strong id="rollback-state">N/A</strong></li>
+              <li id="rollback-row" style="display: none;"><span>Rollback</span><strong id="rollback-state">N/A</strong>
+              </li>
             </ul>
           </article>
 
@@ -330,10 +398,12 @@
           <h2>About Mix Review</h2>
         </div>
         <div class="producer-preview-content">
-          <p>Mix Review will analyze your FL Studio project for clipping, headroom, and stereo balance risks before you export. It reads mixer levels and channel data in read-only mode.</p>
+          <p>Mix Review will analyze your FL Studio project for clipping, headroom, and stereo balance risks before you
+            export. It reads mixer levels and channel data in read-only mode.</p>
           <div class="preview-notice">
             <span class="preview-notice-icon" aria-hidden="true">ℹ</span>
-            <p>This feature is not active in this beta. Current Control Center features focus on setup, diagnostics, safe connection checks, and AI&#8209;client configuration.</p>
+            <p>This feature is not active in this beta. Current Control Center features focus on setup, diagnostics,
+              safe connection checks, and AI&#8209;client configuration.</p>
           </div>
         </div>
       </div>
@@ -352,35 +422,169 @@
           <h2>About Low-End Analysis</h2>
         </div>
         <div class="producer-preview-content">
-          <p>Low-End Analysis will inspect the relationship between kick, bass, and master low-end frequency content. It uses read-only analyzer data to surface low-frequency masking and phase issues.</p>
+          <p>Low-End Analysis will inspect the relationship between kick, bass, and master low-end frequency content. It
+            uses read-only analyzer data to surface low-frequency masking and phase issues.</p>
           <div class="preview-notice">
             <span class="preview-notice-icon" aria-hidden="true">ℹ</span>
-            <p>This feature is not active in this beta. Current Control Center features focus on setup, diagnostics, safe connection checks, and AI&#8209;client configuration.</p>
+            <p>This feature is not active in this beta. Current Control Center features focus on setup, diagnostics,
+              safe connection checks, and AI&#8209;client configuration.</p>
           </div>
         </div>
       </div>
     </main>
 
-    <!-- ── Routing Audit Preview ──────────────────────────────────────────── -->
+    <!-- ── Routing Audit ──────────────────────────────────────────────────── -->
     <main class="status-report" id="producer_routing" style="display: none;">
       <section class="hero">
         <div>
-          <h1>Routing Audit <span class="badge badge-coming-soon">Coming Soon</span></h1>
-          <p>Detect suspicious sends, muted paths and bus-routing risks.</p>
+          <h1>Routing Audit <span class="badge badge-read-only">Read-only</span></h1>
+          <p>Signal flow, bus structure, direct Master paths, and unrouted sources.</p>
+        </div>
+        <div class="hero-actions">
+          <button class="ghost-button primary-action" id="run-routing-audit" type="button">Run Routing Audit</button>
+          <button class="ghost-button" id="routing-refresh-status" type="button">Refresh Status</button>
         </div>
       </section>
-      <div class="producer-preview-card panel">
-        <div class="panel-heading">
-          <h2>About Routing Audit</h2>
-        </div>
-        <div class="producer-preview-content">
-          <p>Routing Audit will scan your mixer and channel routing for suspicious sends, dead-end paths, muted routing chains, and bus-routing risks — all in read-only mode.</p>
-          <div class="preview-notice">
-            <span class="preview-notice-icon" aria-hidden="true">ℹ</span>
-            <p>This feature is not active in this beta. Current Control Center features focus on setup, diagnostics, safe connection checks, and AI&#8209;client configuration.</p>
+
+      <div id="routing-audit-feedback" class="routing-audit-feedback" role="status"></div>
+
+      <section class="routing-audit-layout" id="routing-audit-layout">
+        <article class="panel routing-map-panel">
+          <div class="panel-heading">
+            <h2>Routing Map</h2>
+            <span class="badge badge-neutral" id="routing-map-state">Idle</span>
           </div>
-        </div>
-      </div>
+          <div class="routing-map" id="routing-map">
+            <svg class="routing-links" id="routing-links" aria-hidden="true"></svg>
+            <div class="routing-column" data-column="sources">
+              <div class="routing-column-title">Sources</div>
+              <div class="routing-node-list" id="routing-graph-sources"></div>
+            </div>
+            <div class="routing-column" data-column="buses">
+              <div class="routing-column-title">Buses</div>
+              <div class="routing-node-list" id="routing-graph-buses"></div>
+            </div>
+            <div class="routing-column" data-column="master">
+              <div class="routing-column-title">Master</div>
+              <div class="routing-node-list" id="routing-graph-master"></div>
+            </div>
+          </div>
+          <div class="routing-legend" id="routing-legend">
+            <span><i class="legend-line audio"></i> Audio</span>
+            <span><i class="legend-line send"></i> Send</span>
+            <span><i class="legend-line direct"></i> Direct Master</span>
+            <span><i class="legend-line unrouted"></i> Unrouted</span>
+          </div>
+        </article>
+
+        <aside class="routing-side-stack">
+          <article class="panel routing-score-panel">
+            <div class="panel-heading">
+              <h2>Routing Health</h2>
+              <span class="badge badge-neutral" id="routing-score-label">Idle</span>
+            </div>
+            <div class="routing-score-body">
+              <div class="routing-score-ring" id="routing-score-ring" style="--score: 0;">
+                <strong id="routing-score-value">--</strong>
+                <span id="routing-score-caption">Not run</span>
+              </div>
+              <dl class="routing-score-stats">
+                <div>
+                  <dt>Automation</dt>
+                  <dd id="routing-automation-total">--</dd>
+                </div>
+                <div>
+                  <dt>Channels</dt>
+                  <dd id="routing-channel-total">--</dd>
+                </div>
+                <div>
+                  <dt>Mixer Tracks</dt>
+                  <dd id="routing-track-total">--</dd>
+                </div>
+                <div>
+                  <dt>Routes</dt>
+                  <dd id="routing-route-total">--</dd>
+                </div>
+              </dl>
+            </div>
+          </article>
+
+          <article class="panel routing-findings-panel">
+            <div class="panel-heading">
+              <h2>Routing Findings</h2>
+              <span class="badge badge-neutral" id="routing-findings-count">0</span>
+            </div>
+            <div class="routing-finding-list" id="routing-finding-list"></div>
+          </article>
+
+          <article class="panel routing-risks-panel">
+            <div class="panel-heading">
+              <h2>Bottlenecks &amp; Risks</h2>
+            </div>
+            <div class="routing-risk-list" id="routing-risk-list"></div>
+          </article>
+        </aside>
+
+        <article class="panel routing-details-panel">
+          <div class="panel-heading">
+            <h2>Channel Routing</h2>
+            <span class="badge badge-neutral" id="routing-channel-count">0</span>
+          </div>
+          <div class="routing-table-wrap">
+            <table class="routing-table">
+              <thead>
+                <tr>
+                  <th>Channel</th>
+                  <th>Type</th>
+                  <th>Mixer Target</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="routing-channel-table"></tbody>
+            </table>
+          </div>
+        </article>
+
+        <article class="panel routing-details-panel">
+          <div class="panel-heading">
+            <h2>Mixer Routes</h2>
+            <span class="badge badge-neutral" id="routing-route-count">0</span>
+          </div>
+          <div class="routing-table-wrap">
+            <table class="routing-table">
+              <thead>
+                <tr>
+                  <th>Source</th>
+                  <th>Destination</th>
+                  <th>Level</th>
+                </tr>
+              </thead>
+              <tbody id="routing-route-table"></tbody>
+            </table>
+          </div>
+        </article>
+
+        <article class="panel routing-details-panel">
+          <div class="panel-heading">
+            <h2>Mixer Tracks</h2>
+            <span class="badge badge-neutral" id="routing-track-count">0</span>
+          </div>
+          <div class="routing-table-wrap">
+            <table class="routing-table">
+              <thead>
+                <tr>
+                  <th>Track</th>
+                  <th>Role</th>
+                  <th>Incoming</th>
+                  <th>Channels</th>
+                  <th>Outputs</th>
+                </tr>
+              </thead>
+              <tbody id="routing-track-table"></tbody>
+            </table>
+          </div>
+        </article>
+      </section>
     </main>
 
     <!-- ── Project Organizer Preview ─────────────────────────────────────── -->
@@ -396,10 +600,13 @@
           <h2>About Project Organizer</h2>
         </div>
         <div class="producer-preview-content">
-          <p>Project Organizer will scan your project and suggest safe naming, color, and routing cleanup actions. All suggestions are presented before any changes are applied.</p>
+          <p>Project Organizer will scan your project and suggest safe naming, color, and routing cleanup actions. All
+            suggestions are presented before any changes are applied.</p>
           <div class="preview-notice">
             <span class="preview-notice-icon" aria-hidden="true">ℹ</span>
-            <p>This feature is not active in this beta. Current Control Center features focus on setup, diagnostics, safe connection checks, and AI&#8209;client configuration.</p>
+            <p>This feature is not active in this beta. Current Control Center features focus on setup, diagnostics,
+              safe
+              connection checks, and AI&#8209;client configuration.</p>
           </div>
         </div>
       </div>
@@ -418,10 +625,13 @@
           <h2>About Safe Apply</h2>
         </div>
         <div class="producer-preview-content">
-          <p>Safe Apply will let you review and approve each proposed change before it is applied to FL Studio. Changes are scoped, reversible, and logged — one at a time.</p>
+          <p>Safe Apply will let you review and approve each proposed change before it is applied to FL Studio. Changes
+            are scoped, reversible, and logged — one at a time.</p>
           <div class="preview-notice">
             <span class="preview-notice-icon" aria-hidden="true">ℹ</span>
-            <p>This feature is not active in this beta. Current Control Center features focus on setup, diagnostics, safe connection checks, and AI&#8209;client configuration.</p>
+            <p>This feature is not active in this beta. Current Control Center features focus on setup, diagnostics,
+              safe
+              connection checks, and AI&#8209;client configuration.</p>
           </div>
         </div>
       </div>
@@ -476,8 +686,11 @@
           <span class="badge badge-planned" style="margin-left: auto;">Planned</span>
         </div>
         <div style="padding: 20px 26px 24px;">
-          <p style="color: var(--muted); margin: 0 0 12px;">Developer configuration will be available in a future release.</p>
-          <p style="color: var(--dim); font-size: 13px; margin: 0;">This section will collect advanced local configuration, debug output, and integration settings.</p>
+          <p style="color: var(--muted); margin: 0 0 12px;">Developer configuration will be available in a future
+            release.
+          </p>
+          <p style="color: var(--dim); font-size: 13px; margin: 0;">This section will collect advanced local
+            configuration, debug output, and integration settings.</p>
         </div>
       </div>
     </main>
@@ -486,8 +699,8 @@
     <footer class="statusbar">
       <div>
         <span aria-hidden="true">&#x25a3;</span>
-        <strong>Mode: SETUP &amp; DIAGNOSTICS</strong>
-        <span>Setup, diagnostics, and service management for FL Studio Pilot.</span>
+        <strong>FLS Pilot Control Center</strong>
+          <span>Setup, diagnostics, and service management for FL Studio.</span>
       </div>
       <div id="footer-cc-port" style="margin-left: auto; font-size: 11px; opacity: 0.8;"></div>
     </footer>
@@ -495,15 +708,27 @@
 
   <!-- ── Success overlay ────────────────────────────────────────────────────── -->
   <div id="success-overlay" class="loading-overlay" style="display: none; z-index: 10000; backdrop-filter: blur(8px);">
-    <article class="panel setup-success-layer" style="max-width: 480px; margin: 20px; box-shadow: 0 40px 100px rgba(0,0,0,0.6);">
+    <article class="panel setup-success-layer"
+      style="max-width: 480px; margin: 20px; box-shadow: 0 40px 100px rgba(0,0,0,0.6);">
       <div class="panel-heading">
         <h2 style="font-size: 18px;">FL Studio is connected.</h2>
-        <span class="evidence-state" style="margin-left: auto; font-size: 11px; color: #70fba0; background: rgba(27, 228, 126, 0.14); border: 1px solid rgba(54, 244, 152, 0.44); border-radius: 8px; padding: 2px 10px;">Connected</span>
+        <span class="evidence-state"
+          style="margin-left: auto; font-size: 11px; color: #70fba0; background: rgba(27, 228, 126, 0.14); border: 1px solid rgba(54, 244, 152, 0.44); border-radius: 8px; padding: 2px 10px;">Connected</span>
       </div>
-      <p class="panel-note" style="margin: 20px 26px; white-space: pre-wrap; line-height: 1.5;">fls&#8209;pilot can read FL Studio data. Check Setup Overview for the full status, or open AI Clients to configure your AI assistant.</p>
-      <div style="padding: 0 26px 20px; display: flex; gap: 8px; flex-wrap: wrap;">
-        <button class="ghost-button" onclick="document.getElementById('success-overlay').style.display='none'; selectPanel('overview')">Setup Overview</button>
-        <button class="ghost-button" onclick="document.getElementById('success-overlay').style.display='none'; selectPanel('clients')">AI Clients</button>
+      <p class="panel-note" style="margin: 20px 26px; line-height: 1.5;">FLS Pilot can read data
+        from FL Studio. You may enjoy our Producer tools., or connect your LLM Client to FL Studio. For SSE usage you
+        must start SSE Server in Services panel.
+      </p>
+      <div style="padding: 0 26px 20px; display: flex; gap: 8px; flex-wrap: wrap; justify-content: center;">
+        <button class="ghost-button"
+          onclick="document.getElementById('success-overlay').style.display='none'; selectPanel('overview')">Setup
+          Overview</button>
+        <button class="ghost-button"
+          onclick="document.getElementById('success-overlay').style.display='none'; selectPanel('clients')">AI
+          Clients</button>
+        <button class="ghost-button"
+          style="background: rgba(39, 215, 255, 0.15); border-color: rgba(39, 215, 255, 0.4); color: #fff;"
+          onclick="document.getElementById('success-overlay').style.display='none';">Dismiss</button>
       </div>
     </article>
   </div>
@@ -512,7 +737,7 @@
   <div id="loading-overlay" class="loading-overlay" style="display: none;">
     <div class="loading-content">
       <div class="spinner"></div>
-      <p id="loading-text">performing tests ...</p>
+      <p id="loading-text">Please be patient ...</p>
     </div>
   </div>
 

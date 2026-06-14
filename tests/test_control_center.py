@@ -583,6 +583,111 @@ def test_http_status_endpoint(monkeypatch):
     assert payload["version"]
 
 
+def test_http_routing_audit_endpoint(monkeypatch):
+    monkeypatch.setattr(
+        control_center,
+        "_run_routing_audit",
+        lambda state: {"ok": True, "workflow": "routing_audit", "state": "live"},
+    )
+    state = _state(port=0)
+    handler_cls = control_center._handler_factory(state)
+    request = (
+        b"POST /api/workflows/routing-audit HTTP/1.1\r\n"
+        b"Host: localhost\r\n"
+        b"Content-Type: application/json\r\n"
+        b"Content-Length: 2\r\n"
+        b"\r\n"
+        b"{}"
+    )
+
+    class OneShotHandler(handler_cls):
+        def setup(self):  # noqa: ANN001
+            self.rfile = io.BytesIO(request)
+            self.wfile = io.BytesIO()
+
+        def finish(self):  # noqa: ANN001
+            pass
+
+    server = mock.Mock()
+    server.server_version = "test"
+    server.sys_version = ""
+    server.timeout = 1
+    server._BaseServer__is_shut_down = mock.Mock()
+    server._BaseServer__shutdown_request = False
+
+    handler = OneShotHandler(request=None, client_address=("127.0.0.1", 1234), server=server)
+    response = handler.wfile.getvalue().decode("utf-8")
+    payload = json.loads(response.split("\r\n\r\n", 1)[1])
+    assert payload == {"ok": True, "workflow": "routing_audit", "state": "live"}
+
+
+def test_build_routing_audit_report_summarizes_graph_and_findings():
+    channels = [
+        {
+            "channel": 1,
+            "name": "Kick",
+            "type": {"label": "genplug"},
+            "target_mixer_track": 1,
+            "target_name": "Kick",
+        },
+        {
+            "channel": 2,
+            "name": "Vocal",
+            "type": {"label": "audio"},
+            "target_mixer_track": 3,
+            "target_name": "Vocal",
+        },
+        {
+            "channel": 3,
+            "name": "FX Riser",
+            "type": {"label": "audio"},
+            "target_mixer_track": 0,
+            "target_name": "Master",
+        },
+        {
+            "channel": 4,
+            "name": "Pad",
+            "type": {"label": "genplug"},
+            "target_mixer_track": 2,
+            "target_name": "Pad",
+        },
+    ]
+    routing = [
+        {"i": 0, "name": "Master", "routes_to": []},
+        {"i": 1, "name": "Kick", "routes_to": [{"dst": 0, "dst_name": "Master"}]},
+        {"i": 2, "name": "Pad", "routes_to": []},
+        {"i": 3, "name": "Vocal", "routes_to": [{"dst": 10, "dst_name": "Vocal Bus"}]},
+        {"i": 9, "name": "Insert 9", "routes_to": []},
+        {"i": 10, "name": "Vocal Bus", "routes_to": [{"dst": 0, "dst_name": "Master"}]},
+    ]
+
+    report = control_center._build_routing_audit_report(
+        channels=channels,
+        routing=routing,
+        unused_mixer_tracks=[{"track": 9, "name": "Insert 9"}],
+    )
+
+    assert report["ok"] is True
+    assert report["summary"]["direct_to_master"] == 1
+    assert report["summary"]["unrouted_channels"] == 1
+    assert report["summary"]["dead_end_tracks"] == 1
+    assert report["summary"]["unused_mixer_tracks"] == 1
+    assert report["summary"]["routes"] == 3
+    assert {finding["id"] for finding in report["findings"]} >= {
+        "generators_direct_to_master",
+        "unrouted_channels",
+        "dead_end_tracks",
+        "unused_mixer_tracks",
+    }
+
+    links = {(link["from"], link["to"], link["kind"]) for link in report["graph"]["links"]}
+    assert ("channel:1", "master", "direct") in links
+    assert ("channel:2", "track:10", "audio") in links
+    assert ("track:10", "master", "audio") in links
+    assert ("channel:3", "unrouted", "unrouted") in links
+    assert ("channel:4", "dead_end", "dead_end") in links
+
+
 def test_main_rejects_non_loopback_host():
     with mock.patch("fls_pilot.control_center.serve_control_center") as serve:
         try:
