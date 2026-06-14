@@ -1,3 +1,4 @@
+import sys
 import os
 import subprocess
 import pytest
@@ -15,7 +16,7 @@ def test_validate_github_labels_script():
     
     # Run the validation script
     result = subprocess.run(
-        ["python", str(script_path)],
+        [sys.executable, str(script_path)],
         cwd=root_dir,
         capture_output=True,
         text=True
