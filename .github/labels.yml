@@ -1,0 +1,154 @@
+labels:
+  - name: type:bug
+    color: d73a4a
+    description: Something is not working as expected.
+  - name: type:feature
+    color: a2eeef
+    description: New capability or user-visible enhancement.
+  - name: type:maintenance
+    color: cfd3d7
+    description: Repository maintenance, tooling, or internal cleanup.
+  - name: type:documentation
+    color: 0075ca
+    description: Documentation-only change or documentation issue.
+  - name: type:fix
+    color: d73a4a
+    description: Bug fix.
+  - name: type:doctor
+    color: a2eeef
+    description: Doctor or diagnostic request.
+  - name: type:workflow
+    color: a2eeef
+    description: Workflow feature or request.
+  - name: type:report
+    color: cfd3d7
+    description: Report.
+  - name: type:github-sync
+    color: cfd3d7
+    description: GitHub synchronization tasks.
+  - name: type:roadmap
+    color: cfd3d7
+    description: Roadmap tracking.
+  - name: type:rename
+    color: cfd3d7
+    description: Rename task.
+  - name: type:security
+    color: b60205
+    description: Security type task.
+
+  - name: area:github
+    color: 5319e7
+    description: GitHub configuration, workflows, templates, labels, or automation.
+  - name: area:ci
+    color: 5319e7
+    description: Continuous integration, test automation, or workflow execution.
+  - name: area:docs
+    color: 0075ca
+    description: User or developer documentation.
+  - name: area:safety
+    color: fbca04
+    description: Safety boundaries, audits, rollback behavior, or protected tool behavior.
+  - name: area:security
+    color: b60205
+    description: Security-sensitive changes or vulnerability handling.
+  - name: area:api
+    color: 1d76db
+    description: API behavior, API probes, compatibility, or documented API limits.
+  - name: area:dependencies
+    color: 0366d6
+    description: Dependency updates or dependency maintenance.
+  - name: area:installer
+    color: 1d76db
+    description: Installer related issues.
+  - name: area:workflow
+    color: 1d76db
+    description: Workflow automation.
+  - name: area:rename
+    color: cfd3d7
+    description: Renaming tasks.
+  - name: area:kb
+    color: a2eeef
+    description: Knowledgebase.
+  - name: area:ux
+    color: a2eeef
+    description: User experience.
+
+  - name: priority:p0
+    color: b60205
+    description: Critical priority; should be handled immediately.
+  - name: priority:p1
+    color: d93f0b
+    description: High priority; important follow-up work.
+  - name: priority:p2
+    color: fbca04
+    description: Medium priority; useful but not urgent.
+  - name: priority:p3
+    color: ededed
+    description: Low priority.
+  - name: P0
+    color: b60205
+    description: Critical priority (alias).
+  - name: P1
+    color: d93f0b
+    description: High priority (alias).
+
+  - name: status:needs-triage
+    color: ededed
+    description: Needs initial maintainer review and classification.
+  - name: status:blocked
+    color: 000000
+    description: Cannot proceed until an external dependency or decision is resolved.
+  - name: status:ready
+    color: 0e8a16
+    description: Ready for implementation or review.
+
+  - name: release-blocker
+    color: b60205
+    description: Must be resolved before the next release.
+  - name: release:skip
+    color: cfd3d7
+    description: Skip in release notes.
+  - name: breaking-change
+    color: b60205
+    description: Introduces a breaking change.
+
+  - name: dependencies
+    color: 0366d6
+    description: Dependency update generated manually or by automation.
+  - name: api-dependent
+    color: 1d76db
+    description: Depends on FL Studio or external API behavior.
+  - name: api-limited
+    color: fbca04
+    description: Limited by known API constraints.
+
+  - name: safety
+    color: fbca04
+    description: Safety task.
+  - name: rollback
+    color: fbca04
+    description: Rollback behavior.
+  - name: documentation
+    color: 0075ca
+    description: Documentation update.
+  - name: ux
+    color: a2eeef
+    description: UX design.
+  - name: onboarding
+    color: a2eeef
+    description: Onboarding improvements.
+  - name: support
+    color: ededed
+    description: Support request.
+  - name: read-only
+    color: cfd3d7
+    description: Read-only script.
+  - name: dry-run-only
+    color: cfd3d7
+    description: Dry run only script.
+  - name: write-safe-required
+    color: fbca04
+    description: Requires safe write guarantees.
+  - name: "*"
+    color: ededed
+    description: Catch-all category.
