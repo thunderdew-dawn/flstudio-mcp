@@ -13,6 +13,7 @@ agent chats are execution surfaces, not durable planning storage.
   #7 is canonical.
 - Every non-trivial change starts with a GitHub issue or updates an existing
   one.
+- Always use the repository's issue and PR templates (e.g., `.github/ISSUE_TEMPLATE/*` and `.github/pull_request_template.md`) to structure the body when creating or updating issues and pull requests.
 - Keep `docs/project/ROADMAP.github.md` and `docs/project/CHANGELOG.github.md`
   as generated snapshots backed by the snapshot workflow.
 - Use small PRs. Each PR should close or materially advance one issue.
