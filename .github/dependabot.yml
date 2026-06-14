@@ -7,8 +7,13 @@ updates:
     open-pull-requests-limit: 5
     labels:
       - dependencies
+      - area:dependencies
       - type:maintenance
-      - area:security
+    groups:
+      python-minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
@@ -16,5 +21,10 @@ updates:
     open-pull-requests-limit: 5
     labels:
       - dependencies
+      - area:dependencies
+      - area:github
       - type:maintenance
-      - area:ci
+    groups:
+      github-actions:
+        patterns:
+          - "*"
