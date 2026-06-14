@@ -319,6 +319,14 @@ Project Fingerprint must be investigated when GitHub project governance changes.
 The Release workflow must be triggered by a correct tag, not replaced by manual copy/paste release steps.
 ```
 
+## Docs build gate
+
+Documentation changes are validated through the `Docs` workflow. The workflow installs the same documentation dependencies used by ReadTheDocs and runs:
+
+`mkdocs build --strict`
+
+Pull requests that change `docs/**`, `mkdocs.yml`, `.readthedocs.yaml`, `docs/requirements.txt`, or packaging metadata should pass the docs gate before merge.
+
 ## Definition Of Done For Normal Pull Requests
 
 A normal PR is done only when:
