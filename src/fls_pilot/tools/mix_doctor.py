@@ -89,52 +89,56 @@ def register(mcp: FastMCP) -> None:
         kind = plan.get("kind", "change")
         if kind == "trim_volume":
             tool = "fl_apply_mix_adjustment"
-            params = {
+            proposed_state = {
                 "kind": "trim_volume",
                 "track": plan.get("track"),
                 "target_db": plan.get("target_fader_db"),
                 "approved": True,
             }
-            target = {"track": plan.get("track"), "track_name": plan.get("track_name")}
+            observed_state = {"track": plan.get("track"), "track_name": plan.get("track_name")}
             readback = "Mixer track fader dB is read back after the write."
             rollback = "MCP changelog restores the prior mixer track volume."
+            safety_class = "write-safe-required"
         elif kind == "group":
             tool = "fl_plan_routing_cleanup"
-            params = {
+            proposed_state = {
                 "issues": [plan.get("reason") or plan.get("human") or "grouping review"],
                 "proposed_buses": [],
             }
-            target = {"tracks": plan.get("args") or []}
+            observed_state = {"tracks": plan.get("args") or []}
             readback = "Read-only routing plan; no FL write is performed."
             rollback = "No rollback needed for read-only routing planning."
+            safety_class = "read-only"
         else:
-            tool = plan.get("tool")
-            params = plan.get("params") or {}
-            target = {}
+            tool = plan.get("tool") or str(kind)
+            proposed_state = plan.get("params") or {}
+            observed_state = {}
             readback = "Readback depends on the selected write-safe tool."
             rollback = "Rollback depends on the selected write-safe tool."
-        return wr.proposed_change(
+            safety_class = "read-only"
+
+        row = wr.proposed_change(
             id=f"{source}_proposal_{index}",
             title=plan.get("human") or f"{kind} proposal",
-            reason=plan.get("reason") or plan.get("note") or "",
-            risk=_risk_for_plan(plan),
             tool=tool,
-            params=params,
-            target=target,
-            safety_basis=(
-                "Apply only after explicit approval. Persistent writes route through "
-                "the safety layer."
-            ),
-            readback=readback,
-            rollback=rollback,
+            observed_state=observed_state,
+            proposed_state=proposed_state,
+            safety_class=safety_class,
+            risk_level=_risk_for_plan(plan),
+            readback_expectation=readback,
+            rollback_expectation=rollback,
             requires_explicit_approval=kind != "group",
-            kb_rule_ids=plan.get("kb_rule_ids") or [],
-            metadata={
-                key: value
-                for key, value in _compact_kb_fields(plan).items()
-                if key not in {"kb_rule_ids"}
-            },
         )
+        if plan.get("kb_rule_ids"):
+            row["kb_rule_ids"] = plan.get("kb_rule_ids")
+        kb_meta = {
+            key: value
+            for key, value in _compact_kb_fields(plan).items()
+            if key not in {"kb_rule_ids"}
+        }
+        if kb_meta:
+            row["metadata"] = kb_meta
+        return row
 
     def _proposal_from_finding(finding: dict, *, index: int, source: str) -> dict | None:
         fix = finding.get("proposed_fix") or {}
@@ -147,39 +151,42 @@ def register(mcp: FastMCP) -> None:
             risk = "medium"
         if intent == "user_action_required":
             risk = "unsupported"
-        return wr.proposed_change(
+
+        tool = "manual_review" if manual else intent
+        proposed_state = fix.get("args") or {}
+        observed_state = {"track_name": finding.get("track")}
+        safety_class = "read-only" if manual else "write-safe-required"
+
+        row = wr.proposed_change(
             id=f"{source}_proposal_{index}",
             title=fix.get("desc") or finding.get("message") or "Review finding",
-            reason=finding.get("message") or "",
-            risk=risk,
-            tool=None if manual else intent,
-            params=fix.get("args") or {},
-            action=intent,
-            target={"track_name": finding.get("track")},
-            safety_basis=(
-                "Read-only/manual review only."
-                if manual
-                else "Apply only after explicit approval through the referenced write-safe tool."
-            ),
-            readback=(
+            tool=tool,
+            observed_state=observed_state,
+            proposed_state=proposed_state,
+            safety_class=safety_class,
+            risk_level=risk,
+            readback_expectation=(
                 "Manual check; no FL write readback."
                 if manual
                 else "Readback depends on the referenced write-safe tool."
             ),
-            rollback=(
+            rollback_expectation=(
                 "No project write is performed by this proposal."
                 if manual
                 else "Rollback is provided by the referenced write-safe tool."
             ),
             requires_explicit_approval=not manual,
-            manual_review=manual,
-            kb_rule_ids=finding.get("kb_rule_ids") or [],
-            metadata={
-                key: value
-                for key, value in _compact_kb_fields(finding).items()
-                if key not in {"kb_rule_ids"}
-            },
         )
+        if finding.get("kb_rule_ids"):
+            row["kb_rule_ids"] = finding.get("kb_rule_ids")
+        kb_meta = {
+            key: value
+            for key, value in _compact_kb_fields(finding).items()
+            if key not in {"kb_rule_ids"}
+        }
+        if kb_meta:
+            row["metadata"] = kb_meta
+        return row
 
     def _diagnostic_report(
         *,
@@ -473,14 +480,13 @@ def register(mcp: FastMCP) -> None:
         proposal = wr.proposed_change(
             id=f"mix_trim_track_{track}",
             title=f"Trim mixer track {track} to {target_db:.1f} dB",
-            reason="Approved Mix Review fader trim.",
-            risk="low",
             tool="fl_apply_mix_adjustment",
-            params={"kind": kind, "track": track, "target_db": target_db, "approved": True},
-            target={"track": track},
-            safety_basis="Single mixer fader write through safety.safe_write.",
-            readback="Mixer track fader dB is read back after write.",
-            rollback="MCP changelog restores the prior mixer track volume.",
+            observed_state={"track": track},
+            proposed_state={"kind": kind, "track": track, "target_db": target_db, "approved": True},
+            safety_class="write-safe-required",
+            risk_level="low",
+            readback_expectation="Mixer track fader dB is read back after write.",
+            rollback_expectation="MCP changelog restores the prior mixer track volume.",
         )
         if not approved:
             return wr.approval_required_report(
@@ -521,14 +527,14 @@ def register(mcp: FastMCP) -> None:
                         id=f"mix_trim_track_{track}",
                         title=f"Trim mixer track {track} to {target_db:.1f} dB",
                         tool="fl_apply_mix_adjustment",
-                        params={"kind": kind, "track": track, "target_db": target_db},
-                        risk="low",
                         before=before,
+                        requested_change={"kind": kind, "track": track, "target_db": target_db},
                         after=after,
+                        safety_class="write-safe-required",
+                        risk_level="low",
                         change_id=res.get("change_id"),
                         rollback=res.get("rollback"),
                         readback_ok=applied,
-                        source_proposal_id=proposal["id"],
                     )
                 ],
                 safety={
@@ -726,7 +732,8 @@ def register(mcp: FastMCP) -> None:
             proposed_changes=proposals,
             notes=[
                 *plan["notes"],
-                "Apply approved trims one at a time. Skip alternative Master trim if source trims were applied.",
+                "Apply approved trims one at a time. "
+                "Skip alternative Master trim if source trims were applied.",
             ],
             kb_policy_refs=kb_policy.rule_refs(used_rule_ids),
             metadata={
@@ -807,6 +814,8 @@ def register(mcp: FastMCP) -> None:
             "kb_policy_refs": kb_policy.rule_refs(
                 ["master_peak_boundary", "mix_doctor_existing_plugin_only"]
             ),
-            "guidance": "Nudge via fl_apply_eq_intent (balance) / fl_apply_mix_adjustment (level): e.g. "
-            "positive low delta -> high-pass/trim lows; negative high delta -> add_air.",
+            "guidance": (
+                "Nudge via fl_apply_eq_intent (balance) / fl_apply_mix_adjustment (level): e.g. "
+                "positive low delta -> high-pass/trim lows; negative high delta -> add_air."
+            ),
         }

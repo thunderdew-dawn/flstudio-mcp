@@ -441,7 +441,10 @@ def main() -> int:
 
     check("tool diagnosis output ok", tool_out.get("ok") is True)
     check("tool diagnosis uses workflow contract", tool_out.get("contract_version") is not None)
-    check("tool diagnosis includes markdown report", "# Mix Review" in tool_out.get("markdown_report", ""))
+    check(
+        "tool diagnosis includes markdown report",
+        "# Mix Review" in tool_out.get("markdown_report", ""),
+    )
     check(
         "tool findings omit full per-row KB rule details",
         all("kb_rules" not in f for f in tool_out.get("diagnostics", [])),
