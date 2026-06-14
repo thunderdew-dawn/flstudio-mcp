@@ -19,9 +19,10 @@ tool call. They are intentionally capped so automatic context reads stay small.
 
 ## Full Tool Reference
 
-The current public MCP surface registers 87 tools: 41 `read-only`, 33
-`write-safe-required`, 4 `server-state`, 2 `external-write`, and 7 Knowledgebase tools
-registered outside the static annotation pattern.
+The current public MCP surface registers 94 tools: 41 `read-only`, 33
+`write-safe-required`, 4 `server-state`, 2 `external-write`, 1 `transient`,
+and 13 Knowledgebase/workflow-context tools registered outside the static
+annotation pattern.
 
 ### Workflow Report Contract
 

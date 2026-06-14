@@ -20,20 +20,21 @@ from fastmcp import FastMCP  # noqa: E402
 from fls_pilot import __version__  # noqa: E402
 from fls_pilot import server as server_module  # noqa: E402
 
-EXPECTED_REGISTERED_TOOL_COUNT = 87
-EXPECTED_STATIC_TOOL_COUNT = 166
+EXPECTED_REGISTERED_TOOL_COUNT = 94
+EXPECTED_STATIC_TOOL_COUNT = 167
 EXPECTED_REGISTERED_SAFETY_SUMMARY = {
     "external-write": 2,
     "read-only": 41,
     "server-state": 4,
-    "unannotated": 7,
+    "transient": 1,
+    "unannotated": 13,
     "write-safe-required": 33,
 }
 EXPECTED_STATIC_SAFETY_SUMMARY = {
     "external-write": 2,
     "read-only": 71,
     "server-state": 4,
-    "transient": 5,
+    "transient": 6,
     "write-gap": 0,
     "write-safe-required": 84,
 }
