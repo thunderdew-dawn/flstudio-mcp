@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from copy import deepcopy
-from typing import Any, Mapping
+from typing import Any
 
 CONTRACT_VERSION = "fls-pilot.workflow-report.v1"
 RISK_LEVELS = {"read-only", "low", "medium", "high", "unsupported"}
@@ -54,43 +55,35 @@ def proposed_change(
     *,
     id: str,
     title: str,
-    reason: str,
-    risk: str,
-    tool: str | None = None,
-    params: Mapping[str, Any] | None = None,
-    action: str | None = None,
-    target: Mapping[str, Any] | None = None,
-    source_diagnostic_ids: list[str] | tuple[str, ...] | None = None,
-    safety_basis: str,
-    readback: str,
-    rollback: str,
-    requires_explicit_approval: bool = True,
+    tool: str,
+    observed_state: Any,
+    proposed_state: Any,
+    safety_class: str,
+    risk_level: str,
+    readback_expectation: str,
+    rollback_expectation: str,
+    limitations: list[str] | None = None,
+    skipped_changes: list[str] | None = None,
     status: str = "proposed",
-    manual_review: bool = False,
-    kb_rule_ids: list[str] | tuple[str, ...] | None = None,
-    metadata: Mapping[str, Any] | None = None,
+    requires_explicit_approval: bool = True,
 ) -> dict[str, Any]:
     row: dict[str, Any] = {
         "id": str(id),
         "status": str(status),
         "title": str(title),
-        "reason": str(reason),
-        "risk_level": risk_level(risk),
-        "action": action or tool or "manual_review",
-        "tool": tool,
-        "params": _compact_value(dict(params or {})),
-        "target": dict(target or {}),
-        "source_diagnostic_ids": [str(item) for item in (source_diagnostic_ids or [])],
-        "safety_basis": str(safety_basis),
-        "readback": str(readback),
-        "rollback": str(rollback),
+        "tool": str(tool),
+        "observed_state": _compact_value(observed_state),
+        "proposed_state": _compact_value(proposed_state),
+        "safety_class": str(safety_class),
+        "risk_level": globals()["risk_level"](risk_level),
+        "readback_expectation": str(readback_expectation),
+        "rollback_expectation": str(rollback_expectation),
         "requires_explicit_approval": bool(requires_explicit_approval),
-        "manual_review": bool(manual_review),
     }
-    if kb_rule_ids:
-        row["kb_rule_ids"] = [str(rule_id) for rule_id in kb_rule_ids if rule_id]
-    if metadata:
-        row["metadata"] = _compact_value(dict(metadata))
+    if limitations:
+        row["limitations"] = [str(x) for x in limitations]
+    if skipped_changes:
+        row["skipped_changes"] = _compact_value(skipped_changes)
     return row
 
 
@@ -99,33 +92,36 @@ def applied_change(
     id: str,
     title: str,
     tool: str,
-    params: Mapping[str, Any],
-    risk: str,
     before: Any,
+    requested_change: Any,
     after: Any,
+    safety_class: str,
+    risk_level: str,
     change_id: str | None,
+    readback_ok: bool | None,
     rollback: Mapping[str, Any] | None = None,
-    readback_ok: bool | None = None,
-    source_proposal_id: str | None = None,
-    metadata: Mapping[str, Any] | None = None,
+    rollback_command: str | None = None,
+    limitations: list[str] | None = None,
 ) -> dict[str, Any]:
     row: dict[str, Any] = {
         "id": str(id),
         "status": "applied",
         "title": str(title),
         "tool": str(tool),
-        "params": _compact_value(dict(params or {})),
-        "risk_level": risk_level(risk),
         "before": _compact_value(before),
+        "requested_change": _compact_value(requested_change),
         "after": _compact_value(after),
+        "safety_class": str(safety_class),
+        "risk_level": globals()["risk_level"](risk_level),
         "change_id": change_id,
-        "rollback": _compact_value(dict(rollback or {})),
         "readback_ok": readback_ok,
     }
-    if source_proposal_id:
-        row["source_proposal_id"] = str(source_proposal_id)
-    if metadata:
-        row["metadata"] = _compact_value(dict(metadata))
+    if rollback:
+        row["rollback"] = _compact_value(dict(rollback))
+    if rollback_command:
+        row["rollback_command"] = str(rollback_command)
+    if limitations:
+        row["limitations"] = [str(x) for x in limitations]
     return row
 
 
@@ -264,20 +260,38 @@ def _diagnostic_line(row):
 
 
 def _proposed_change_line(row):
-    tool = row.get("tool") or row.get("action")
-    return (
+    tool = row.get("tool")
+    msg = (
         f"- [risk: {row.get('risk_level')}] `{row.get('id')}`: "
         f"{row.get('title')} via `{tool}`. Approval required: "
         f"{str(row.get('requires_explicit_approval')).lower()}"
     )
+    hints = []
+    if row.get("readback_expectation"):
+        hints.append(f"readback: {row.get('readback_expectation')}")
+    if row.get("rollback_expectation"):
+        hints.append(f"rollback: {row.get('rollback_expectation')}")
+    if hints:
+        msg += f" ({', '.join(hints)})"
+    return msg
 
 
 def _applied_change_line(row):
     change = row.get("change_id") or "no change_id"
-    return (
+    msg = (
         f"- [risk: {row.get('risk_level')}] `{row.get('id')}`: "
         f"{row.get('title')} via `{row.get('tool')}`. Change: `{change}`"
     )
+    hints = []
+    if row.get("readback_ok") is not None:
+        hints.append(f"readback_ok: {str(row.get('readback_ok')).lower()}")
+    if row.get("rollback_command"):
+        hints.append(f"rollback: {row.get('rollback_command')}")
+    elif row.get("rollback"):
+        hints.append("rollback: available")
+    if hints:
+        msg += f" ({', '.join(hints)})"
+    return msg
 
 
 def _manual_check_line(row):
