@@ -4,14 +4,26 @@ All reuse existing (budget-paginated) reads, so no new heavy controller loops.
 Kept COMPACT: summaries + counts, capped, with a note pointing to the detail
 tool when a list is large. Every resource degrades gracefully if the bridge is
 down (returns an {error} dict instead of throwing) so an auto-pull never breaks.
+
+Static ``fls://docs/...`` resources serve compact excerpts from repo Markdown
+documentation so local LLMs can quickly orient without reading full files.
+``fls://capabilities/...`` resources document hard FL API limits.
 """
 
 from __future__ import annotations
+
+import logging
+from pathlib import Path
 
 from fastmcp import FastMCP
 
 from .. import protocol
 from ..connection import fetch_all_pages, get_bridge
+
+logger = logging.getLogger("fls_pilot.resources")
+
+# Repo root (two parents up from this file's src/fls_pilot/tools/ location)
+_REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 
 _CAPS = {
     "channels": 24,
@@ -263,3 +275,194 @@ def register(mcp: FastMCP) -> None:
                 'fl_pattern(action="list")',
             )
         )
+
+    # ------------------------------------------------------------------
+    # Static doc resources  fls://docs/…
+    # Compact excerpts from canonical Markdown files.
+    # Max ~3 KB each; longer docs are summarised with a kb_get pointer.
+    # ------------------------------------------------------------------
+
+    def _read_doc(rel_path: str, max_chars: int = 3000) -> dict:
+        """Load a repo-relative Markdown file as a compact resource."""
+        p = _REPO_ROOT / rel_path
+        try:
+            text = p.read_text(encoding="utf-8")
+            if len(text) > max_chars:
+                text = text[:max_chars] + (
+                    f"\n\n[Truncated. Use kb_get({rel_path!r}) or read the "
+                    "full file for complete content.]"
+                )
+            return {"source": rel_path, "content": text}
+        except FileNotFoundError:
+            return {"error": f"File not found: {rel_path}"}
+        except Exception as exc:
+            return {"error": f"{type(exc).__name__}: {exc}"}
+
+    @mcp.resource("fls://docs/safety-contract")
+    def docs_safety_contract() -> dict:
+        """Compact safety contract: what the agent may and may not do."""
+        return _read_doc("docs/concepts/safety-contract.md")
+
+    @mcp.resource("fls://docs/api-capability-audit")
+    def docs_api_capability_audit() -> dict:
+        """Compact excerpt from the FL API capability audit."""
+        return _read_doc("docs/concepts/api-capability-audit.md", max_chars=2500)
+
+    @mcp.resource("fls://docs/default-safe-ux")
+    def docs_default_safe_ux() -> dict:
+        """Default safe UX rules for write-capable workflows."""
+        return _read_doc("docs/concepts/default-safe-ux.md")
+
+    @mcp.resource("fls://docs/runtime-usage")
+    def docs_runtime_usage() -> dict:
+        """Startup protocol and tool-choice matrix for runtime agents."""
+        return _read_doc("docs/agents/runtime-usage.md")
+
+    @mcp.resource("fls://docs/knowledgebase-protocol")
+    def docs_knowledgebase_protocol() -> dict:
+        """Knowledgebase protocol: when and how to record findings."""
+        return _read_doc("docs/agents/knowledgebase-protocol.md")
+
+    @mcp.resource("fls://docs/tool-policy")
+    def docs_tool_policy() -> dict:
+        """MCP tool policy: hierarchy, examples of allowed vs forbidden calls."""
+        return _read_doc("knowledgebase/MCP_TOOL_POLICY.md")
+
+    # ------------------------------------------------------------------
+    # Capability resources  fls://capabilities/…
+    # Pure Python dicts — fast, always available, no file I/O.
+    # ------------------------------------------------------------------
+
+    @mcp.resource("fls://capabilities/supported")
+    def capabilities_supported() -> dict:
+        """What the MCP server can do (confirmed supported workflows)."""
+        return {
+            "supported": [
+                "Mix Review (fl_review_mix, fl_review_low_end_stereo, fl_mix_watch_start/stop)",
+                "Routing Review (fl_review_routing, fl_plan_routing_cleanup)",
+                "Project Cleanup Planning (fl_plan_project_cleanup, fl_apply_project_cleanup_step)",
+                "Project Health & Export Preflight (fl_project_health_overview, fl_check_project_preflight)",
+                "Piano Roll write after explicit user approval (fl_piano_roll write_notes, fl_write_raga_melody, fl_write_raga_chords)",
+                "MIDI Export from arrangement spec (fl_export_midi)",
+                "Audio File Analysis — tempo, key, energy (fl_analyze_audio)",
+                "Melody Extraction from audio (fl_extract_melody)",
+                "Knowledgebase Search & Retrieval (kb_search, kb_get, kb_get_many, kb_get_workflow_pack)",
+                "Parameter Validation via Knowledgebase (kb_get_parameter_spec, kb_get_conversion)",
+                "Plugin FX chain planning using already-loaded plugins (fl_setup_chain, fl_list_chains)",
+                "Genre/recipe chain setup (fl_list_chains, fl_setup_chain)",
+                "Gain Staging & Reference Matching (fl_gain_stage, fl_reference_match)",
+                "Bulk mute/solo (fl_mute_tracks, fl_solo_tracks)",
+                "Track/channel coloring (fl_set_track_color, fl_set_channel_color)",
+                "Arrangement: pattern create/clone + markers (fl_arrange_new_pattern, fl_arrange_clone_pattern)",
+                "Scale/Raga lookup (fl_scale_list, fl_scale_get)",
+            ],
+            "note": (
+                "All write actions require explicit user approval before execution. "
+                "Read fls://capabilities/write-safety for the exact protocol."
+            ),
+        }
+
+    @mcp.resource("fls://capabilities/not-possible")
+    def capabilities_not_possible() -> dict:
+        """Hard FL API limits: actions that cannot be automated."""
+        return {
+            "not_possible": [
+                {
+                    "action": "Load new VST/AU plugin instances",
+                    "reason": "FL Studio API does not expose plugin instantiation to controller scripts.",
+                    "workaround": "User must load the plugin manually in FL Studio first.",
+                },
+                {
+                    "action": "Render audio / WAV export",
+                    "reason": "FL Studio's render/export pipeline is not accessible via MIDI SysEx bridge.",
+                    "workaround": "User must trigger File > Export in FL Studio manually.",
+                },
+                {
+                    "action": "Place, move, or delete playlist clips",
+                    "reason": "Playlist clip placement API is not reliably supported via the controller bridge.",
+                    "workaround": "User arranges clips manually; server can build patterns and add markers.",
+                },
+                {
+                    "action": "Edit deep audio clip properties (pitch, stretch mode, warp markers)",
+                    "reason": "Audio clip internals are not exposed through the controller API.",
+                    "workaround": "Manual editing in FL Studio Edison or playlist properties.",
+                },
+                {
+                    "action": "Guess normalized plugin/EQ parameter values",
+                    "reason": "Mapping between UI values and normalized API values is non-linear and plugin-specific.",
+                    "workaround": "Use kb_get_parameter_spec or kb_get_conversion for verified mappings only.",
+                },
+                {
+                    "action": "Project open / save-as / new project automation",
+                    "reason": "File I/O commands are not exposed to controller scripts.",
+                    "workaround": "User manages project files in FL Studio.",
+                },
+                {
+                    "action": "Piano Roll readback after write (in all FL versions)",
+                    "reason": "Piano Roll state readback is unreliable or unsupported in some FL versions.",
+                    "workaround": "Report note count from write response; user verifies visually.",
+                },
+            ],
+        }
+
+    @mcp.resource("fls://capabilities/api-limits")
+    def capabilities_api_limits() -> dict:
+        """Hard numerical and structural limits of the FL bridge API."""
+        return {
+            "hard_limits": [
+                "Mixer track indices: 0–125 (FL 20.9+); 0–63 in older versions.",
+                "Channel rack slot count: project-dependent, typically 0–499.",
+                "Pattern count: up to ~500 in FL 20.9; older versions vary.",
+                "Piano Roll note velocity: 0–127 (MIDI standard).",
+                "Piano Roll note duration: ticks; 96 ticks = 1 beat at default PPQ.",
+                "Tempo range: ~10–999 BPM (exact limits FL-version-dependent).",
+                "Mixer volume: normalized 0.0–1.0 where 1.0 = 100% / 0 dB.",
+                "Mixer pan: normalized 0.0–1.0 where 0.5 = center.",
+                "EQ gain: normalized; see kb_get_parameter_spec for band-specific mapping.",
+                "EQ frequency: normalized; see kb_get_parameter_spec for Hz mapping.",
+            ],
+            "do_not_guess": (
+                "Never interpolate or guess normalized API values. "
+                "Use kb_get_parameter_spec or kb_get_conversion for verified mappings. "
+                "Use kb_search before any value-dependent API call."
+            ),
+        }
+
+    @mcp.resource("fls://capabilities/write-safety")
+    def capabilities_write_safety() -> dict:
+        """Write-safety protocol: snapshot, confirmation, readback, rollback."""
+        return {
+            "protocol": [
+                "1. Scan / read-only first. Explain findings before proposing writes.",
+                "2. Propose exactly one reversible change with a risk level.",
+                "3. Ask for explicit user confirmation of the exact change.",
+                "4. After confirmation: apply one reversible change only.",
+                "5. Readback where supported; report before/after plus rollback/change_id.",
+                "6. Stop after the verified change and wait for user direction.",
+            ],
+            "snapshot_requirement": (
+                "Every persistent write must be preceded by a scoped snapshot "
+                "or change_id that enables rollback. Use fl_take_snapshot or the "
+                "change history tools."
+            ),
+            "approval_gates": [
+                "fl_apply_mix_adjustment",
+                "fl_apply_routing_cleanup",
+                "fl_apply_bus_layout",
+                "fl_apply_project_cleanup_step",
+                "fl_apply_naming_standard",
+                "fl_apply_color_standard",
+                "fl_piano_roll (write_notes, write_chord, clear, transpose, velocity_ramp)",
+                "fl_write_raga_melody",
+                "fl_write_raga_chords",
+                "fl_gain_stage",
+                "fl_effect (set_slot_mix, set_slot_enabled, set_eq_band)",
+                "fl_plugin (set_param)",
+                "fl_mixer (set_volume, set_pan, set_mute, set_solo, set_route)",
+                "fl_channel (set_volume, set_pan, set_mute, set_steps, set_mixer_target)",
+            ],
+            "never_auto_execute": (
+                "MCP Prompts do not execute any write tool automatically. "
+                "A prompt invocation is a guided template, not a write approval."
+            ),
+        }
