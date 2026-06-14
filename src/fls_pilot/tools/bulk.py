@@ -14,7 +14,7 @@ from typing import Annotated
 from fastmcp import FastMCP
 from pydantic import Field
 
-from .. import protocol, safety
+from .. import protocol, safety, workflow_report
 from ..connection import fetch_all_pages, get_bridge
 from ..music.mix_doctor import FAMILIES
 
@@ -73,6 +73,55 @@ def _mute_writes(indices, state):
     ]
 
 
+def _dry_run_report(*, workflow: str, title: str, proposed_changes: list[dict]) -> dict:
+    return workflow_report.workflow_report(
+        workflow=workflow,
+        title=title,
+        mode="dry_run",
+        status="Dry-run only",
+        summary={"proposed_changes": len(proposed_changes), "applied_changes": 0},
+        proposed_changes=proposed_changes,
+        notes=["Dry-run mode is enabled; no FL Studio project state was changed."],
+        safety={"read_only": True, "requires_explicit_approval": True},
+    )
+
+
+def _track_from_state(state: object) -> object:
+    if not isinstance(state, dict):
+        return "unknown"
+    return state.get("track", state.get("index", state.get("i", "unknown")))
+
+
+def _applied_state_changes(
+    res: dict,
+    *,
+    id_prefix: str,
+    title_prefix: str,
+    tool: str,
+    requested_state: bool,
+) -> list[dict]:
+    rows = []
+    for before, after in zip(res.get("before", []), res.get("after", []), strict=True):
+        track = _track_from_state(after)
+        rows.append(
+            workflow_report.applied_change(
+                id=f"{id_prefix}_{track}",
+                title=f"{title_prefix} {track}",
+                tool=tool,
+                before=before,
+                requested_change={"track": track, "state": requested_state},
+                after=after,
+                safety_class="write-safe-required",
+                risk_level="low",
+                change_id=res.get("change_id"),
+                rollback=res.get("rollback"),
+                rollback_command=res.get("undo"),
+                readback_ok=True,
+            )
+        )
+    return rows
+
+
 def register(mcp: FastMCP) -> None:
     _WR = {
         "readOnlyHint": False,
@@ -97,6 +146,10 @@ def register(mcp: FastMCP) -> None:
             list[int | str] | None,
             Field(description="Explicit track indices or name substrings to keep audible."),
         ] = None,
+        approved: Annotated[
+            bool,
+            Field(description="Must be True to apply the state changes. False returns a proposal."),
+        ] = False,
     ) -> dict:
         """Isolate a group so only it is audible -- mutes every OTHER (non-Master)
         track. Use category ('drums', etc.) or explicit tracks. Implemented as
@@ -106,29 +159,61 @@ def register(mcp: FastMCP) -> None:
         Safety: Write-Safe-Required with Rollback.
         """
         if not category and not tracks:
-            return {"ok": False, "error": "give a category or a tracks list"}
+            return workflow_report.workflow_report(
+                workflow="bulk_solo_tracks",
+                title="Solo Tracks",
+                mode="error",
+                status="Error",
+                summary="give a category or a tracks list",
+                ok=False,
+            )
         b = get_bridge()
         ts = _tracks(b)
         keep = resolve_targets(ts, category, tracks)
         if not keep:
-            return {
-                "ok": False,
-                "error": "no tracks matched",
-                "category": category,
-                "tracks": tracks,
-            }
+            return workflow_report.workflow_report(
+                workflow="bulk_solo_tracks",
+                title="Solo Tracks",
+                mode="error",
+                status="Error",
+                summary={"error": "no tracks matched", "category": category, "tracks": tracks},
+                ok=False,
+            )
         to_mute = [
             t["index"] for t in ts if t["index"] != 0 and not t["mute"] and t["index"] not in keep
         ]
         if not to_mute:
-            return {
-                "ok": True,
-                "kept": sorted(keep),
-                "muted": [],
-                "note": "everything else was already muted",
-            }
+            return workflow_report.workflow_report(
+                workflow="bulk_solo_tracks",
+                title="Solo Tracks",
+                mode="no_op",
+                status="No changes needed",
+                summary={"kept": sorted(keep), "note": "everything else was already muted"},
+                ok=True,
+            )
+        proposal = workflow_report.proposed_change(
+            id="bulk_solo_tracks",
+            title="Solo tracks",
+            tool="fl_solo_tracks",
+            observed_state={"tracks_to_mute": len(to_mute)},
+            proposed_state={
+                "category": category,
+                "tracks": tracks,
+                "approved": True,
+            },
+            safety_class="write-safe-required",
+            risk_level="low",
+            readback_expectation="Mute states read back matching applied writes",
+            rollback_expectation="One named rollback unit",
+        )
+        if not approved:
+            return workflow_report.approval_required_report(
+                workflow="bulk_solo_tracks",
+                title="Solo Tracks",
+                proposed_changes=[proposal],
+            )
         try:
-            safety.safe_write_group(
+            res = safety.safe_write_group(
                 b,
                 tool="bulk_solo",
                 scope="mixer:bulk",
@@ -136,13 +221,37 @@ def register(mcp: FastMCP) -> None:
                 rollback_unit="bulk_solo_tracks",
             )
         except Exception as e:
-            return {"ok": False, "error": f"{type(e).__name__}: {e}"}
-        return {
-            "ok": True,
-            "kept": sorted(keep),
-            "muted": to_mute,
-            "undo": "fl_clear_mute_solo to restore",
-        }
+            return workflow_report.workflow_report(
+                workflow="bulk_solo_tracks",
+                title="Solo Tracks",
+                mode="error",
+                status="Error",
+                summary=f"{type(e).__name__}: {e}",
+                ok=False,
+            )
+        if res.get("dry_run"):
+            return _dry_run_report(
+                workflow="bulk_solo_tracks",
+                title="Solo Tracks",
+                proposed_changes=[proposal],
+            )
+
+        applied_changes = _applied_state_changes(
+            res,
+            id_prefix="bulk_solo_tracks",
+            title_prefix="Mute track",
+            tool="fl_solo_tracks",
+            requested_state=True,
+        )
+
+        return workflow_report.workflow_report(
+            workflow="bulk_solo_tracks",
+            title="Solo Tracks",
+            mode="applied",
+            status="Tracks soloed",
+            applied_changes=applied_changes,
+            notes=["fl_clear_mute_solo to restore"],
+        )
 
     @mcp.tool(annotations={"title": "Mute a group of tracks", **_WR})
     def fl_mute_tracks(
@@ -153,6 +262,10 @@ def register(mcp: FastMCP) -> None:
             list[int | str] | None,
             Field(description="Explicit track indices or name substrings to mute."),
         ] = None,
+        approved: Annotated[
+            bool,
+            Field(description="Must be True to apply the state changes. False returns a proposal."),
+        ] = False,
     ) -> dict:
         """Mute a group of tracks (leaves the others as they are). Use category or
         explicit tracks. One rollback unit; reverse with fl_clear_mute_solo.
@@ -160,20 +273,51 @@ def register(mcp: FastMCP) -> None:
         Safety: Write-Safe-Required with Rollback.
         """
         if not category and not tracks:
-            return {"ok": False, "error": "give a category or a tracks list"}
+            return workflow_report.workflow_report(
+                workflow="bulk_mute_tracks",
+                title="Mute Tracks",
+                mode="error",
+                status="Error",
+                summary="give a category or a tracks list",
+                ok=False,
+            )
         b = get_bridge()
         ts = _tracks(b)
         targets = resolve_targets(ts, category, tracks)
         muted_now = {t["index"] for t in ts if t["mute"]}
         to_mute = [i for i in sorted(targets) if i not in muted_now]
         if not to_mute:
-            return {
-                "ok": True,
-                "muted": [],
-                "note": "matched tracks already muted, or none matched",
-            }
+            return workflow_report.workflow_report(
+                workflow="bulk_mute_tracks",
+                title="Mute Tracks",
+                mode="no_op",
+                status="No changes needed",
+                summary={"muted": [], "note": "matched tracks already muted, or none matched"},
+                ok=True,
+            )
+        proposal = workflow_report.proposed_change(
+            id="bulk_mute_tracks",
+            title="Mute tracks",
+            tool="fl_mute_tracks",
+            observed_state={"tracks_to_mute": len(to_mute)},
+            proposed_state={
+                "category": category,
+                "tracks": tracks,
+                "approved": True,
+            },
+            safety_class="write-safe-required",
+            risk_level="low",
+            readback_expectation="Mute states read back matching applied writes",
+            rollback_expectation="One named rollback unit",
+        )
+        if not approved:
+            return workflow_report.approval_required_report(
+                workflow="bulk_mute_tracks",
+                title="Mute Tracks",
+                proposed_changes=[proposal],
+            )
         try:
-            safety.safe_write_group(
+            res = safety.safe_write_group(
                 b,
                 tool="bulk_mute",
                 scope="mixer:bulk",
@@ -181,11 +325,45 @@ def register(mcp: FastMCP) -> None:
                 rollback_unit="bulk_mute_tracks",
             )
         except Exception as e:
-            return {"ok": False, "error": f"{type(e).__name__}: {e}"}
-        return {"ok": True, "muted": to_mute, "undo": "fl_clear_mute_solo to restore"}
+            return workflow_report.workflow_report(
+                workflow="bulk_mute_tracks",
+                title="Mute Tracks",
+                mode="error",
+                status="Error",
+                summary=f"{type(e).__name__}: {e}",
+                ok=False,
+            )
+        if res.get("dry_run"):
+            return _dry_run_report(
+                workflow="bulk_mute_tracks",
+                title="Mute Tracks",
+                proposed_changes=[proposal],
+            )
+
+        applied_changes = _applied_state_changes(
+            res,
+            id_prefix="bulk_mute_tracks",
+            title_prefix="Mute track",
+            tool="fl_mute_tracks",
+            requested_state=True,
+        )
+
+        return workflow_report.workflow_report(
+            workflow="bulk_mute_tracks",
+            title="Mute Tracks",
+            mode="applied",
+            status="Tracks muted",
+            applied_changes=applied_changes,
+            notes=["fl_clear_mute_solo to restore"],
+        )
 
     @mcp.tool(annotations={"title": "Clear all mutes + solos", **_WR})
-    def fl_clear_mute_solo() -> dict:
+    def fl_clear_mute_solo(
+        approved: Annotated[
+            bool,
+            Field(description="Must be True to apply the state changes. False returns a proposal."),
+        ] = False,
+    ) -> dict:
         """Unmute and unsolo every mixer track (reset). The universal undo for the
         bulk solo/mute tools.
 
@@ -225,9 +403,33 @@ def register(mcp: FastMCP) -> None:
                     }
                 )
         if not writes:
-            return {"ok": True, "cleared": 0, "note": "no mutes or solos were set"}
+            return workflow_report.workflow_report(
+                workflow="clear_mute_solo",
+                title="Clear Mute/Solo",
+                mode="no_op",
+                status="No changes needed",
+                summary={"cleared": 0, "note": "no mutes or solos were set"},
+                ok=True,
+            )
+        proposal = workflow_report.proposed_change(
+            id="clear_mute_solo",
+            title="Clear all mutes and solos",
+            tool="fl_clear_mute_solo",
+            observed_state={"items_to_clear": len(writes)},
+            proposed_state={"approved": True},
+            safety_class="write-safe-required",
+            risk_level="low",
+            readback_expectation="Mute/solo states read back as False",
+            rollback_expectation="One named rollback unit",
+        )
+        if not approved:
+            return workflow_report.approval_required_report(
+                workflow="clear_mute_solo",
+                title="Clear Mute/Solo",
+                proposed_changes=[proposal],
+            )
         try:
-            safety.safe_write_group(
+            res = safety.safe_write_group(
                 b,
                 tool="clear_mute_solo",
                 scope="mixer:bulk",
@@ -235,5 +437,33 @@ def register(mcp: FastMCP) -> None:
                 rollback_unit="clear_mute_solo",
             )
         except Exception as e:
-            return {"ok": False, "error": f"{type(e).__name__}: {e}"}
-        return {"ok": True, "cleared": len(writes)}
+            return workflow_report.workflow_report(
+                workflow="clear_mute_solo",
+                title="Clear Mute/Solo",
+                mode="error",
+                status="Error",
+                summary=f"{type(e).__name__}: {e}",
+                ok=False,
+            )
+        if res.get("dry_run"):
+            return _dry_run_report(
+                workflow="clear_mute_solo",
+                title="Clear Mute/Solo",
+                proposed_changes=[proposal],
+            )
+
+        applied_changes = _applied_state_changes(
+            res,
+            id_prefix="clear_mute_solo",
+            title_prefix="Clear mute/solo on track",
+            tool="fl_clear_mute_solo",
+            requested_state=False,
+        )
+
+        return workflow_report.workflow_report(
+            workflow="clear_mute_solo",
+            title="Clear Mute/Solo",
+            mode="applied",
+            status="Mutes and solos cleared",
+            applied_changes=applied_changes,
+        )

@@ -51,6 +51,17 @@ For any persistent FL Studio write, the assistant should follow this sequence:
 5. Log restore data.
 6. Report what changed and how it can be rolled back.
 
+Workflow reports use the v3 contract `fls-pilot.workflow-report.v1`. Planned
+changes appear in `proposed_changes` with observed state, proposed state, safety
+class, risk level, limitations or skipped work where relevant, readback
+expectation, and rollback expectation. Applied changes appear in
+`applied_changes` with before, requested change, after, readback status,
+`change_id`, and rollback guidance from the safety changelog.
+
+The v3 report shape intentionally omits compatibility-only legacy fields and
+aliases. Use `json_report` for structured clients and `markdown_report` for
+compact human-facing summaries.
+
 ## Default Safe UX
 
 The default assistant posture is scan/read-only first. A write-capable workflow

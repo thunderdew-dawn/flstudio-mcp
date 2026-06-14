@@ -92,7 +92,7 @@ def test_routing_plans_expose_kb_policy_boundaries() -> None:
         issues=["generators direct to Master"],
         proposed_buses=[{"track": 10, "name": "DRUM BUS", "sources": [1, 2]}],
     )
-    rules = "\n".join(plan.get("rules", []))
+    rules = "\n".join(plan.get("metadata", {}).get("rules", []))
     assert "Do not infer Playlist Track N maps to Mixer Track N." in rules
     assert "Keep plugin loading, external I/O, and broad UI routing manual." in rules
     assert {

@@ -18,7 +18,7 @@ from typing import Annotated
 from fastmcp import FastMCP
 from pydantic import Field
 
-from .. import kb_policy, operations, protocol, safety
+from .. import kb_policy, operations, protocol, safety, workflow_report
 from .. import project_templates as templates
 from ..connection import fetch_all_pages, get_bridge
 from .targets import mixer_track_error
@@ -36,6 +36,31 @@ def _bus_rename_entry(bus: int, name: str) -> dict:
     return operations.prepare_operation(
         "mixer", "set_name", {"track": bus, "name": name}
     ).safe_write_group_entry()
+
+
+def _dry_run_report(*, workflow: str, title: str, proposed_changes: list[dict]) -> dict:
+    return workflow_report.workflow_report(
+        workflow=workflow,
+        title=title,
+        mode="dry_run",
+        status="Dry-run only",
+        summary={"proposed_changes": len(proposed_changes), "applied_changes": 0},
+        proposed_changes=proposed_changes,
+        notes=["Dry-run mode is enabled; no FL Studio project state was changed."],
+        safety={"read_only": True, "requires_explicit_approval": True},
+    )
+
+
+def _no_write_report(*, workflow: str, title: str, status: str, ok: bool = True) -> dict:
+    return workflow_report.workflow_report(
+        workflow=workflow,
+        title=title,
+        mode="no_op" if ok else "error",
+        status=status,
+        summary={"applied_changes": 0},
+        notes=["No FL Studio project state was changed."],
+        ok=ok,
+    )
 
 
 # --- server-side judgement helpers (pure) -----------------------------------
@@ -65,9 +90,7 @@ def detect_cleanup(bridge, *, max_plugin_checks: int = 60) -> dict:
     chans = fetch_all_pages(bridge, protocol.CMD_CHANNEL_ROUTING_SUMMARY, "channels")
     routing = fetch_all_pages(bridge, protocol.CMD_MIXER_GET_ROUTING_ALL, "routing")
     tracks = routing.get("routing", [])
-    template_context = templates.classify_topology(
-        tracks, tracks, chans.get("channels", [])
-    )
+    template_context = templates.classify_topology(tracks, tracks, chans.get("channels", []))
 
     targeted = set()
     for c in chans.get("channels", []):
@@ -223,6 +246,9 @@ def register(mcp: FastMCP) -> None:
         name: Annotated[
             str | None, Field(description="Optional new name for the bus track.")
         ] = None,
+        approved: Annotated[
+            bool, Field(description="Must be True to apply the group routing.")
+        ] = False,
     ) -> dict:
         """Group sources into a bus, EXCLUSIVELY: each source -> bus ON and its
         direct -> Master OFF; bus -> Master ON; optional bus rename. Applied as
@@ -231,6 +257,29 @@ def register(mcp: FastMCP) -> None:
         Safety: Write-Safe-Required with Rollback. The routing and optional rename are
         persisted as one named rollback unit.
         """
+        proposal = workflow_report.proposed_change(
+            id="group_tracks",
+            title="Group tracks to bus",
+            tool="fl_group_tracks",
+            observed_state={},
+            proposed_state={
+                "sources": sources,
+                "bus": bus,
+                "name": name,
+                "approved": True,
+            },
+            safety_class="write-safe-required",
+            risk_level="medium",
+            readback_expectation="Routes and name read back matching applied writes",
+            rollback_expectation="One named rollback unit for the group operation",
+        )
+        if not approved:
+            return workflow_report.approval_required_report(
+                workflow="group_tracks",
+                title="Group Tracks",
+                proposed_changes=[proposal],
+            )
+
         bridge = get_bridge()
         error = mixer_track_error(bridge, bus, allow_master=False, purpose="group bus track")
         if error is not None:
@@ -248,7 +297,12 @@ def register(mcp: FastMCP) -> None:
         if name:
             writes.append(_bus_rename_entry(bus, name))
         if not srcs:
-            return {"ok": False, "error": "no valid source tracks (excluding bus and Master)"}
+            return _no_write_report(
+                workflow="group_tracks",
+                title="Group Tracks",
+                status="No valid source tracks (excluding bus and Master)",
+                ok=False,
+            )
         res = safety.safe_write_group(
             bridge,
             tool="group_tracks",
@@ -257,9 +311,38 @@ def register(mcp: FastMCP) -> None:
             rollback_unit=f"group_tracks_bus_{bus}",
         )
         if res.get("dry_run"):
-            res.update({"sources": srcs, "bus": bus, "name": name})
-            return res
-        return {"ok": True, "sources": srcs, "bus": bus, "name": name, "applied": res.get("after")}
+            return _dry_run_report(
+                workflow="group_tracks",
+                title="Group Tracks",
+                proposed_changes=[proposal],
+            )
+
+        applied_changes = []
+        if not res.get("dry_run") and "after" in res:
+            applied_changes.append(
+                workflow_report.applied_change(
+                    id="group_tracks",
+                    title="Group tracks to bus",
+                    tool="fl_group_tracks",
+                    before=res.get("before"),
+                    requested_change={"sources": srcs, "bus": bus, "name": name},
+                    after=res.get("after"),
+                    safety_class="write-safe-required",
+                    risk_level="medium",
+                    change_id=res.get("change_id"),
+                    rollback=res.get("rollback"),
+                    rollback_command=res.get("undo"),
+                    readback_ok=True,
+                )
+            )
+
+        return workflow_report.workflow_report(
+            workflow="group_tracks",
+            title="Group Tracks",
+            mode="applied",
+            status="Tracks grouped",
+            applied_changes=applied_changes,
+        )
 
     # --- Phase 1: Routing Review 2.0 ---
 
@@ -274,9 +357,7 @@ def register(mcp: FastMCP) -> None:
         chans = fetch_all_pages(bridge, protocol.CMD_CHANNEL_ROUTING_SUMMARY, "channels")
         routing = fetch_all_pages(bridge, protocol.CMD_MIXER_GET_ROUTING_ALL, "routing")
         tracks = routing.get("routing", [])
-        template_context = templates.classify_topology(
-            tracks, tracks, chans.get("channels", [])
-        )
+        template_context = templates.classify_topology(tracks, tracks, chans.get("channels", []))
 
         unrouted = []
         direct_to_master = []
@@ -321,8 +402,14 @@ def register(mcp: FastMCP) -> None:
             "note": "Use this data to plan bus structures or correct routing.",
             "policy_notes": [
                 "Preserve recognizable existing routing structure before proposing cleanup.",
-                "Infer Channel Rack to Mixer relationships from channel target tracks, not playlist indices.",
-                "Treat plugin insertion, external inputs, and UI drag-and-drop routing as manual guidance.",
+                (
+                    "Infer Channel Rack to Mixer relationships from channel "
+                    "target tracks, not playlist indices."
+                ),
+                (
+                    "Treat plugin insertion, external inputs, and UI drag-and-drop "
+                    "routing as manual guidance."
+                ),
             ],
             "kb_policy_refs": kb_policy.rule_refs(
                 [
@@ -344,25 +431,43 @@ def register(mcp: FastMCP) -> None:
 
         Safety: Read-Only (Dry-run).
         """
-        return {
-            "status": "Plan created. Please review and apply using fl_apply_routing_cleanup.",
-            "issues": issues,
-            "proposed_buses": proposed_buses,
-            "rules": [
-                "Preserve existing structure when it is recognizable.",
-                "Do not infer Playlist Track N maps to Mixer Track N.",
-                "Prefer bus placement before the group when it fits the current project.",
-                "Use one named rollback unit for approved grouped routing writes.",
-                "Keep plugin loading, external I/O, and broad UI routing manual.",
-            ],
-            "supported_bus_placement_policy": [
-                "before_group",
-                "after_group",
-                "central_front",
-                "central_end",
-                "preserve_existing",
-            ],
-            "kb_policy_refs": kb_policy.rule_refs(
+        proposed_changes = []
+        if issues:
+            proposed_changes.append(
+                workflow_report.proposed_change(
+                    id="fix_routing_issues",
+                    title="Fix identified routing issues",
+                    tool="fl_apply_routing_cleanup",
+                    observed_state={"issues": issues},
+                    proposed_state={"issues_resolved": True},
+                    safety_class="write-safe-required",
+                    risk_level="medium",
+                    readback_expectation="Routes read back matching applied writes",
+                    rollback_expectation="One named rollback unit for the batch",
+                )
+            )
+        if proposed_buses:
+            proposed_changes.append(
+                workflow_report.proposed_change(
+                    id="create_buses",
+                    title="Create routing buses",
+                    tool="fl_apply_bus_layout",
+                    observed_state={"buses_missing": len(proposed_buses)},
+                    proposed_state={"buses": proposed_buses},
+                    safety_class="write-safe-required",
+                    risk_level="medium",
+                    readback_expectation="Routes and names read back matching applied writes",
+                    rollback_expectation="One named rollback unit per layout",
+                )
+            )
+
+        return workflow_report.workflow_report(
+            workflow="routing_cleanup_plan",
+            title="Routing Cleanup Plan",
+            mode="dry_run",
+            status="Plan created. Please review and apply using fl_apply_routing_cleanup.",
+            proposed_changes=proposed_changes,
+            kb_policy_refs=kb_policy.rule_refs(
                 [
                     "preserve_existing_structure_first",
                     "channel_rack_workflow_requires_routing_inference",
@@ -370,7 +475,25 @@ def register(mcp: FastMCP) -> None:
                     "send_effects_for_shared_space",
                 ]
             ),
-        }
+            metadata={
+                "issues": issues,
+                "proposed_buses": proposed_buses,
+                "rules": [
+                    "Preserve existing structure when it is recognizable.",
+                    "Do not infer Playlist Track N maps to Mixer Track N.",
+                    "Prefer bus placement before the group when it fits the current project.",
+                    "Use one named rollback unit for approved grouped routing writes.",
+                    "Keep plugin loading, external I/O, and broad UI routing manual.",
+                ],
+                "supported_bus_placement_policy": [
+                    "before_group",
+                    "after_group",
+                    "central_front",
+                    "central_end",
+                    "preserve_existing",
+                ],
+            },
+        )
 
     @mcp.tool(annotations={"title": "Apply routing cleanup", **_WR})
     def fl_apply_routing_cleanup(
@@ -380,11 +503,36 @@ def register(mcp: FastMCP) -> None:
         renames: Annotated[
             list[dict], Field(description="List of bus renames: {track, name}")
         ] = None,
+        approved: Annotated[
+            bool, Field(description="Must be True to apply the routing changes.")
+        ] = False,
     ) -> dict:
         """Apply multiple routing changes and track renames in one rollback unit.
 
         Safety: Write-Safe-Required with Rollback.
         """
+        proposal = workflow_report.proposed_change(
+            id="apply_routing_cleanup",
+            title="Apply routing cleanup batch",
+            tool="fl_apply_routing_cleanup",
+            observed_state={},
+            proposed_state={
+                "routes": routes,
+                "renames": renames,
+                "approved": True,
+            },
+            safety_class="write-safe-required",
+            risk_level="medium",
+            readback_expectation="Routes read back matching applied writes",
+            rollback_expectation="One named rollback unit for the batch",
+        )
+        if not approved:
+            return workflow_report.approval_required_report(
+                workflow="apply_routing_cleanup",
+                title="Apply Routing Cleanup",
+                proposed_changes=[proposal],
+            )
+
         bridge = get_bridge()
         writes = []
 
@@ -396,7 +544,11 @@ def register(mcp: FastMCP) -> None:
                 writes.append(_bus_rename_entry(r["track"], r["name"]))
 
         if not writes:
-            return {"status": "No writes specified."}
+            return _no_write_report(
+                workflow="apply_routing_cleanup",
+                title="Apply Routing Cleanup",
+                status="No writes specified",
+            )
 
         res = safety.safe_write_group(
             bridge,
@@ -405,23 +557,59 @@ def register(mcp: FastMCP) -> None:
             writes=writes,
             rollback_unit="routing_cleanup_batch",
         )
-        if isinstance(res, dict):
-            res["kb_policy_refs"] = kb_policy.rule_refs(
-                ["routing_ui_guidance_vs_mcp_write", "send_effects_for_shared_space"]
+        if res.get("dry_run"):
+            return _dry_run_report(
+                workflow="apply_routing_cleanup",
+                title="Apply Routing Cleanup",
+                proposed_changes=[proposal],
             )
-        return res
+
+        applied_changes = []
+        if not res.get("dry_run") and "after" in res:
+            applied_changes.append(
+                workflow_report.applied_change(
+                    id="apply_routing_cleanup",
+                    title="Apply routing cleanup batch",
+                    tool="fl_apply_routing_cleanup",
+                    before=res.get("before"),
+                    requested_change={"routes": routes, "renames": renames},
+                    after=res.get("after"),
+                    safety_class="write-safe-required",
+                    risk_level="medium",
+                    change_id=res.get("change_id"),
+                    rollback=res.get("rollback"),
+                    rollback_command=res.get("undo"),
+                    readback_ok=True,
+                )
+            )
+
+        return workflow_report.workflow_report(
+            workflow="apply_routing_cleanup",
+            title="Apply Routing Cleanup",
+            mode="applied",
+            status="Cleanup applied",
+            applied_changes=applied_changes,
+            kb_policy_refs=kb_policy.rule_refs(
+                ["routing_ui_guidance_vs_mcp_write", "send_effects_for_shared_space"]
+            ),
+        )
 
     @mcp.tool(annotations={"title": "Apply bus layout", **_WR})
     def fl_apply_bus_layout(
         buses: Annotated[
             list[dict],
             Field(
-                description="List of bus configs: {bus_track: int, name: str, source_tracks: list[int]}"
+                description=(
+                    "List of bus configs: {bus_track: int, name: str, source_tracks: list[int]}"
+                )
             ),
         ],
+        approved: Annotated[
+            bool, Field(description="Must be True to apply the bus layout.")
+        ] = False,
     ) -> dict:
-        """Create multiple group buses at once. Ensures each source track sends exclusively to its assigned bus,
-        and the bus routes to the Master.
+        """Create multiple group buses at once. Ensures each source track sends exclusively to
+        its assigned bus, and the bus routes to the Master.
 
         Policy:
         - Preserve existing structure where recognizable.
@@ -430,6 +618,27 @@ def register(mcp: FastMCP) -> None:
 
         Safety: Write-Safe-Required with Rollback.
         """
+        proposal = workflow_report.proposed_change(
+            id="apply_bus_layout",
+            title="Apply bus layout",
+            tool="fl_apply_bus_layout",
+            observed_state={},
+            proposed_state={
+                "buses": buses,
+                "approved": True,
+            },
+            safety_class="write-safe-required",
+            risk_level="medium",
+            readback_expectation="Routes and names read back matching applied writes",
+            rollback_expectation="One named rollback unit for the layout",
+        )
+        if not approved:
+            return workflow_report.approval_required_report(
+                workflow="apply_bus_layout",
+                title="Apply Bus Layout",
+                proposed_changes=[proposal],
+            )
+
         bridge = get_bridge()
         writes = []
 
@@ -447,7 +656,11 @@ def register(mcp: FastMCP) -> None:
                 writes.append(_bus_rename_entry(bus, name))
 
         if not writes:
-            return {"status": "No bus writes specified."}
+            return _no_write_report(
+                workflow="apply_bus_layout",
+                title="Apply Bus Layout",
+                status="No bus writes specified",
+            )
 
         res = safety.safe_write_group(
             bridge,
@@ -456,12 +669,43 @@ def register(mcp: FastMCP) -> None:
             writes=writes,
             rollback_unit="bus_layout_creation",
         )
-        if isinstance(res, dict):
-            res["kb_policy_refs"] = kb_policy.rule_refs(
+        if res.get("dry_run"):
+            return _dry_run_report(
+                workflow="apply_bus_layout",
+                title="Apply Bus Layout",
+                proposed_changes=[proposal],
+            )
+
+        applied_changes = []
+        if not res.get("dry_run") and "after" in res:
+            applied_changes.append(
+                workflow_report.applied_change(
+                    id="apply_bus_layout",
+                    title="Apply bus layout",
+                    tool="fl_apply_bus_layout",
+                    before=res.get("before"),
+                    requested_change={"buses": buses},
+                    after=res.get("after"),
+                    safety_class="write-safe-required",
+                    risk_level="medium",
+                    change_id=res.get("change_id"),
+                    rollback=res.get("rollback"),
+                    rollback_command=res.get("undo"),
+                    readback_ok=True,
+                )
+            )
+
+        return workflow_report.workflow_report(
+            workflow="apply_bus_layout",
+            title="Apply Bus Layout",
+            mode="applied",
+            status="Bus layout applied",
+            applied_changes=applied_changes,
+            kb_policy_refs=kb_policy.rule_refs(
                 [
                     "preserve_existing_structure_first",
                     "routing_ui_guidance_vs_mcp_write",
                     "send_effects_for_shared_space",
                 ]
-            )
-        return res
+            ),
+        )

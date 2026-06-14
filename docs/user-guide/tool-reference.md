@@ -25,13 +25,22 @@ registered outside the static annotation pattern.
 
 ### Workflow Report Contract
 
-Mix Review, Project Health/Preflight, and Project Organizer diagnostics return
-the v3 workflow report contract (`fls-pilot.workflow-report.v1`). These reports
-separate `diagnostics`, `proposed_changes`, `applied_changes`, and
-`manual_checks`, and include both `json_report` and `markdown_report` renderings.
-Proposal reports are read-only. Persistent organizer or Mix Review changes
-require an exact proposed change to be approved and then applied through a
-write-safe tool with rollback/readback metadata.
+Mix Review, Routing/Cleanup, Project Organizer, Project Health/Preflight, and
+grouped cleanup flows return the v3 workflow report contract
+(`fls-pilot.workflow-report.v1`). These reports separate `diagnostics`,
+`proposed_changes`, `applied_changes`, and `manual_checks`, and include both
+`json_report` and `markdown_report` renderings.
+
+Proposal reports are read-only and include observed state, proposed state,
+safety class, risk level, limitations or skipped work where relevant, readback
+expectation, and rollback expectation. Applied reports include before,
+requested change, after, readback status, `change_id`, and rollback guidance
+from the safety changelog. Compatibility-only legacy report fields are
+intentionally removed in v3 to keep tool output compact.
+
+Persistent Mix Review, Routing/Cleanup, Project Organizer, and grouped cleanup
+changes require an exact proposed change to be approved and then applied through
+a write-safe tool with rollback/readback metadata.
 
 ### Phase 1: Ideation & Composition Tools
 
