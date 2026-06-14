@@ -2,7 +2,7 @@
 # url=https://github.com/thunderdew-dawn/fls-pilot
 # receiveFrom=
 # supportedDevices=
-"""FLStudioPilot controller script -- v0.2 MIDI-only transport.
+"""FLStudioPilot controller script -- v3.0 MIDI-only transport.
 
 Lives at:
     Documents/Image-Line/FL Studio/Settings/Hardware/FLStudioPilot/device_FLStudioPilot.py
@@ -113,7 +113,11 @@ def OnInit():
         _send_sysex_fn = getattr(device, "midiOutSysEx", None)
 
     print(
-        "[FLStudioPilot] Ready. FL " + str(_fl_version) + ", protocol v" + str(PROTOCOL_VERSION) + "."
+        "[FLStudioPilot] Ready. FL "
+        + str(_fl_version)
+        + ", protocol v"
+        + str(PROTOCOL_VERSION)
+        + "."
     )
     if _send_sysex_fn is None:
         print(
