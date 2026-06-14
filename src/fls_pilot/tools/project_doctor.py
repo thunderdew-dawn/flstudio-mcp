@@ -34,9 +34,7 @@ def _diagnostic_from_finding(finding: dict, *, source: str) -> dict:
         severity=str(finding.get("severity") or "info"),
         message=str(finding.get("message") or ""),
         evidence={
-            key: value
-            for key, value in finding.items()
-            if key not in {"id", "severity", "message"}
+            key: value for key, value in finding.items() if key not in {"id", "severity", "message"}
         },
         source=source,
     )
@@ -54,7 +52,7 @@ def _risk_for_action(action: dict) -> str:
 
 
 def _proposal_from_action(action: dict) -> dict:
-    tool = action.get("tool")
+    tool = str(action.get("tool", ""))
     params = dict(action.get("params") or {})
     if tool in {
         "fl_apply_project_cleanup_step",
@@ -66,19 +64,14 @@ def _proposal_from_action(action: dict) -> dict:
     return wr.proposed_change(
         id=f"project_action_{action.get('id')}",
         title=f"{action.get('kind', 'project_action')}: {action.get('reason', '')}",
-        reason=action.get("reason", ""),
-        risk=_risk_for_action(action),
         tool=tool,
-        params=params,
-        target=action.get("params") or {},
-        safety_basis=(
-            "The referenced tool is write-safe-required and must be called only "
-            "after explicit approval."
-        ),
-        readback="Readback is provided by the referenced write-safe tool.",
-        rollback=action.get("rollback") or "MCP safety changelog rollback.",
-        manual_review=bool(action.get("manual_review")),
-        metadata={"priority": action.get("priority"), "kind": action.get("kind")},
+        observed_state=action.get("params") or {},
+        proposed_state=params,
+        safety_class="write-safe-required" if tool != "fl_gain_stage" else "read-only",
+        risk_level=_risk_for_action(action),
+        readback_expectation="Readback is provided by the referenced write-safe tool.",
+        rollback_expectation=str(action.get("rollback") or "MCP safety changelog rollback."),
+        requires_explicit_approval=True,
     )
 
 
@@ -123,9 +116,7 @@ def register(mcp: FastMCP) -> None:
         channel_routing = fetch_all_pages(
             bridge, protocol.CMD_CHANNEL_ROUTING_SUMMARY, "channels"
         ).get("channels", [])
-        template_context = templates.classify_topology(
-            mixer_tracks, routing, channel_routing
-        )
+        template_context = templates.classify_topology(mixer_tracks, routing, channel_routing)
 
         unassigned_channels = []
         for row in channels:
@@ -197,8 +188,7 @@ def register(mcp: FastMCP) -> None:
             "diagnostics": len(findings),
         }
         diagnostics = [
-            _diagnostic_from_finding(finding, source="project_health")
-            for finding in findings
+            _diagnostic_from_finding(finding, source="project_health") for finding in findings
         ]
         return wr.workflow_report(
             workflow="project_health",
@@ -275,9 +265,7 @@ def register(mcp: FastMCP) -> None:
                     "priority": "high",
                     "kind": "channel_routing",
                     "tool": "fl_apply_project_cleanup_step",
-                    "params": {
-                        "routing": [{"channel": int(row["index"]), "mode": "free"}]
-                    },
+                    "params": {"routing": [{"channel": int(row["index"]), "mode": "free"}]},
                     "reason": "Channel is routed to Master only.",
                     "rollback": "single safe_write entry",
                 }
@@ -370,7 +358,8 @@ def register(mcp: FastMCP) -> None:
 
     @mcp.tool(annotations={"title": "Project health overview", **_RO})
     def fl_project_health_overview() -> dict:
-        """Aggregates Project Organizer, Routing Review, and Mix Review insights into a single overview.
+        """Aggregates Project Organizer, Routing Review, and Mix Review
+        insights into a single overview.
 
         Safety: Read-Only.
         """
@@ -439,7 +428,8 @@ def register(mcp: FastMCP) -> None:
 
     @mcp.tool(annotations={"title": "Project preflight check", **_RO})
     def fl_check_project_preflight() -> dict:
-        """Export readiness preflight checks including clipping, unrouted channels, and Stretch mode checklists.
+        """Export readiness preflight checks including clipping, unrouted channels,
+        and Stretch mode checklists.
 
         Safety: Read-Only.
         """
@@ -524,15 +514,15 @@ def register(mcp: FastMCP) -> None:
         manual_checks = [
             _manual_check(
                 "mix_watch",
-                "Run Mix Review watch mode through the loudest section if Master peak data is missing.",
+                "Run Mix Review watch mode through the loudest section if Master peak data is missing.",  # noqa: E501
             ),
             _manual_check(
                 "audio_clip_stretch_mode",
-                "Check Audio Clip Stretch Mode manually; automatic Stretch Pro read/write is API-limited.",
+                "Check Audio Clip Stretch Mode manually; automatic Stretch Pro read/write is API-limited.",  # noqa: E501
             ),
             _manual_check(
                 "audio_clip_normalize",
-                "Check Audio Clip Normalize manually; automatic Normalize read/write is API-limited.",
+                "Check Audio Clip Normalize manually; automatic Normalize read/write is API-limited.",  # noqa: E501
             ),
             _manual_check(
                 "manual_export_boundaries",
@@ -545,22 +535,18 @@ def register(mcp: FastMCP) -> None:
                 wr.proposed_change(
                     id="preflight_route_one_unrouted_channel",
                     title="Route one unrouted channel to a free mixer track",
-                    reason="Project preflight found channels routed only to Master.",
-                    risk="low",
                     tool="fl_apply_project_cleanup_step",
-                    params={
+                    observed_state={"channel": int(unrouted[0].get("channel", 0))},
+                    proposed_state={
                         "routing": [
                             {"channel": int(unrouted[0].get("channel", 0)), "mode": "free"}
                         ],
                         "approved": True,
                     },
-                    target={"channel": int(unrouted[0].get("channel", 0))},
-                    safety_basis=(
-                        "Single channel target write through the organizer apply wrapper "
-                        "and safety layer."
-                    ),
-                    readback="Channel target mixer track is read back after the write.",
-                    rollback="MCP changelog restores the prior channel target.",
+                    safety_class="write-safe-required",
+                    risk_level="low",
+                    readback_expectation="Channel target mixer track is read back after the write.",
+                    rollback_expectation="MCP changelog restores the prior channel target.",
                 )
             )
         if master_peak_db is not None and master_peak_db > -3.0:
@@ -568,13 +554,13 @@ def register(mcp: FastMCP) -> None:
                 wr.proposed_change(
                     id="preflight_gain_stage_review",
                     title="Run gain-stage review before export",
-                    reason="Master peak leaves little or no export headroom.",
-                    risk="read-only",
                     tool="fl_gain_stage",
-                    params={},
-                    safety_basis="Read-only review; applies no FL changes.",
-                    readback="No write is performed.",
-                    rollback="No rollback needed for read-only review.",
+                    observed_state={},
+                    proposed_state={},
+                    safety_class="read-only",
+                    risk_level="read-only",
+                    readback_expectation="No write is performed.",
+                    rollback_expectation="No rollback needed for read-only review.",
                     requires_explicit_approval=False,
                 )
             )
@@ -632,15 +618,15 @@ def register(mcp: FastMCP) -> None:
             "workflow_type": "LLM_ORCHESTRATED_WIZARD",
             "state_model": "STATELESS_MCP_AUTHORITATIVE",
             "assistant_instructions": [
-                "1. You are now driving Guided Cleanup Mode. You must NOT present all issues at once.",
-                "2. Treat MCP readbacks, diagnostics, and the changelog as the authoritative state, NOT your conversation history.",
-                "3. Follow the prioritization strategy below. Pick the highest priority issue category.",
+                "1. You are now driving Guided Cleanup Mode. You must NOT present all issues at once.",  # noqa: E501
+                "2. Treat MCP readbacks, diagnostics, and the changelog as the authoritative state, NOT your conversation history.",  # noqa: E501
+                "3. Follow the prioritization strategy below. Pick the highest priority issue category.",  # noqa: E501
                 "4. Explain the evidence for that specific issue to the user.",
-                "5. Propose exactly ONE fix using an available write-safe-required tool (e.g. fl_apply_bus_layout, fl_apply_naming_standard, fl_apply_audio_clip_safe_defaults).",
+                "5. Propose exactly ONE fix using an available write-safe-required tool (e.g. fl_apply_bus_layout, fl_apply_naming_standard, fl_apply_audio_clip_safe_defaults).",  # noqa: E501
                 "6. Ask for the user's approval.",
-                "7. Apply the fix. Then immediately read back the affected state and show the before/after result.",
+                "7. Apply the fix. Then immediately read back the affected state and show the before/after result.",  # noqa: E501
                 "8. Offer to rollback (via fl_rollback_last_change) or continue to the next issue.",
-                "9. If the user continues, re-check diagnostics (via fl_get_guided_cleanup_context) to find the next issue.",
+                "9. If the user continues, re-check diagnostics (via fl_get_guided_cleanup_context) to find the next issue.",  # noqa: E501
             ],
             "prioritization_strategy": [
                 "Priority 1: Export Blockers (Unrouted channels to Master, Clipping)",
@@ -679,7 +665,7 @@ def register(mcp: FastMCP) -> None:
             "context_type": "FRESH_DIAGNOSTICS",
             "current_health_summary": health,
             "current_preflight_status": readiness,
-            "instruction_to_llm": "Based on the summary above, determine the highest remaining priority. If you need deep details to propose a fix, run the corresponding analyzer:",
+            "instruction_to_llm": "Based on the summary above, determine the highest remaining priority. If you need deep details to propose a fix, run the corresponding analyzer:",  # noqa: E501
             "analyzer_mapping": {
                 "Priority 1 (Routing Blockers)": "Run fl_review_routing",
                 "Priority 2 (Audio Clips)": "Run fl_inspect_audio_clips",
@@ -687,7 +673,7 @@ def register(mcp: FastMCP) -> None:
                 "Priority 4 (Naming/Coloring)": "Run fl_analyze_project_organization",
                 "Priority 5 (Mix Headroom)": "Run fl_review_mix",
             },
-            "changelog_state_hint": "Run fl_get_change_log_summary to review recently applied fixes if needed.",
+            "changelog_state_hint": "Run fl_get_change_log_summary to review recently applied fixes if needed.",  # noqa: E501
             "kb_policy_refs": kb_policy.rule_refs(
                 [
                     "preserve_existing_structure_first",

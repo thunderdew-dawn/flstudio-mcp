@@ -90,20 +90,14 @@ def _cleanup_proposal(
     return wr.proposed_change(
         id=id,
         title=title,
-        reason=reason,
-        risk=risk,
         tool=tool,
-        params=proposal_params,
-        target=target,
-        safety_basis=(
-            "Project organizer writes use operation-registry entries and "
-            "safety.safe_write_group as one named rollback unit."
-            if tool in _ORGANIZER_APPLY_TOOLS
-            else "Referenced write-safe tool must be called only after explicit approval."
-        ),
-        readback="Affected channel or mixer metadata is read back where supported.",
-        rollback="MCP changelog rollback restores the prior metadata.",
-        manual_review=manual_review,
+        observed_state=target,
+        proposed_state=proposal_params,
+        safety_class="write-safe-required" if tool in _ORGANIZER_APPLY_TOOLS else "read-only",
+        risk_level=risk,
+        readback_expectation="Affected channel or mixer metadata is read back where supported.",
+        rollback_expectation="MCP changelog rollback restores the prior metadata.",
+        requires_explicit_approval=True,
     )
 
 
@@ -223,14 +217,14 @@ def _apply_report(
                 id=proposal["id"],
                 title=proposal["title"],
                 tool=tool_name,
-                params=proposal.get("params") or {},
-                risk=risk,
                 before=before[index] if index < len(before) else None,
+                requested_change=proposal.get("proposed_state") or proposal.get("params") or {},
                 after=after[index] if index < len(after) else None,
+                safety_class="write-safe-required",
+                risk_level=risk,
                 change_id=res.get("change_id"),
-                rollback=res.get("rollback"),
                 readback_ok=index < len(after),
-                source_proposal_id=proposal["id"],
+                rollback=res.get("rollback"),
             )
         )
     return wr.workflow_report(
@@ -335,8 +329,8 @@ def register(mcp: FastMCP) -> None:
             diagnostics=diagnostics,
             notes=[
                 "Use fl_plan_project_cleanup to generate proposal-first cleanup actions.",
-                "Preserve linked Channel, Playlist, and Mixer naming/coloring where it is already evident.",
-                "Do not infer Channel, Playlist Track, and Mixer Track links from numeric index alone.",
+                "Preserve linked Channel, Playlist, and Mixer naming/coloring where it is already evident.",  # noqa: E501
+                "Do not infer Channel, Playlist Track, and Mixer Track links from numeric index alone.",  # noqa: E501
                 "Only apply cleanup through rollback-safe wrappers.",
             ],
             kb_policy_refs=kb_policy.rule_refs(
@@ -407,9 +401,7 @@ def register(mcp: FastMCP) -> None:
                         source="project_organizer",
                     )
                 )
-                proposed_changes.append(
-                    _proposal_for_channel_routing(idx)
-                )
+                proposed_changes.append(_proposal_for_channel_routing(idx))
 
         duplicate_mixer_names = {}
         for row in mixer_tracks:
@@ -647,7 +639,9 @@ def register(mcp: FastMCP) -> None:
                 if r["type"] == "channel":
                     writes.append(_channel_rename_entry(r["index"], r["name"]))
                     requested_changes.append(
-                        _proposal_for_rename("channel", r["index"], str(r.get("from", "")), r["name"])
+                        _proposal_for_rename(
+                            "channel", r["index"], str(r.get("from", "")), r["name"]
+                        )
                     )
                 elif r["type"] == "mixer":
                     writes.append(_bus_rename_entry(r["index"], r["name"]))

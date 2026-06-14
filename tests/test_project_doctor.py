@@ -132,11 +132,16 @@ def main() -> int:
             "health report has diagnostics",
             report.get("summary", {}).get("diagnostics", 0) >= 1,
         )
-        check("health report includes markdown", "# Project Health Report" in report.get("markdown_report", ""))
+        check(
+            "health report includes markdown",
+            "# Project Health Report" in report.get("markdown_report", ""),
+        )
 
         readiness = mcp.tools["fl_export_readiness_report"]()
         check("readiness report ok", readiness.get("ok") is True)
-        check("readiness marks project not ready", readiness.get("summary", {}).get("ready") is False)
+        check(
+            "readiness marks project not ready", readiness.get("summary", {}).get("ready") is False
+        )
         check(
             "readiness exposes mastering boundary KB ref",
             "mastering_after_mix_readiness" in _ref_ids(readiness),
@@ -150,7 +155,7 @@ def main() -> int:
             "contains rollback-safe channel assignment action",
             any(
                 a.get("tool") == "fl_apply_project_cleanup_step"
-                and a.get("params", {}).get("approved") is True
+                and a.get("proposed_state", {}).get("approved") is True
                 for a in plan.get("proposed_changes", [])
             ),
         )
@@ -179,24 +184,28 @@ def main() -> int:
         )
         check(
             "preflight reports watch peak source",
-            preflight.get("metadata", {})
-            .get("mix_readiness", {})
-            .get("master_peak_source")
+            preflight.get("metadata", {}).get("mix_readiness", {}).get("master_peak_source")
             == "mix_review_watch",
         )
         check(
             "preflight keeps render and FL Cloud Mastering manual",
-            any("FL Cloud Mastering" in item.get("check", "") for item in preflight.get("manual_checks", [])),
+            any(
+                "FL Cloud Mastering" in item.get("check", "")
+                for item in preflight.get("manual_checks", [])
+            ),
         )
         check(
             "preflight no longer uses generic API LIMITATION clipping copy",
-            all("API LIMITATION" not in item.get("check", "") for item in preflight.get("manual_checks", [])),
+            all(
+                "API LIMITATION" not in item.get("check", "")
+                for item in preflight.get("manual_checks", [])
+            ),
         )
         check(
             "preflight channel route proposal is approval-gated",
             any(
                 p.get("tool") == "fl_apply_project_cleanup_step"
-                and p.get("params", {}).get("approved") is True
+                and p.get("proposed_state", {}).get("approved") is True
                 for p in preflight.get("proposed_changes", [])
             ),
         )
