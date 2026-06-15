@@ -621,6 +621,118 @@ def test_http_routing_audit_endpoint(monkeypatch):
     assert payload == {"ok": True, "workflow": "routing_audit", "state": "live"}
 
 
+def test_http_mix_review_endpoint(monkeypatch):
+    monkeypatch.setattr(
+        control_center,
+        "_run_mix_review",
+        lambda state: {"ok": True, "workflow": "mix_review", "state": "live"},
+    )
+    state = _state(port=0)
+    handler_cls = control_center._handler_factory(state)
+    request = (
+        b"POST /api/workflows/mix-review HTTP/1.1\r\n"
+        b"Host: localhost\r\n"
+        b"Content-Type: application/json\r\n"
+        b"Content-Length: 2\r\n"
+        b"\r\n"
+        b"{}"
+    )
+
+    class OneShotHandler(handler_cls):
+        def setup(self):  # noqa: ANN001
+            self.rfile = io.BytesIO(request)
+            self.wfile = io.BytesIO()
+
+        def finish(self):  # noqa: ANN001
+            pass
+
+    server = mock.Mock()
+    server.server_version = "test"
+    server.sys_version = ""
+    server.timeout = 1
+    server._BaseServer__is_shut_down = mock.Mock()
+    server._BaseServer__shutdown_request = False
+
+    handler = OneShotHandler(request=None, client_address=("127.0.0.1", 1234), server=server)
+    response = handler.wfile.getvalue().decode("utf-8")
+    payload = json.loads(response.split("\r\n\r\n", 1)[1])
+    assert payload == {"ok": True, "workflow": "mix_review", "state": "live"}
+
+
+def test_build_mix_review_report_summarizes_levels_findings_and_visuals():
+    snapshot = {
+        "playing": True,
+        "levels_valid": True,
+        "peak_window": {"source": "sustained_1200ms"},
+        "tracks": [
+            {
+                "index": 0,
+                "name": "Master",
+                "vol_db": 0.0,
+                "peak_db": 0.2,
+                "peak_max": 1.02,
+                "pan": 0.0,
+                "stereo_sep": 0.0,
+                "plugins": [],
+                "routes_to": [],
+            },
+            {
+                "index": 1,
+                "name": "Lead Vox",
+                "vol_db": -2.0,
+                "peak_db": -0.4,
+                "peak_max": 0.95,
+                "pan": 0.0,
+                "stereo_sep": 0.0,
+                "plugins": [{"slot": 0, "name": "Fruity Parametric EQ 2"}],
+                "routes_to": [{"dst": 0, "dst_name": "Master"}],
+            },
+            {
+                "index": 2,
+                "name": "Sub Bass",
+                "vol_db": -3.0,
+                "peak_db": -4.0,
+                "peak_max": 0.63,
+                "pan": 0.42,
+                "stereo_sep": 0.5,
+                "plugins": [],
+                "routes_to": [{"dst": 0, "dst_name": "Master"}],
+            },
+            {
+                "index": 3,
+                "name": "Pad",
+                "vol_db": -7.0,
+                "peak_db": -18.0,
+                "peak_max": 0.12,
+                "pan": -0.2,
+                "stereo_sep": 0.2,
+                "plugins": [],
+                "routes_to": [{"dst": 0, "dst_name": "Master"}],
+            },
+        ],
+        "template_context": {},
+        "gather_errors": [],
+    }
+
+    report = control_center._build_mix_review_report(snapshot)
+
+    assert report["ok"] is True
+    assert report["workflow"] == "mix_review"
+    assert report["summary"]["master_peak_db"] == 0.2
+    assert report["summary"]["hot_tracks"] == 1
+    assert report["summary"]["low_end_findings"] >= 2
+    assert report["summary"]["health_score"] < 100
+    assert {finding["rule"] for finding in report["findings"]} >= {
+        "clipping",
+        "headroom",
+    }
+    assert report["proposals"]
+    assert report["visuals"]["level_tracks"][0]["name"] == "Master"
+    assert report["visuals"]["band_balance"]["bands_pct"]["low"] > 0
+    assert any(row["low_end"] for row in report["visuals"]["stereo_tracks"])
+    assert any(track["plugins"] for track in report["details"]["tracks"])
+
+
 def test_build_routing_audit_report_summarizes_graph_and_findings():
     channels = [
         {

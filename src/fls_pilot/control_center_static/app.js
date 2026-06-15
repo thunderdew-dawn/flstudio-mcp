@@ -2,6 +2,11 @@
 const state = {
   status: null,
   report: "",
+  mixReview: {
+    loading: false,
+    report: null,
+    error: null
+  },
   routingAudit: {
     loading: false,
     report: null,
@@ -143,6 +148,7 @@ function render() {
   renderRuntime();
   renderClients();
   renderProjectData();
+  renderMixReview();
   renderRoutingAudit();
   renderLogsHistory();
   renderPorts();
@@ -1109,6 +1115,499 @@ function renderProjectData() {
   }
 }
 
+// ─── Mix Review ──────────────────────────────────────────────────────────────
+async function runMixReview() {
+  state.mixReview.loading = true;
+  state.mixReview.error = null;
+  renderMixReview();
+  try {
+    const result = await api("/api/workflows/mix-review", {
+      method: "POST",
+      body: "{}"
+    });
+    state.mixReview.report = result;
+    state.mixReview.error = result?.ok === false
+      ? (result.error || "Mix Review unavailable.")
+      : null;
+  } catch (error) {
+    state.mixReview.error = `Mix Review failed: ${error.message}`;
+  } finally {
+    state.mixReview.loading = false;
+    renderMixReview();
+  }
+}
+
+function renderMixReview() {
+  const layout = document.getElementById("mix-review-layout");
+  if (!layout) return;
+
+  const report = state.mixReview.report;
+  const isLoading = state.mixReview.loading;
+  const error = state.mixReview.error;
+
+  const runButton = document.getElementById("run-mix-review");
+  if (runButton) {
+    runButton.disabled = isLoading;
+    runButton.textContent = isLoading ? "Running..." : "Run Mix Review";
+  }
+
+  renderMixFeedback(report, error, isLoading);
+  renderMixSummary(report, isLoading);
+  renderMixLevels(report);
+  renderMixFindings(report);
+  renderMixProposals(report);
+  renderMixTone(report);
+  renderMixStereo(report);
+  renderMixTables(report);
+  renderMixNotes(report);
+}
+
+function renderMixFeedback(report, error, isLoading) {
+  const feedback = document.getElementById("mix-review-feedback");
+  if (!feedback) return;
+
+  feedback.className = "mix-review-feedback";
+  if (isLoading) {
+    feedback.classList.add("is-loading");
+    feedback.textContent = "Mix Review is reading FL Studio mixer data...";
+    return;
+  }
+  if (error) {
+    feedback.classList.add("is-error");
+    feedback.textContent = error;
+    return;
+  }
+  if (report?.ok) {
+    feedback.classList.add("is-live");
+    const timestamp = new Date(report.generated_at || Date.now()).toLocaleTimeString();
+    feedback.textContent = `Last review: ${timestamp}. No project changes were made.`;
+    return;
+  }
+  feedback.textContent = "Review has not run yet.";
+}
+
+function renderMixSummary(report, isLoading) {
+  const summary = report?.summary || {};
+  const score = Number.isFinite(Number(summary.health_score))
+    ? Number(summary.health_score)
+    : null;
+  const label = summary.health_label || (report?.ok ? "Live" : "Idle");
+
+  text("mix-score-value", score == null ? "--" : `${Math.round(score)}%`);
+  text("mix-score-caption", isLoading ? "Reading" : label);
+  text("mix-score-label", label);
+  text("mix-used-total", summary.used_tracks ?? "--");
+  text("mix-hot-total", summary.hot_tracks ?? "--");
+  text("mix-finding-total", summary.findings ?? "--");
+  text("mix-proposal-total", summary.proposals ?? "--");
+  text("mix-findings-count", summary.findings ?? 0);
+  text("mix-proposals-count", summary.proposals ?? 0);
+  text("mix-track-count", summary.tracks ?? 0);
+  text("mix-master-peak", formatDb(summary.master_peak_db));
+  text("mix-master-headroom", formatDb(summary.master_headroom_db));
+  text("mix-peak-source", mixPeakSourceLabel(summary.peak_source));
+
+  const ring = document.getElementById("mix-score-ring");
+  if (ring) {
+    const clampedScore = score == null ? 0 : Math.max(0, Math.min(100, score));
+    ring.style.setProperty("--score", clampedScore);
+    ring.dataset.state = routingScoreState(score);
+  }
+
+  const scoreLabel = document.getElementById("mix-score-label");
+  if (scoreLabel) {
+    scoreLabel.className = `badge ${mixBadgeClass(score, report?.ok)}`;
+  }
+
+  const levelState = document.getElementById("mix-level-state");
+  if (levelState) {
+    const hasLevels = summary.levels_valid === true;
+    levelState.textContent = isLoading
+      ? "Reading"
+      : report?.ok
+        ? (hasLevels ? "Live" : "Limited")
+        : "Idle";
+    levelState.className = `badge ${report?.ok && hasLevels ? "badge-ok" : "badge-neutral"}`;
+  }
+}
+
+function renderMixLevels(report) {
+  const list = document.getElementById("mix-level-list");
+  if (!list) return;
+  list.innerHTML = "";
+
+  const tracks = Array.isArray(report?.visuals?.level_tracks)
+    ? report.visuals.level_tracks
+    : [];
+  if (!tracks.length) {
+    list.appendChild(mixPlaceholder("Run Mix Review to populate levels."));
+    return;
+  }
+
+  for (const track of tracks) {
+    const stateName = String(track.level_state || "unknown").toLowerCase();
+    const row = document.createElement("div");
+    row.className = `mix-level-row mix-level-${stateName}`;
+
+    const meta = document.createElement("div");
+    meta.className = "mix-level-meta";
+    const title = document.createElement("strong");
+    title.textContent = safeString(track.name);
+    const detail = document.createElement("span");
+    detail.textContent = [
+      mixTrackNumber(track.track),
+      mixTrackRoleLabel(track.role),
+      `Fader ${formatDb(track.fader_db)}`
+    ].join(" · ");
+    meta.append(title, detail);
+
+    const bar = document.createElement("div");
+    bar.className = "mix-level-bar";
+    const fill = document.createElement("i");
+    fill.style.setProperty("--value", mixLevelPercent(track.peak_db));
+    bar.appendChild(fill);
+
+    const value = document.createElement("span");
+    value.className = "mix-level-value";
+    value.textContent = track.mute ? "Muted" : formatDb(track.peak_db);
+
+    row.append(meta, bar, value);
+    list.appendChild(row);
+  }
+}
+
+function renderMixFindings(report) {
+  const list = document.getElementById("mix-finding-list");
+  if (!list) return;
+  list.innerHTML = "";
+
+  const findings = Array.isArray(report?.findings) ? report.findings : [];
+  if (!findings.length) {
+    list.appendChild(mixPlaceholder("No findings yet."));
+    return;
+  }
+
+  for (const finding of findings) {
+    const row = document.createElement("div");
+    row.className = `mix-finding ${mixSeverityClass(finding.severity)}`;
+
+    const icon = document.createElement("span");
+    icon.className = "mix-finding-icon";
+    icon.textContent = mixSeverityIcon(finding.severity);
+
+    const body = document.createElement("div");
+    const title = document.createElement("strong");
+    title.textContent = safeString(finding.title);
+    const detail = document.createElement("span");
+    detail.textContent = mixFindingDetail(finding);
+    body.append(title, detail);
+
+    const severity = document.createElement("span");
+    severity.className = "mix-finding-severity";
+    severity.textContent = safeString(finding.severity).toUpperCase();
+
+    row.append(icon, body, severity);
+    list.appendChild(row);
+  }
+}
+
+function renderMixProposals(report) {
+  const list = document.getElementById("mix-proposal-list");
+  if (!list) return;
+  list.innerHTML = "";
+
+  const proposals = Array.isArray(report?.proposals) ? report.proposals : [];
+  if (!proposals.length) {
+    list.appendChild(mixPlaceholder("No proposals yet."));
+    return;
+  }
+
+  for (const proposal of proposals) {
+    const row = document.createElement("div");
+    row.className = `mix-proposal ${mixSeverityClass(proposal.severity)}`;
+
+    const title = document.createElement("strong");
+    title.textContent = safeString(proposal.title);
+
+    const detail = document.createElement("span");
+    detail.textContent = mixProposalDetail(proposal);
+
+    const values = document.createElement("em");
+    values.textContent = mixProposalValues(proposal);
+
+    row.append(title, detail, values);
+    list.appendChild(row);
+  }
+}
+
+function renderMixTone(report) {
+  const balance = report?.visuals?.band_balance || {};
+  const bands = balance.bands_pct || {};
+  for (const band of ["low", "mid", "high"]) {
+    const value = Number(bands[band] || 0);
+    const meter = document.getElementById(`mix-band-${band}`);
+    if (meter) meter.style.setProperty("--value", Math.max(0, Math.min(100, value)));
+    text(`mix-band-${band}-value`, formatPercent(value));
+  }
+
+  const toneState = document.getElementById("mix-tone-state");
+  if (toneState) {
+    toneState.textContent = report?.ok ? "Estimate" : "Idle";
+    toneState.className = `badge ${report?.ok ? "badge-ok" : "badge-neutral"}`;
+  }
+
+  const sources = document.getElementById("mix-band-sources");
+  if (!sources) return;
+  sources.innerHTML = "";
+  const trackBuckets = balance.tracks || {};
+  for (const band of ["low", "mid", "high"]) {
+    const row = document.createElement("span");
+    const names = Array.isArray(trackBuckets[band]) ? trackBuckets[band] : [];
+    row.textContent = `${band.toUpperCase()}: ${names.slice(0, 4).map(safeString).join(", ") || "--"}`;
+    sources.appendChild(row);
+  }
+}
+
+function renderMixStereo(report) {
+  const field = document.getElementById("mix-stereo-field");
+  if (!field) return;
+  field.innerHTML = "";
+
+  const tracks = Array.isArray(report?.visuals?.stereo_tracks)
+    ? report.visuals.stereo_tracks
+    : [];
+  text("mix-stereo-count", tracks.length);
+  if (!tracks.length) {
+    field.appendChild(mixPlaceholder("Run Mix Review to populate stereo metadata."));
+    return;
+  }
+
+  for (const track of tracks) {
+    const row = document.createElement("div");
+    row.className = track.low_end ? "mix-stereo-row is-low-end" : "mix-stereo-row";
+
+    const label = document.createElement("div");
+    label.className = "mix-stereo-label";
+    const name = document.createElement("strong");
+    name.textContent = safeString(track.name);
+    const detail = document.createElement("span");
+    detail.textContent = `${mixTrackNumber(track.track)} · Peak ${formatDb(track.peak_db)}`;
+    label.append(name, detail);
+
+    const rail = document.createElement("div");
+    rail.className = "mix-stereo-rail";
+    const width = document.createElement("span");
+    width.className = "mix-stereo-width";
+    width.style.setProperty("--width", mixStereoWidth(track.stereo_sep));
+    const dot = document.createElement("i");
+    dot.className = "mix-stereo-dot";
+    dot.style.setProperty("--pan", mixPanPercent(track.pan));
+    rail.append(width, dot);
+
+    const value = document.createElement("em");
+    value.textContent = `Pan ${formatSigned(track.pan)} · Width ${formatSigned(track.stereo_sep)}`;
+
+    row.append(label, rail, value);
+    field.appendChild(row);
+  }
+}
+
+function renderMixTables(report) {
+  const body = document.getElementById("mix-track-table");
+  if (!body) return;
+  body.innerHTML = "";
+
+  const tracks = Array.isArray(report?.details?.tracks) ? report.details.tracks : [];
+  if (!tracks.length) {
+    appendMixTableEmpty(body, 7, "No mixer track rows.");
+    return;
+  }
+
+  for (const track of tracks) {
+    const row = document.createElement("tr");
+    appendCell(row, `${safeString(track.name)} (${safeString(track.track)})`);
+    appendCell(row, formatDb(track.peak_db));
+    appendCell(row, formatDb(track.fader_db));
+    appendCell(row, formatSigned(track.pan));
+    appendCell(row, formatSigned(track.stereo_sep));
+    appendCell(row, mixPluginList(track.plugins));
+    appendCell(row, mixTrackStateLabel(track), `mix-state-${mixTrackState(track)}`);
+    body.appendChild(row);
+  }
+}
+
+function renderMixNotes(report) {
+  const list = document.getElementById("mix-note-list");
+  if (!list) return;
+  list.innerHTML = "";
+
+  const details = report?.details || {};
+  const notes = [
+    ...(Array.isArray(details.notes) ? details.notes : []),
+    ...(Array.isArray(details.limits) ? details.limits : []),
+    ...(Array.isArray(details.gather_errors) ? details.gather_errors : []),
+    ...(Array.isArray(details.low_end?.manual_checks) ? details.low_end.manual_checks : [])
+  ].filter(Boolean);
+  text("mix-note-count", notes.length);
+
+  if (!notes.length) {
+    list.appendChild(mixPlaceholder("No notes yet."));
+    return;
+  }
+
+  for (const note of notes.slice(0, 8)) {
+    const row = document.createElement("div");
+    row.className = "mix-note-row";
+    row.textContent = safeString(note);
+    list.appendChild(row);
+  }
+}
+
+function appendMixTableEmpty(body, colspan, message) {
+  const row = document.createElement("tr");
+  const cell = document.createElement("td");
+  cell.colSpan = colspan;
+  cell.className = "mix-table-empty";
+  cell.textContent = message;
+  row.appendChild(cell);
+  body.appendChild(row);
+}
+
+function mixPlaceholder(message) {
+  const node = document.createElement("div");
+  node.className = "mix-placeholder";
+  node.textContent = message;
+  return node;
+}
+
+function mixBadgeClass(score, ok) {
+  if (!ok || score == null) return "badge-neutral";
+  if (score >= 90) return "badge-ok";
+  if (score >= 75) return "badge-warn";
+  return "badge-warn";
+}
+
+function mixSeverityClass(severity) {
+  const value = String(severity || "").toLowerCase();
+  if (value === "critical" || value === "high") return "is-critical";
+  if (value === "warning" || value === "medium") return "is-warning";
+  if (value === "ok") return "is-ok";
+  return "is-info";
+}
+
+function mixSeverityIcon(severity) {
+  const value = String(severity || "").toLowerCase();
+  if (value === "critical" || value === "high") return "!";
+  if (value === "warning" || value === "medium") return "△";
+  if (value === "ok") return "✓";
+  return "i";
+}
+
+function mixFindingDetail(finding) {
+  const track = finding.track == null ? "" : `Track ${finding.track}: `;
+  return `${track}${safeString(finding.detail || finding.evidence)}`;
+}
+
+function mixProposalDetail(proposal) {
+  const track = proposal.track_name || proposal.track;
+  const prefix = track == null ? "" : `${safeString(track)} · `;
+  return `${prefix}${safeString(proposal.detail || proposal.kind)}`;
+}
+
+function mixProposalValues(proposal) {
+  const values = [];
+  if (proposal.current_fader_db != null || proposal.target_fader_db != null) {
+    values.push(`${formatDb(proposal.current_fader_db)} → ${formatDb(proposal.target_fader_db)}`);
+  }
+  if (proposal.current_peak_db != null || proposal.target_peak_db != null) {
+    values.push(`Peak ${formatDb(proposal.current_peak_db)} → ${formatDb(proposal.target_peak_db)}`);
+  }
+  return values.join(" · ") || (proposal.actionable ? "Actionable" : "Manual review");
+}
+
+function mixPluginList(plugins) {
+  if (!Array.isArray(plugins) || !plugins.length) return "None";
+  const names = plugins.map(plugin => safeString(plugin.name)).filter(name => name !== "N/A");
+  if (!names.length) return "None";
+  const shown = names.slice(0, 3).join(", ");
+  return names.length > 3 ? `${shown}, +${names.length - 3}` : shown;
+}
+
+function mixTrackState(track) {
+  if (track.mute) return "muted";
+  if (track.solo) return "solo";
+  return track.used ? "used" : "idle";
+}
+
+function mixTrackStateLabel(track) {
+  const stateName = mixTrackState(track);
+  const labels = {
+    used: "Used",
+    idle: "Idle",
+    muted: "Muted",
+    solo: "Solo"
+  };
+  return labels[stateName] || "Unknown";
+}
+
+function mixTrackNumber(value) {
+  return value == null ? "Track ?" : (Number(value) === 0 ? "Master" : `Track ${value}`);
+}
+
+function mixTrackRoleLabel(role) {
+  const labels = {
+    master: "Master",
+    bus: "Bus",
+    stem_bus: "Stem Bus",
+    premaster: "Premaster",
+    insert: "Insert",
+    source: "Source",
+    utility: "Utility"
+  };
+  return labels[role] || safeString(role);
+}
+
+function mixPeakSourceLabel(value) {
+  if (!value || value === "none") return "--";
+  return safeString(String(value).replaceAll("_", " "));
+}
+
+function mixLevelPercent(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 0;
+  return Math.max(3, Math.min(100, ((numeric + 48) / 48) * 100));
+}
+
+function mixPanPercent(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 50;
+  return Math.max(4, Math.min(96, 50 + numeric * 42));
+}
+
+function mixStereoWidth(value) {
+  const numeric = Math.abs(Number(value));
+  if (!Number.isFinite(numeric)) return 10;
+  return Math.max(10, Math.min(72, 10 + numeric * 62));
+}
+
+function formatDb(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return "--";
+  return `${numeric.toFixed(1)} dB`;
+}
+
+function formatPercent(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return "--";
+  return `${numeric.toFixed(1)}%`;
+}
+
+function formatSigned(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return "--";
+  return `${numeric >= 0 ? "+" : ""}${numeric.toFixed(2)}`;
+}
+
 // ─── Routing Audit ───────────────────────────────────────────────────────────
 async function runRoutingAudit() {
   state.routingAudit.loading = true;
@@ -1870,6 +2369,7 @@ function selectPanel(targetId) {
     loadReport();
     renderSupportSummary();
   }
+  if (targetId === "producer_mix_review") renderMixReview();
   if (targetId === "producer_routing") renderRoutingAudit();
   if (targetId === "logs_history") renderLogsHistory();
   if (targetId === "ports") renderPorts();
@@ -1939,6 +2439,12 @@ function wireEvents() {
   const refreshButton = document.getElementById("refresh-button");
   if (refreshButton) refreshButton.addEventListener("click", refresh);
 
+  const runMixButton = document.getElementById("run-mix-review");
+  if (runMixButton) runMixButton.addEventListener("click", runMixReview);
+
+  const mixRefreshButton = document.getElementById("mix-refresh-status");
+  if (mixRefreshButton) mixRefreshButton.addEventListener("click", refresh);
+
   const runRoutingButton = document.getElementById("run-routing-audit");
   if (runRoutingButton) runRoutingButton.addEventListener("click", runRoutingAudit);
 
@@ -1977,7 +2483,9 @@ function wireEvents() {
 window.flsPilotControlCenter = {
   state,
   processAction,
+  runMixReview,
   runRoutingAudit,
+  renderMixReview,
   renderProjectData,
   renderRoutingAudit,
   renderRuntime,

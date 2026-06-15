@@ -385,28 +385,157 @@
          PRODUCER TOOLS PREVIEW PANELS
     ════════════════════════════════════════════════════════════════════════════ -->
 
-    <!-- ── Mix Review Preview ─────────────────────────────────────────────── -->
+    <!-- ── Mix Review ─────────────────────────────────────────────────────── -->
     <main class="status-report" id="producer_mix_review" style="display: none;">
       <section class="hero">
         <div>
-          <h1>Mix Review <span class="badge badge-coming-soon">Coming Soon</span></h1>
-          <p>Find clipping, headroom and balance risks before export.</p>
+          <h1>Mix Review <span class="badge badge-read-only">Read-only</span></h1>
+          <p>Headroom, clipping, tonal balance, stereo width, and mix-action risks.</p>
+        </div>
+        <div class="hero-actions">
+          <button class="ghost-button primary-action" id="run-mix-review" type="button">Run Mix Review</button>
+          <button class="ghost-button" id="mix-refresh-status" type="button">Refresh Status</button>
         </div>
       </section>
-      <div class="producer-preview-card panel">
-        <div class="panel-heading">
-          <h2>About Mix Review</h2>
-        </div>
-        <div class="producer-preview-content">
-          <p>Mix Review will analyze your FL Studio project for clipping, headroom, and stereo balance risks before you
-            export. It reads mixer levels and channel data in read-only mode.</p>
-          <div class="preview-notice">
-            <span class="preview-notice-icon" aria-hidden="true">ℹ</span>
-            <p>This feature is not active in this beta. Current Control Center features focus on setup, diagnostics,
-              safe connection checks, and AI&#8209;client configuration.</p>
+
+      <div id="mix-review-feedback" class="mix-review-feedback" role="status"></div>
+
+      <section class="mix-review-layout" id="mix-review-layout">
+        <article class="panel mix-level-panel">
+          <div class="panel-heading">
+            <h2>Level Map</h2>
+            <span class="badge badge-neutral" id="mix-level-state">Idle</span>
           </div>
-        </div>
-      </div>
+          <div class="mix-master-strip">
+            <div>
+              <span>Master Peak</span>
+              <strong id="mix-master-peak">--</strong>
+            </div>
+            <div>
+              <span>Headroom</span>
+              <strong id="mix-master-headroom">--</strong>
+            </div>
+            <div>
+              <span>Peak Source</span>
+              <strong id="mix-peak-source">--</strong>
+            </div>
+          </div>
+          <div class="mix-level-list" id="mix-level-list"></div>
+        </article>
+
+        <aside class="mix-side-stack">
+          <article class="panel mix-score-panel">
+            <div class="panel-heading">
+              <h2>Mix Health</h2>
+              <span class="badge badge-neutral" id="mix-score-label">Idle</span>
+            </div>
+            <div class="mix-score-body">
+              <div class="mix-score-ring" id="mix-score-ring" style="--score: 0;">
+                <strong id="mix-score-value">--</strong>
+                <span id="mix-score-caption">Not run</span>
+              </div>
+              <dl class="mix-score-stats">
+                <div>
+                  <dt>Used Tracks</dt>
+                  <dd id="mix-used-total">--</dd>
+                </div>
+                <div>
+                  <dt>Hot Tracks</dt>
+                  <dd id="mix-hot-total">--</dd>
+                </div>
+                <div>
+                  <dt>Findings</dt>
+                  <dd id="mix-finding-total">--</dd>
+                </div>
+                <div>
+                  <dt>Proposals</dt>
+                  <dd id="mix-proposal-total">--</dd>
+                </div>
+              </dl>
+            </div>
+          </article>
+
+          <article class="panel mix-findings-panel">
+            <div class="panel-heading">
+              <h2>Findings</h2>
+              <span class="badge badge-neutral" id="mix-findings-count">0</span>
+            </div>
+            <div class="mix-finding-list" id="mix-finding-list"></div>
+          </article>
+
+          <article class="panel mix-proposals-panel">
+            <div class="panel-heading">
+              <h2>Proposals</h2>
+              <span class="badge badge-neutral" id="mix-proposals-count">0</span>
+            </div>
+            <div class="mix-proposal-list" id="mix-proposal-list"></div>
+          </article>
+        </aside>
+
+        <article class="panel mix-tone-panel">
+          <div class="panel-heading">
+            <h2>Tone Balance</h2>
+            <span class="badge badge-neutral" id="mix-tone-state">Estimate</span>
+          </div>
+          <div class="mix-band-grid">
+            <div class="mix-band-row">
+              <span>Low</span>
+              <div class="mix-band-meter"><i id="mix-band-low" style="--value: 0;"></i></div>
+              <strong id="mix-band-low-value">--</strong>
+            </div>
+            <div class="mix-band-row">
+              <span>Mid</span>
+              <div class="mix-band-meter"><i id="mix-band-mid" style="--value: 0;"></i></div>
+              <strong id="mix-band-mid-value">--</strong>
+            </div>
+            <div class="mix-band-row">
+              <span>High</span>
+              <div class="mix-band-meter"><i id="mix-band-high" style="--value: 0;"></i></div>
+              <strong id="mix-band-high-value">--</strong>
+            </div>
+          </div>
+          <div class="mix-band-sources" id="mix-band-sources"></div>
+        </article>
+
+        <article class="panel mix-stereo-panel">
+          <div class="panel-heading">
+            <h2>Stereo Field</h2>
+            <span class="badge badge-neutral" id="mix-stereo-count">0</span>
+          </div>
+          <div class="mix-stereo-field" id="mix-stereo-field"></div>
+        </article>
+
+        <article class="panel mix-details-panel">
+          <div class="panel-heading">
+            <h2>Track Detail</h2>
+            <span class="badge badge-neutral" id="mix-track-count">0</span>
+          </div>
+          <div class="mix-table-wrap">
+            <table class="mix-table">
+              <thead>
+                <tr>
+                  <th>Track</th>
+                  <th>Peak</th>
+                  <th>Fader</th>
+                  <th>Pan</th>
+                  <th>Stereo</th>
+                  <th>Plugins</th>
+                  <th>State</th>
+                </tr>
+              </thead>
+              <tbody id="mix-track-table"></tbody>
+            </table>
+          </div>
+        </article>
+
+        <article class="panel mix-notes-panel">
+          <div class="panel-heading">
+            <h2>Notes</h2>
+            <span class="badge badge-neutral" id="mix-note-count">0</span>
+          </div>
+          <div class="mix-note-list" id="mix-note-list"></div>
+        </article>
+      </section>
     </main>
 
     <!-- ── Low-End Analysis Preview ──────────────────────────────────────── -->

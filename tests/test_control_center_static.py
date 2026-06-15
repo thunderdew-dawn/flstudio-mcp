@@ -342,6 +342,282 @@ function createHarness() {
     )
 
 
+def test_control_center_static_mix_review_render() -> None:
+    _run_node_dom_check(
+        r"""
+const assert = require("assert");
+const fs = require("fs");
+const vm = require("vm");
+
+class ClassList {
+  constructor(element) {
+    this.element = element;
+    this.values = new Set();
+  }
+
+  setFromString(value) {
+    this.values = new Set(String(value || "").split(/\s+/).filter(Boolean));
+  }
+
+  sync() {
+    this.element._className = Array.from(this.values).join(" ");
+  }
+
+  add(name) {
+    this.values.add(name);
+    this.sync();
+  }
+
+  remove(name) {
+    this.values.delete(name);
+    this.sync();
+  }
+
+  contains(name) {
+    return this.values.has(name);
+  }
+}
+
+class Element {
+  constructor(tagName = "div", id = "") {
+    this.tagName = tagName.toUpperCase();
+    this.id = id;
+    this.children = [];
+    this.dataset = {};
+    this.disabled = false;
+    this.listeners = {};
+    this.parentElement = null;
+    this.textContent = "";
+    this.colSpan = 1;
+    this._className = "";
+    this.classList = new ClassList(this);
+    this.style = {
+      setProperty(name, value) {
+        this[name] = value;
+      }
+    };
+  }
+
+  set className(value) {
+    this._className = String(value || "");
+    this.classList.setFromString(this._className);
+  }
+
+  get className() {
+    return this._className;
+  }
+
+  append(...nodes) {
+    for (const node of nodes) this.appendChild(node);
+  }
+
+  appendChild(node) {
+    node.parentElement = this;
+    this.children.push(node);
+    return node;
+  }
+
+  addEventListener(name, handler) {
+    this.listeners[name] = handler;
+  }
+}
+
+function textTree(root) {
+  let out = root.textContent || "";
+  for (const child of root.children || []) out += "\n" + textTree(child);
+  return out;
+}
+
+const elements = new Map();
+const root = new Element("div", "root");
+
+function register(id, tagName = "div") {
+  const element = new Element(tagName, id);
+  elements.set(id, element);
+  root.appendChild(element);
+  return element;
+}
+
+for (const id of [
+  "mix-review-layout",
+  "run-mix-review",
+  "mix-review-feedback",
+  "mix-level-state",
+  "mix-master-peak",
+  "mix-master-headroom",
+  "mix-peak-source",
+  "mix-level-list",
+  "mix-score-label",
+  "mix-score-ring",
+  "mix-score-value",
+  "mix-score-caption",
+  "mix-used-total",
+  "mix-hot-total",
+  "mix-finding-total",
+  "mix-proposal-total",
+  "mix-findings-count",
+  "mix-finding-list",
+  "mix-proposals-count",
+  "mix-proposal-list",
+  "mix-tone-state",
+  "mix-band-low",
+  "mix-band-mid",
+  "mix-band-high",
+  "mix-band-low-value",
+  "mix-band-mid-value",
+  "mix-band-high-value",
+  "mix-band-sources",
+  "mix-stereo-count",
+  "mix-stereo-field",
+  "mix-track-count",
+  "mix-track-table",
+  "mix-note-count",
+  "mix-note-list"
+]) {
+  register(id, id === "mix-track-table" ? "tbody" : "div");
+}
+
+const document = {
+  createElement: (tagName) => new Element(tagName),
+  getElementById: (id) => elements.get(id) || null,
+  querySelectorAll: () => [],
+  querySelector: () => null
+};
+
+const context = {
+  Blob,
+  URL,
+  clearInterval,
+  console,
+  document,
+  fetch: async () => ({
+    ok: true,
+    headers: { get: () => "application/json" },
+    json: async () => ({})
+  }),
+  navigator: { clipboard: { writeText: async () => undefined } },
+  setInterval,
+  window: { __FLS_PILOT_TEST__: true }
+};
+context.window.document = document;
+
+vm.createContext(context);
+vm.runInContext(fs.readFileSync(process.argv[1], "utf8"), context);
+
+const controls = context.window.flsPilotControlCenter;
+controls.state.mixReview.report = {
+  ok: true,
+  state: "live",
+  generated_at: "2026-06-14T12:00:00Z",
+  summary: {
+    health_score: 72,
+    health_label: "At Risk",
+    tracks: 4,
+    used_tracks: 3,
+    levels_valid: true,
+    peak_source: "sustained_1200ms",
+    findings: 2,
+    proposals: 1,
+    master_peak_db: 0.2,
+    master_headroom_db: -0.2,
+    hot_tracks: 1
+  },
+  findings: [
+    {
+      severity: "high",
+      title: "Clipping / Peak Risk",
+      detail: "Master is over 0 dBFS",
+      track: 0
+    },
+    {
+      severity: "medium",
+      title: "Low-End Width Risk",
+      detail: "Sub Bass is wide",
+      track: 2
+    }
+  ],
+  proposals: [
+    {
+      severity: "medium",
+      title: "Lower Lead Vox",
+      detail: "Trim the loudest source before the master",
+      track_name: "Lead Vox",
+      current_fader_db: -2,
+      target_fader_db: -5,
+      current_peak_db: -0.4,
+      target_peak_db: -3
+    }
+  ],
+  visuals: {
+    level_tracks: [
+      {
+        track: 0,
+        name: "Master",
+        peak_db: 0.2,
+        fader_db: 0,
+        role: "master",
+        level_state: "clip"
+      },
+      {
+        track: 1,
+        name: "Lead Vox",
+        peak_db: -0.4,
+        fader_db: -2,
+        role: "insert",
+        level_state: "risk"
+      }
+    ],
+    stereo_tracks: [
+      {
+        track: 2,
+        name: "Sub Bass",
+        pan: 0.42,
+        stereo_sep: 0.5,
+        peak_db: -4,
+        low_end: true
+      }
+    ],
+    band_balance: {
+      bands_pct: { low: 44.2, mid: 51.3, high: 4.5 },
+      tracks: { low: ["Sub Bass"], mid: ["Lead Vox"], high: ["Hat"] }
+    }
+  },
+  details: {
+    tracks: [
+      {
+        track: 1,
+        name: "Lead Vox",
+        peak_db: -0.4,
+        fader_db: -2,
+        pan: 0,
+        stereo_sep: 0,
+        plugins: [{ slot: 0, name: "Fruity Parametric EQ 2" }],
+        used: true
+      }
+    ],
+    notes: ["Rough peak-energy estimate only."],
+    limits: ["No output spectrum is available."],
+    gather_errors: []
+  }
+};
+
+controls.renderMixReview();
+
+assert.strictEqual(elements.get("run-mix-review").disabled, false);
+assert.strictEqual(elements.get("mix-score-value").textContent, "72%");
+assert.strictEqual(elements.get("mix-master-peak").textContent, "0.2 dB");
+assert.match(textTree(elements.get("mix-review-feedback")), /Last review/);
+assert.match(textTree(elements.get("mix-level-list")), /Lead Vox/);
+assert.match(textTree(elements.get("mix-finding-list")), /Clipping/);
+assert.match(textTree(elements.get("mix-proposal-list")), /Lower Lead Vox/);
+assert.match(textTree(elements.get("mix-band-sources")), /Sub Bass/);
+assert.match(textTree(elements.get("mix-stereo-field")), /Sub Bass/);
+assert.match(textTree(elements.get("mix-track-table")), /Fruity Parametric EQ 2/);
+assert.match(textTree(elements.get("mix-note-list")), /output spectrum/);
+"""
+    )
+
+
 def test_control_center_static_routing_audit_render() -> None:
     _run_node_dom_check(
         r"""

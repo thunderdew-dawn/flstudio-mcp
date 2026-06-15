@@ -26,6 +26,7 @@ from typing import Any
 from . import doctor, kb_policy, protocol
 from . import project_templates as templates
 from .connection import DEFAULT_TCP_HOST, DEFAULT_TCP_PORT, TCPBridge, fetch_all_pages
+from .music import mix_doctor as mix_review
 from .runtime_config import (
     DEFAULT_CONTROL_CENTER_HOST,
     DEFAULT_CONTROL_CENTER_PORT,
@@ -556,6 +557,535 @@ def setup_report(state: ControlCenterState) -> str:
         if finding.get("remediation"):
             lines.append(f"  Fix: {finding['remediation']}")
     return "\n".join(lines) + "\n"
+
+
+MIX_POLICY_RULE_IDS = [
+    "master_peak_boundary",
+    "mix_doctor_master_output_boundary",
+    "mix_doctor_insert_headroom_context",
+    "mix_doctor_source_trim_first",
+    "source_or_bus_trim_before_master_trim",
+    "mix_doctor_existing_plugin_only",
+]
+
+
+def _run_mix_review(state: ControlCenterState) -> dict[str, Any]:
+    """Run the read-only Mix Review workflow for the Control Center UI."""
+    with state.lock:
+        daemon_host, daemon_port = _selected_daemon_endpoint(state)
+
+    bridge = None
+    try:
+        bridge = TCPBridge(daemon_host, daemon_port)
+        wait = getattr(bridge, "wait_for_heartbeat", None)
+        if callable(wait):
+            wait(timeout=1.0)
+        alive = bool(getattr(bridge, "is_alive", lambda: False)())
+        if not alive:
+            return _mix_review_unavailable_report(
+                "No fresh FL Studio controller heartbeat. Open FL Studio and refresh "
+                "the connection."
+            )
+
+        watch_peaks = mix_review.get_watcher().last_max()
+        snapshot = mix_review.gather_snapshot(
+            bridge,
+            peaks_override=watch_peaks or None,
+        )
+        return _build_mix_review_report(snapshot)
+    except Exception as exc:
+        return _mix_review_unavailable_report(f"{type(exc).__name__}: {exc}")
+    finally:
+        if bridge is not None:
+            with contextlib.suppress(Exception):
+                bridge.close()
+
+
+def _mix_review_unavailable_report(message: str) -> dict[str, Any]:
+    return {
+        "ok": False,
+        "state": "unavailable",
+        "workflow": "mix_review",
+        "title": "Mix Review",
+        "generated_at": _now_iso(),
+        "error": message,
+        "summary": {
+            "health_score": 0,
+            "health_label": "Unavailable",
+            "tracks": 0,
+            "used_tracks": 0,
+            "levels_valid": False,
+            "playing": False,
+            "peak_source": "none",
+            "findings": 1,
+            "high": 0,
+            "medium": 0,
+            "low": 0,
+            "proposals": 0,
+            "master_peak_db": None,
+            "master_headroom_db": None,
+            "hot_tracks": 0,
+            "muted_tracks": 0,
+            "solo_tracks": 0,
+            "eq_coverage_pct": 0,
+            "compressor_coverage_pct": 0,
+            "low_end_findings": 0,
+        },
+        "findings": [
+            {
+                "id": "mix_review_unavailable",
+                "severity": "warning",
+                "rule": "unavailable",
+                "title": "Mix data unavailable",
+                "detail": message,
+                "track": None,
+                "evidence": message,
+            }
+        ],
+        "proposals": [],
+        "visuals": {
+            "level_tracks": [],
+            "stereo_tracks": [],
+            "band_balance": {
+                "bands_pct": {"low": 0, "mid": 0, "high": 0},
+                "tracks": {"low": [], "mid": [], "high": []},
+            },
+        },
+        "details": {
+            "tracks": [],
+            "notes": [
+                "Mix Review is read-only and does not modify FL Studio project state."
+            ],
+            "limits": [
+                "Level findings require playback or a recent Mix Review watch capture."
+            ],
+            "gather_errors": [],
+            "low_end": {
+                "summary": {},
+                "findings": [],
+                "manual_checks": [],
+            },
+            "kb_policy_refs": kb_policy.rule_refs(MIX_POLICY_RULE_IDS),
+        },
+        "safety": {"read_only": True, "project_changes": False},
+    }
+
+
+def _build_mix_review_report(snapshot: dict[str, Any]) -> dict[str, Any]:
+    diagnosis = mix_review.diagnose(snapshot)
+    fix_plan = mix_review.plan_fixes(snapshot)
+    gain_plan = mix_review.gain_stage_plan(snapshot)
+    band_balance = mix_review.mix_band_balance(snapshot)
+    low_end = mix_review.low_end_stereo_safety(snapshot)
+    tracks = [dict(row) for row in snapshot.get("tracks", []) if isinstance(row, dict)]
+    used_tracks = [row for row in tracks if _mix_track_used(row)]
+    master = next((row for row in tracks if _as_int(row.get("index")) == 0), None)
+
+    findings = [
+        _mix_finding_summary(finding, index=index)
+        for index, finding in enumerate(diagnosis.get("findings") or [], start=1)
+    ]
+    proposals = _mix_proposal_summaries(
+        list(fix_plan.get("plans") or []),
+        list(gain_plan.get("plans") or []),
+    )
+    high = sum(1 for row in findings if row["severity"] == "high")
+    medium = sum(1 for row in findings if row["severity"] == "medium")
+    low = sum(1 for row in findings if row["severity"] == "low")
+    levels_valid = bool(snapshot.get("levels_valid"))
+    master_peak = _as_float(master.get("peak_db")) if master else None
+    health_score = _mix_health_score(
+        high=high,
+        medium=medium,
+        low=low,
+        levels_valid=levels_valid,
+        master_peak=master_peak,
+    )
+    audible = [
+        row for row in used_tracks
+        if _as_int(row.get("index")) != 0 and not row.get("mute")
+    ]
+    eq_count = sum(1 for row in audible if _mix_has_plugin_keyword(row, ("eq",)))
+    comp_count = sum(
+        1
+        for row in audible
+        if _mix_has_plugin_keyword(
+            row,
+            ("comp", "limit", "max", "ott", "dynamics", "level"),
+        )
+    )
+    hot_tracks = 0
+    for row in audible:
+        peak = _as_float(row.get("peak_db"))
+        if peak is not None and peak > -3.0:
+            hot_tracks += 1
+    master_headroom = -master_peak if master_peak is not None else None
+
+    notes = [
+        *list(diagnosis.get("notes") or []),
+        *list(fix_plan.get("notes") or []),
+        *list(gain_plan.get("notes") or []),
+        *list(low_end.get("notes") or []),
+    ]
+    limits = []
+    if not levels_valid:
+        limits.append("Level findings require playback or a recent full-song watch capture.")
+    limits.append(
+        "Tone balance is a rough name-and-peak estimate, not an output spectrum."
+    )
+    if low_end.get("analysis_limits"):
+        limits.append(str(low_end["analysis_limits"]))
+
+    return {
+        "ok": True,
+        "state": "live",
+        "workflow": "mix_review",
+        "title": "Mix Review",
+        "generated_at": _now_iso(),
+        "summary": {
+            "health_score": health_score,
+            "health_label": _mix_health_label(health_score),
+            "tracks": len(tracks),
+            "used_tracks": len(used_tracks),
+            "levels_valid": levels_valid,
+            "playing": bool(snapshot.get("playing")),
+            "peak_source": (snapshot.get("peak_window") or {}).get("source"),
+            "findings": len(findings),
+            "high": high,
+            "medium": medium,
+            "low": low,
+            "proposals": len(proposals),
+            "master_peak_db": _round_optional(master_peak),
+            "master_headroom_db": _round_optional(master_headroom),
+            "hot_tracks": hot_tracks,
+            "muted_tracks": sum(1 for row in tracks if row.get("mute")),
+            "solo_tracks": sum(1 for row in tracks if row.get("solo")),
+            "eq_coverage_pct": _coverage_pct(eq_count, len(audible)),
+            "compressor_coverage_pct": _coverage_pct(comp_count, len(audible)),
+            "low_end_findings": len(low_end.get("findings") or []),
+        },
+        "findings": findings,
+        "proposals": proposals,
+        "visuals": {
+            "level_tracks": _mix_level_tracks(tracks),
+            "stereo_tracks": _mix_stereo_tracks(tracks),
+            "band_balance": band_balance,
+        },
+        "details": {
+            "tracks": [_mix_track_detail(row) for row in tracks],
+            "notes": _unique_strings(notes),
+            "limits": _unique_strings(limits),
+            "gather_errors": list(snapshot.get("gather_errors") or []),
+            "template_context": templates.compact_context(
+                diagnosis.get("template_context")
+                or snapshot.get("template_context")
+                or {}
+            ),
+            "low_end": {
+                "summary": low_end.get("summary") or {},
+                "findings": [
+                    _mix_finding_summary(finding, index=index)
+                    for index, finding in enumerate(low_end.get("findings") or [], start=1)
+                ],
+                "manual_checks": list(low_end.get("manual_checks") or []),
+            },
+            "kb_policy_refs": kb_policy.rule_refs(MIX_POLICY_RULE_IDS),
+        },
+        "safety": {"read_only": True, "project_changes": False},
+    }
+
+
+def _mix_finding_summary(finding: dict[str, Any], *, index: int) -> dict[str, Any]:
+    rule = str(finding.get("rule") or "finding")
+    return {
+        "id": f"{rule}_{index}",
+        "severity": str(finding.get("severity") or "info"),
+        "rule": rule,
+        "title": _mix_rule_title(rule),
+        "detail": str(finding.get("message") or finding.get("evidence") or ""),
+        "track": finding.get("track"),
+        "evidence": finding.get("evidence"),
+        "proposed_fix": finding.get("proposed_fix") or {},
+        "kb_rule_ids": list(finding.get("kb_rule_ids") or []),
+    }
+
+
+def _mix_proposal_summaries(
+    fix_plans: list[dict[str, Any]],
+    gain_plans: list[dict[str, Any]],
+    limit: int = 12,
+) -> list[dict[str, Any]]:
+    out = []
+    seen: set[tuple[Any, Any, Any]] = set()
+    for source, plans in (("mix_review", fix_plans), ("gain_stage", gain_plans)):
+        for plan in plans:
+            key = (plan.get("kind"), plan.get("track"), plan.get("target_fader_db"))
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(
+                {
+                    "id": f"{source}_{len(out) + 1}",
+                    "source": source,
+                    "kind": plan.get("kind"),
+                    "severity": plan.get("severity") or "info",
+                    "track": plan.get("track"),
+                    "track_name": plan.get("track_name"),
+                    "title": plan.get("human") or plan.get("reason") or "Mix proposal",
+                    "detail": plan.get("reason") or plan.get("note") or "",
+                    "actionable": bool(plan.get("actionable")),
+                    "alternative": bool(plan.get("alternative")),
+                    "current_fader_db": _round_optional(plan.get("current_fader_db")),
+                    "target_fader_db": _round_optional(plan.get("target_fader_db")),
+                    "current_peak_db": _round_optional(plan.get("current_peak_db")),
+                    "target_peak_db": _round_optional(plan.get("target_peak_db")),
+                    "kb_rule_ids": list(plan.get("kb_rule_ids") or []),
+                }
+            )
+            if len(out) >= limit:
+                return out
+    return out
+
+
+def _mix_level_tracks(tracks: list[dict[str, Any]], limit: int = 18) -> list[dict[str, Any]]:
+    rows = []
+    for row in tracks:
+        if not _mix_track_used(row):
+            continue
+        peak = _as_float(row.get("peak_db"))
+        fader = _as_float(row.get("vol_db"))
+        rows.append(
+            {
+                "track": _as_int(row.get("index")),
+                "name": _mix_track_name(row),
+                "peak_db": _round_optional(peak),
+                "avg_db": _round_optional(row.get("peak_avg_db")),
+                "fader_db": _round_optional(fader),
+                "mute": bool(row.get("mute")),
+                "solo": bool(row.get("solo")),
+                "role": row.get("template_role") or "insert",
+                "level_state": _mix_level_state(peak, row),
+            }
+        )
+    rows.sort(
+        key=lambda item: (
+            1 if item["track"] == 0 else 0,
+            _mix_peak_sort_value(item.get("peak_db")),
+        ),
+        reverse=True,
+    )
+    master = [row for row in rows if row["track"] == 0]
+    others = [row for row in rows if row["track"] != 0]
+    return (master + others)[:limit]
+
+
+def _mix_stereo_tracks(tracks: list[dict[str, Any]], limit: int = 14) -> list[dict[str, Any]]:
+    rows = []
+    for row in tracks:
+        if _as_int(row.get("index")) == 0 or not _mix_track_used(row):
+            continue
+        pan = _as_float(row.get("pan"))
+        stereo = _as_float(row.get("stereo_sep"))
+        peak = _as_float(row.get("peak_db"))
+        if pan is None and stereo is None and peak is None:
+            continue
+        rows.append(
+            {
+                "track": _as_int(row.get("index")),
+                "name": _mix_track_name(row),
+                "pan": _round_optional(pan),
+                "stereo_sep": _round_optional(stereo),
+                "peak_db": _round_optional(peak),
+                "low_end": _mix_name_has_any(
+                    row,
+                    ("kick", "sub", "bass", "808", "boom"),
+                ),
+            }
+        )
+    rows.sort(
+        key=lambda item: (
+            bool(item.get("low_end")),
+            abs(item.get("pan") or 0),
+            abs(item.get("stereo_sep") or 0),
+            _mix_peak_sort_value(item.get("peak_db")),
+        ),
+        reverse=True,
+    )
+    return rows[:limit]
+
+
+def _mix_track_detail(row: dict[str, Any]) -> dict[str, Any]:
+    plugins = [
+        {
+            "slot": plugin.get("slot"),
+            "name": plugin.get("name"),
+        }
+        for plugin in row.get("plugins") or []
+        if isinstance(plugin, dict)
+    ]
+    role = row.get("template_role")
+    if not role:
+        role = "master" if _as_int(row.get("index")) == 0 else "insert"
+    return {
+        "track": _as_int(row.get("index")),
+        "name": _mix_track_name(row),
+        "role": role,
+        "fader_db": _round_optional(row.get("vol_db")),
+        "peak_db": _round_optional(row.get("peak_db")),
+        "pan": _round_optional(row.get("pan")),
+        "stereo_sep": _round_optional(row.get("stereo_sep")),
+        "mute": bool(row.get("mute")),
+        "solo": bool(row.get("solo")),
+        "plugins": plugins,
+        "routes_to": _normalise_routes(row.get("routes_to") or []),
+        "used": _mix_track_used(row),
+    }
+
+
+def _mix_track_used(row: dict[str, Any]) -> bool:
+    idx = _as_int(row.get("index"))
+    if idx == 0:
+        return True
+    if row.get("template_role") == templates.ROLE_RESERVED_PLACEHOLDER:
+        return False
+    if row.get("plugins"):
+        return True
+    name = _mix_track_name(row)
+    if name and name.lower() not in {"master", f"insert {idx}".lower()}:
+        return True
+    peak = _as_float(row.get("peak_db"))
+    if peak is not None and peak > -60.0:
+        return True
+    return any(
+        _as_int(route.get("dst") if isinstance(route, dict) else route) not in (None, 0)
+        for route in row.get("routes_to") or []
+    )
+
+
+def _mix_level_state(peak: float | None, row: dict[str, Any]) -> str:
+    if row.get("mute"):
+        return "muted"
+    if peak is None:
+        return "unknown"
+    if peak >= 0:
+        return "clip"
+    if peak > -1:
+        return "risk"
+    if peak > -3:
+        return "hot"
+    if peak < -24:
+        return "quiet"
+    return "ok"
+
+
+def _mix_health_score(
+    *,
+    high: int,
+    medium: int,
+    low: int,
+    levels_valid: bool,
+    master_peak: float | None,
+) -> int:
+    penalty = high * 18 + medium * 9 + low * 3
+    if not levels_valid:
+        penalty += 12
+    if master_peak is not None:
+        if master_peak >= 0:
+            penalty += 24
+        elif master_peak > -1:
+            penalty += 16
+        elif master_peak > -3:
+            penalty += 7
+    return max(0, min(100, 100 - penalty))
+
+
+def _mix_health_label(score: int) -> str:
+    if score >= 90:
+        return "Good"
+    if score >= 75:
+        return "Needs Review"
+    return "At Risk"
+
+
+def _mix_rule_title(rule: str) -> str:
+    labels = {
+        "clipping": "Clipping / Peak Risk",
+        "headroom": "Headroom",
+        "imbalance": "Level Imbalance",
+        "missing_hpf": "Missing High-Pass",
+        "missing_compressor": "Missing Dynamics",
+        "ungrouped": "Ungrouped Tracks",
+        "eq_clash": "EQ Clash",
+        "low_end_pan": "Low-End Pan Risk",
+        "low_end_width": "Low-End Width Risk",
+        "low_end_layering": "Low-End Layering",
+        "master_headroom_risk": "Master Headroom",
+    }
+    return labels.get(rule, rule.replace("_", " ").title())
+
+
+def _mix_track_name(row: dict[str, Any]) -> str:
+    name = str(row.get("name") or "").strip()
+    idx = _as_int(row.get("index"))
+    if name:
+        return name
+    return "Master" if idx == 0 else f"Insert {idx}" if idx is not None else "Track"
+
+
+def _mix_has_plugin_keyword(row: dict[str, Any], keywords: tuple[str, ...]) -> bool:
+    for plugin in row.get("plugins") or []:
+        name = str((plugin or {}).get("name") or "").lower()
+        if any(keyword in name for keyword in keywords):
+            return True
+    return False
+
+
+def _mix_name_has_any(row: dict[str, Any], keywords: tuple[str, ...]) -> bool:
+    name = _mix_track_name(row).lower()
+    return any(keyword in name for keyword in keywords)
+
+
+def _mix_peak_sort_value(value: Any) -> float:
+    numeric = _as_float(value)
+    return numeric if numeric is not None else -999.0
+
+
+def _coverage_pct(count_value: int, total: int) -> int:
+    if total <= 0:
+        return 0
+    return round(100 * count_value / total)
+
+
+def _round_optional(value: Any, digits: int = 1) -> float | None:
+    numeric = _as_float(value)
+    if numeric is None:
+        return None
+    return round(numeric, digits)
+
+
+def _as_float(value: Any) -> float | None:
+    if isinstance(value, bool) or value is None:
+        return None
+    if isinstance(value, int | float):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value)
+        except ValueError:
+            return None
+    return None
+
+
+def _unique_strings(values: list[Any]) -> list[str]:
+    out = []
+    seen = set()
+    for value in values:
+        text_value = str(value or "").strip()
+        if not text_value or text_value in seen:
+            continue
+        seen.add(text_value)
+        out.append(text_value)
+    return out
 
 
 ROUTING_POLICY_RULE_IDS = [
@@ -1367,6 +1897,8 @@ def _handler_factory(state: ControlCenterState):
             elif self.path == "/api/setup/confirm-step":
                 step = str(body.get("step", ""))
                 self._json(_confirm_step(state, step))
+            elif self.path == "/api/workflows/mix-review":
+                self._json(_run_mix_review(state))
             elif self.path == "/api/workflows/routing-audit":
                 self._json(_run_routing_audit(state))
             else:
