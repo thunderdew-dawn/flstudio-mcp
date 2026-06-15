@@ -23,6 +23,7 @@ import sys
 from fastmcp import FastMCP
 
 from . import __version__
+from . import prompts as prompt_defs
 from .connection import list_ports
 from .protocol import port_from_fl_name, port_to_fl_name
 from .runtime_config import DEFAULT_SSE_HOST, DEFAULT_SSE_PORT
@@ -56,7 +57,6 @@ from .tools import resources as resource_defs
 from .tools import routing as routing_tools
 from .tools import transport as transport_tools
 from .tools import workflow_context as workflow_context_tools
-from . import prompts as prompt_defs
 
 logger = logging.getLogger("fls_pilot")
 

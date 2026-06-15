@@ -260,10 +260,7 @@ def _reserved_ranges(routing_rows: Iterable[Mapping[str, Any]]) -> list[dict[str
     current_signature: tuple[tuple[int, float | None], ...] | None = None
 
     rows = sorted(
-        (
-            (_as_int(row.get("i", row.get("index", row.get("track")))), row)
-            for row in routing_rows
-        ),
+        ((_as_int(row.get("i", row.get("index", row.get("track")))), row) for row in routing_rows),
         key=lambda pair: -1 if pair[0] is None else pair[0],
     )
     for index, row in rows:
@@ -514,7 +511,7 @@ def _plugins(detail: Mapping[str, Any], *, max_params_per_plugin: int) -> list[d
                 "enabled": slot_data.get("enabled") if "enabled" in slot_data else None,
                 "mix": _as_float(slot_data.get("mix")),
                 "parameter_count": len(params),
-                "parameter_signature": params[:max(0, max_params_per_plugin)],
+                "parameter_signature": params[: max(0, max_params_per_plugin)],
             }
         )
     if out:

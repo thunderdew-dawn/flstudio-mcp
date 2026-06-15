@@ -39,8 +39,7 @@ def _dump() -> dict:
         },
     ]
     routing.extend(
-        {"i": index, "name": f"Insert {index}", "routes_to": _route(120)}
-        for index in range(22, 34)
+        {"i": index, "name": f"Insert {index}", "routes_to": _route(120)} for index in range(22, 34)
     )
     return {
         "date": "2026-06-07",

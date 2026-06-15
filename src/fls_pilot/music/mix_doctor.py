@@ -262,9 +262,7 @@ def gather_snapshot(
             }
         )
     template_rows = routing_raw or tracks
-    template_context = templates.classify_topology(
-        template_rows, routing_raw, channel_routing_raw
-    )
+    template_context = templates.classify_topology(template_rows, routing_raw, channel_routing_raw)
     tracks = templates.annotate_tracks(tracks, template_context)
     return {
         "playing": playing,
@@ -519,9 +517,9 @@ def rule_missing_compressor(tracks):
     Suggest a compressor if missing. Low confidence -- just a reminder."""
     out = []
     template_matched = _template_matched(tracks)
-    
+
     comp_keywords = ["comp", "limit", "max", "ott", "dynamics", "level", "cla", "c1", "c2", "c4"]
-    
+
     for t in _audible(tracks):
         # We can reuse the same suppression tags or template judgement rules
         if _template_policy_suppresses(t, "suppress_missing_compressor"):
@@ -530,22 +528,26 @@ def rule_missing_compressor(tracks):
             continue
         if template_matched and not _has_level_evidence(t):
             continue
-            
+
         nm = (t.get("name") or "").lower()
         needs_comp = False
-        if any(k in nm for k in FAMILIES["vocals"]):
+        if (
+            any(k in nm for k in FAMILIES["vocals"])
+            or any(k in nm for k in FAMILIES["bass"])
+            or any(k in nm for k in FAMILIES["drums"])
+            or "master" in nm
+            or "premaster" in nm
+            or "mix" in nm
+        ):
             needs_comp = True
-        elif any(k in nm for k in FAMILIES["bass"]):
-            needs_comp = True
-        elif any(k in nm for k in FAMILIES["drums"]):
-            needs_comp = True
-        elif "master" in nm or "premaster" in nm or "mix" in nm:
-            needs_comp = True
-            
+
         if not needs_comp:
             continue
-            
-        has_comp = any(any(k in (p.get("name") or "").lower() for k in comp_keywords) for p in t.get("plugins", []))
+
+        has_comp = any(
+            any(k in (p.get("name") or "").lower() for k in comp_keywords)
+            for p in t.get("plugins", [])
+        )
         if not has_comp:
             names = [p.get("name") for p in t.get("plugins", [])] or ["(no plugins)"]
             out.append(
@@ -554,7 +556,9 @@ def rule_missing_compressor(tracks):
                     "low",
                     t["name"],
                     "no dynamics plugin in chain ({})".format(", ".join(names)),
-                    "{} is a naturally dynamic track (vocal/bass/drums/bus) but has no compressor in its chain -- consider adding one (heuristic).".format(t["name"]),
+                    "{} is a naturally dynamic track (vocal/bass/drums/bus) but has no compressor in its chain -- consider adding one (heuristic).".format(
+                        t["name"]
+                    ),
                     {
                         "intent": "user_action_required",
                         "args": {},
@@ -564,7 +568,6 @@ def rule_missing_compressor(tracks):
                 )
             )
     return out
-
 
 
 def _imbalance(tracks, key, label, thresh, floor=None):
@@ -802,11 +805,7 @@ def low_end_stereo_safety(snapshot):
         if template_matched and not _has_level_evidence(t):
             continue
         pan = _as_float(t.get("pan"))
-        if (
-            not suppress_offcenter
-            and pan is not None
-            and abs(pan) >= LOW_END_PAN_RISK
-        ):
+        if not suppress_offcenter and pan is not None and abs(pan) >= LOW_END_PAN_RISK:
             findings.append(
                 finding(
                     "low_end_off_center",
@@ -961,12 +960,10 @@ def low_end_stereo_safety(snapshot):
         {
             "topic": "mono_sum",
             "check": (
-                "Mono-sum the loudest section and verify kick, sub, and bass "
-                "keep level and punch."
+                "Mono-sum the loudest section and verify kick, sub, and bass keep level and punch."
             ),
             "reason": (
-                "The MCP snapshot cannot measure true phase correlation or "
-                "mono cancellation."
+                "The MCP snapshot cannot measure true phase correlation or mono cancellation."
             ),
             **_kb_fields(
                 (

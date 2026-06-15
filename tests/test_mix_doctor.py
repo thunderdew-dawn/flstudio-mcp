@@ -456,16 +456,14 @@ def main() -> int:
     check(
         "tool findings keep compact KB ids and confidence",
         any(
-            f.get("kb_rule_ids")
-            and f.get("metadata", {}).get("kb_confidence_levels")
+            f.get("kb_rule_ids") and f.get("metadata", {}).get("kb_confidence_levels")
             for f in tool_out.get("diagnostics", [])
         ),
     )
     check(
         "tool proposals keep compact KB ids and safety limits",
         any(
-            p.get("kb_rule_ids")
-            and p.get("metadata", {}).get("safety_limits")
+            p.get("kb_rule_ids") and p.get("metadata", {}).get("safety_limits")
             for p in tool_out.get("proposed_changes", [])
         ),
     )
@@ -485,8 +483,7 @@ def main() -> int:
     check(
         "tool gain-stage proposals keep compact KB confidence",
         any(
-            p.get("kb_rule_ids")
-            and p.get("metadata", {}).get("kb_confidence_levels")
+            p.get("kb_rule_ids") and p.get("metadata", {}).get("kb_confidence_levels")
             for p in gain_out.get("proposed_changes", [])
         ),
     )

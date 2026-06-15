@@ -96,7 +96,9 @@ def render(repo: str, token: str, display_repo: str | None = None) -> str:
     for milestone in sorted({_milestone(issue) for issue in open_issues}):
         group = [issue for issue in open_issues if _milestone(issue) == milestone]
         lines.extend([f"### {milestone}", ""])
-        for issue in sorted(group, key=lambda item: (_priority(_labels(item)), int(item["number"]))):
+        for issue in sorted(
+            group, key=lambda item: (_priority(_labels(item)), int(item["number"]))
+        ):
             lines.append(_render_issue(issue, repo, display_repo))
         lines.append("")
 

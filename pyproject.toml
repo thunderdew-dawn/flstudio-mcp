@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "fls-pilot"
-version = "3.0.0b1"
+version = "3.0.0b2"
 description = "Control FL Studio with any MCP-compatible LLM: mixing, composition, and mix diagnosis through natural language."
 readme = "README.md"
 license = { text = "MIT" }
@@ -93,7 +93,7 @@ select = ["E", "F", "I", "B", "UP", "SIM"]
 
 [tool.ruff.lint.per-file-ignores]
 "scripts/**/*.py" = ["UP031"]
-"tests/**/*.py" = ["UP031"]
+"tests/**/*.py" = ["UP031", "E501"]
 
 [tool.pytest.ini_options]
 addopts = """

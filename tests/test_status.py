@@ -1,9 +1,6 @@
 from __future__ import annotations
 
-import json
-from pathlib import Path
-
-from fls_pilot import status, protocol
+from fls_pilot import protocol, status
 
 
 class FakeBridge:
@@ -104,4 +101,3 @@ def test_collect_status_is_read_only(monkeypatch) -> None:
         item for item in organization if item["label"] == "Duplicate Channel Names"
     )
     assert duplicate_signal["value"] == 1
-

@@ -33,12 +33,14 @@ class MixFixBridge:
         params = dict(params or {})
         self.calls.append((command, params))
         if command == protocol.CMD_MIXER_LIST_TRACKS:
-            return {"tracks": [
-                {"i": 0, "name": "Master", "mute": False, "solo": False},
-                {"i": 1, "name": "Kick", "mute": False, "solo": False},
-                {"i": 2, "name": "Snare", "mute": False, "solo": False},
-                {"i": 3, "name": "Lead Vox", "mute": False, "solo": False},
-            ]}
+            return {
+                "tracks": [
+                    {"i": 0, "name": "Master", "mute": False, "solo": False},
+                    {"i": 1, "name": "Kick", "mute": False, "solo": False},
+                    {"i": 2, "name": "Snare", "mute": False, "solo": False},
+                    {"i": 3, "name": "Lead Vox", "mute": False, "solo": False},
+                ]
+            }
         return {"ok": True}
 
 
@@ -93,12 +95,18 @@ def test_fl_solo_tracks_noop(monkeypatch):
     monkeypatch.setattr(bulk, "get_bridge", lambda: bridge)
 
     # Make all others muted so no mute is needed
-    bridge.call = lambda cmd, params=None: {"tracks": [
-        {"i": 0, "name": "Master", "mute": False, "solo": False},
-        {"i": 1, "name": "Kick", "mute": False, "solo": False},
-        {"i": 2, "name": "Snare", "mute": False, "solo": False},
-        {"i": 3, "name": "Lead Vox", "mute": True, "solo": False},
-    ]} if cmd == protocol.CMD_MIXER_LIST_TRACKS else {"ok": True}
+    bridge.call = lambda cmd, params=None: (
+        {
+            "tracks": [
+                {"i": 0, "name": "Master", "mute": False, "solo": False},
+                {"i": 1, "name": "Kick", "mute": False, "solo": False},
+                {"i": 2, "name": "Snare", "mute": False, "solo": False},
+                {"i": 3, "name": "Lead Vox", "mute": True, "solo": False},
+            ]
+        }
+        if cmd == protocol.CMD_MIXER_LIST_TRACKS
+        else {"ok": True}
+    )
 
     result = mcp.tools["fl_solo_tracks"](category="drums", approved=False)
 
@@ -150,10 +158,16 @@ def test_fl_clear_mute_solo_requires_approval(monkeypatch):
     bulk.register(mcp)
     bridge = MixFixBridge()
     monkeypatch.setattr(bulk, "get_bridge", lambda: bridge)
-    bridge.call = lambda cmd, params=None: {"tracks": [
-        {"i": 0, "name": "Master", "mute": False, "solo": False},
-        {"i": 1, "name": "Kick", "mute": True, "solo": False},
-    ]} if cmd == protocol.CMD_MIXER_LIST_TRACKS else {"ok": True}
+    bridge.call = lambda cmd, params=None: (
+        {
+            "tracks": [
+                {"i": 0, "name": "Master", "mute": False, "solo": False},
+                {"i": 1, "name": "Kick", "mute": True, "solo": False},
+            ]
+        }
+        if cmd == protocol.CMD_MIXER_LIST_TRACKS
+        else {"ok": True}
+    )
 
     result = mcp.tools["fl_clear_mute_solo"](approved=False)
 
@@ -165,10 +179,16 @@ def test_fl_clear_mute_solo_applied(monkeypatch):
     bulk.register(mcp)
     bridge = MixFixBridge()
     monkeypatch.setattr(bulk, "get_bridge", lambda: bridge)
-    bridge.call = lambda cmd, params=None: {"tracks": [
-        {"i": 0, "name": "Master", "mute": False, "solo": False},
-        {"i": 1, "name": "Kick", "mute": True, "solo": False},
-    ]} if cmd == protocol.CMD_MIXER_LIST_TRACKS else {"ok": True}
+    bridge.call = lambda cmd, params=None: (
+        {
+            "tracks": [
+                {"i": 0, "name": "Master", "mute": False, "solo": False},
+                {"i": 1, "name": "Kick", "mute": True, "solo": False},
+            ]
+        }
+        if cmd == protocol.CMD_MIXER_LIST_TRACKS
+        else {"ok": True}
+    )
 
     def mock_safe_write_group(*args, **kwargs):
         return {

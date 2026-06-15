@@ -180,6 +180,7 @@ def _register_one(
     description: str,
 ) -> None:
     """Register a single prompt by closing over its arguments."""
+
     # Capture values in default args to avoid late-binding closure issues.
     def _make_prompt(
         _name: str = prompt_name,

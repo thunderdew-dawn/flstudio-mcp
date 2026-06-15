@@ -506,8 +506,10 @@ def kb_explain_limit(intent: str) -> dict:
     ]
 
     for limit in _LIMITS:
-        if any(kw in limit["keywords"] for kw in limit["keywords"] if kw in intent_lower): # Fixed generator logic slightly conceptually but string matching works
-             return {
+        if any(
+            kw in limit["keywords"] for kw in limit["keywords"] if kw in intent_lower
+        ):  # Fixed generator logic slightly conceptually but string matching works
+            return {
                 "action": limit["action"],
                 "reason": limit["reason"],
                 "workaround": limit["workaround"],

@@ -54,9 +54,9 @@ def register(mcp: FastMCP) -> None:
             str,
             Field(
                 description=(
-                "Transport action: ping, get_tempo, set_tempo, get_play_state, "
-                "play, stop, pause, toggle_play, record, get_song_position, set_song_position, "
-                "get_time_signature, or set_time_signature."
+                    "Transport action: ping, get_tempo, set_tempo, get_play_state, "
+                    "play, stop, pause, toggle_play, record, get_song_position, set_song_position, "
+                    "get_time_signature, or set_time_signature."
                 )
             ),
         ],

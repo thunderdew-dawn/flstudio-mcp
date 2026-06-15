@@ -6,9 +6,9 @@ from __future__ import annotations
 import argparse
 import re
 import sys
-import tomllib
 from pathlib import Path
 
+import tomllib
 
 TAG_RE = re.compile(
     r"^v(?P<base>\d+\.\d+\.\d+)(?:(?P<stable>-stable)|-(?P<phase>alpha|beta|rc)\.(?P<n>\d+))?$"

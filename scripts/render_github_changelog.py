@@ -68,11 +68,7 @@ def _display_url(url: str | None, repo: str, display_repo: str | None) -> str:
 def render(repo: str, token: str, display_repo: str | None = None) -> str:
     generated = dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat()
     releases = _list(f"/repos/{repo}/releases", token)
-    pulls = [
-        pr
-        for pr in _list(f"/repos/{repo}/pulls?state=closed", token)
-        if pr.get("merged_at")
-    ]
+    pulls = [pr for pr in _list(f"/repos/{repo}/pulls?state=closed", token) if pr.get("merged_at")]
     pulls.sort(key=lambda row: str(row.get("merged_at")), reverse=True)
 
     lines = [

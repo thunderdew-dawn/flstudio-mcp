@@ -15,13 +15,12 @@ import asyncio
 import sys
 from pathlib import Path
 
-import pytest
-
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+
+from fastmcp import FastMCP
 
 from fls_pilot import prompts as prompt_defs
 from fls_pilot.server import build_server
-from fastmcp import FastMCP
 
 # ---------------------------------------------------------------------------
 # Expected prompt names (from prompts.py _PROMPT_MAP)
@@ -214,6 +213,7 @@ def test_prompt_content_from_markdown(tmp_path, monkeypatch):
     """Prompts must load content from bundled Markdown files."""
     # Just verify the prompt module can locate its MD dir without error
     from fls_pilot.prompts import _PROMPTS_DIR
+
     assert _PROMPTS_DIR.exists(), f"Prompt MD directory not found: {_PROMPTS_DIR}"
     assert (_PROMPTS_DIR / "mix-review.md").exists()
     assert (_PROMPTS_DIR / "routing-review.md").exists()

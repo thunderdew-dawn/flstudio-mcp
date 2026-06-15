@@ -252,9 +252,7 @@ def _score_profile(
     route_by: Mapping[int, list],
     channel_by: Mapping[int, Mapping[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    profile_tracks = [
-        row for row in profile.get("mixer_tracks", []) if isinstance(row, Mapping)
-    ]
+    profile_tracks = [row for row in profile.get("mixer_tracks", []) if isinstance(row, Mapping)]
     non_reserved = [
         row
         for row in profile_tracks
@@ -263,9 +261,7 @@ def _score_profile(
         and row.get("name") is not None
     ]
     source_named = [
-        row
-        for row in non_reserved
-        if _profile_role(row.get("role")) in {ROLE_SOURCE, ROLE_UTILITY}
+        row for row in non_reserved if _profile_role(row.get("role")) in {ROLE_SOURCE, ROLE_UTILITY}
     ]
     anchor_named = [
         row
@@ -289,9 +285,9 @@ def _score_profile(
 
     channel_total, channel_matches = _channel_matches(profile, channel_by or {})
     placeholder_matches = _placeholder_matches(profile, name_by, route_by)
-    min_placeholders = _as_int(
-        profile.get("template_detection", {}).get("reserved_placeholder_min_count")
-    ) or 0
+    min_placeholders = (
+        _as_int(profile.get("template_detection", {}).get("reserved_placeholder_min_count")) or 0
+    )
     placeholder_ok = placeholder_matches >= min_placeholders
     anchor_total = max(1, len(anchor_named))
     route_total = max(1, len(required_routes))

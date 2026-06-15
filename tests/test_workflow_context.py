@@ -19,8 +19,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from fls_pilot.server import build_server
-from fls_pilot.tools.workflow_context import fl_get_workflow_context, WORKFLOW_REGISTRY
-
+from fls_pilot.tools.workflow_context import WORKFLOW_REGISTRY, fl_get_workflow_context
 
 KNOWN_WORKFLOWS = list(WORKFLOW_REGISTRY.keys())
 

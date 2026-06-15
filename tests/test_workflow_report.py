@@ -37,9 +37,17 @@ def test_proposed_change_canonical_v3():
 
     # Assert deprecated fields are absent
     deprecated_fields = [
-        "reason", "params", "action", "target", "source_diagnostic_ids",
-        "safety_basis", "readback", "rollback", "manual_review",
-        "kb_rule_ids", "metadata"
+        "reason",
+        "params",
+        "action",
+        "target",
+        "source_diagnostic_ids",
+        "safety_basis",
+        "readback",
+        "rollback",
+        "manual_review",
+        "kb_rule_ids",
+        "metadata",
     ]
     for deprecated in deprecated_fields:
         assert deprecated not in row
