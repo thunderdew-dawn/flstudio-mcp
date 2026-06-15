@@ -621,7 +621,7 @@ def test_http_routing_audit_endpoint(monkeypatch):
     assert payload == {"ok": True, "workflow": "routing_audit", "state": "live"}
 
 
-def test_http_mix_review_endpoint(monkeypatch):
+def test_http_mix_review_and_low_end_endpoints(monkeypatch):
     monkeypatch.setattr(
         control_center,
         "_run_mix_review",
@@ -629,34 +629,54 @@ def test_http_mix_review_endpoint(monkeypatch):
     )
     state = _state(port=0)
     handler_cls = control_center._handler_factory(state)
-    request = (
-        b"POST /api/workflows/mix-review HTTP/1.1\r\n"
-        b"Host: localhost\r\n"
-        b"Content-Type: application/json\r\n"
-        b"Content-Length: 2\r\n"
-        b"\r\n"
-        b"{}"
-    )
 
-    class OneShotHandler(handler_cls):
-        def setup(self):  # noqa: ANN001
-            self.rfile = io.BytesIO(request)
-            self.wfile = io.BytesIO()
+    def call_endpoint(path: str) -> dict:
+        request = (
+            f"POST {path} HTTP/1.1\r\n"
+            "Host: localhost\r\n"
+            "Content-Type: application/json\r\n"
+            "Content-Length: 2\r\n"
+            "\r\n"
+            "{}"
+        ).encode()
 
-        def finish(self):  # noqa: ANN001
-            pass
+        class OneShotHandler(handler_cls):
+            def setup(self):  # noqa: ANN001
+                self.rfile = io.BytesIO(request)
+                self.wfile = io.BytesIO()
 
-    server = mock.Mock()
-    server.server_version = "test"
-    server.sys_version = ""
-    server.timeout = 1
-    server._BaseServer__is_shut_down = mock.Mock()
-    server._BaseServer__shutdown_request = False
+            def finish(self):  # noqa: ANN001
+                pass
 
-    handler = OneShotHandler(request=None, client_address=("127.0.0.1", 1234), server=server)
-    response = handler.wfile.getvalue().decode("utf-8")
-    payload = json.loads(response.split("\r\n\r\n", 1)[1])
-    assert payload == {"ok": True, "workflow": "mix_review", "state": "live"}
+        server = mock.Mock()
+        server.server_version = "test"
+        server.sys_version = ""
+        server.timeout = 1
+        server._BaseServer__is_shut_down = mock.Mock()
+        server._BaseServer__shutdown_request = False
+
+        handler = OneShotHandler(
+            request=None,
+            client_address=("127.0.0.1", 1234),
+            server=server,
+        )
+        response = handler.wfile.getvalue().decode("utf-8")
+        return json.loads(response.split("\r\n\r\n", 1)[1])
+
+    expected_by_path = {
+        "/api/workflows/mix-review": {"workflow": "mix_review", "title": None},
+        "/api/workflows/low-end-analysis": {
+            "workflow": "low_end_analysis",
+            "title": "Low-End Analysis",
+        },
+    }
+    for path, expected in expected_by_path.items():
+        payload = call_endpoint(path)
+        assert payload["ok"] is True
+        assert payload["state"] == "live"
+        assert payload["workflow"] == expected["workflow"]
+        if expected["title"]:
+            assert payload["title"] == expected["title"]
 
 
 def test_build_mix_review_report_summarizes_levels_findings_and_visuals():
@@ -730,6 +750,7 @@ def test_build_mix_review_report_summarizes_levels_findings_and_visuals():
     assert report["visuals"]["level_tracks"][0]["name"] == "Master"
     assert report["visuals"]["band_balance"]["bands_pct"]["low"] > 0
     assert any(row["low_end"] for row in report["visuals"]["stereo_tracks"])
+    assert any(row["name"] == "Sub Bass" for row in report["details"]["low_end"]["tracks"])
     assert any(track["plugins"] for track in report["details"]["tracks"])
 
 

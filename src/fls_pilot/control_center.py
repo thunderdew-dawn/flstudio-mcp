@@ -601,6 +601,14 @@ def _run_mix_review(state: ControlCenterState) -> dict[str, Any]:
                 bridge.close()
 
 
+def _run_low_end_analysis(state: ControlCenterState) -> dict[str, Any]:
+    """Run the read-only Low-End Analysis workflow for the Control Center UI."""
+    report = dict(_run_mix_review(state))
+    report["workflow"] = "low_end_analysis"
+    report["title"] = "Low-End Analysis"
+    return report
+
+
 def _mix_review_unavailable_report(message: str) -> dict[str, Any]:
     return {
         "ok": False,
@@ -662,6 +670,7 @@ def _mix_review_unavailable_report(message: str) -> dict[str, Any]:
             "gather_errors": [],
             "low_end": {
                 "summary": {},
+                "tracks": [],
                 "findings": [],
                 "manual_checks": [],
             },
@@ -783,6 +792,7 @@ def _build_mix_review_report(snapshot: dict[str, Any]) -> dict[str, Any]:
             ),
             "low_end": {
                 "summary": low_end.get("summary") or {},
+                "tracks": list(low_end.get("low_end_tracks") or []),
                 "findings": [
                     _mix_finding_summary(finding, index=index)
                     for index, finding in enumerate(low_end.get("findings") or [], start=1)
@@ -1899,6 +1909,8 @@ def _handler_factory(state: ControlCenterState):
                 self._json(_confirm_step(state, step))
             elif self.path == "/api/workflows/mix-review":
                 self._json(_run_mix_review(state))
+            elif self.path == "/api/workflows/low-end-analysis":
+                self._json(_run_low_end_analysis(state))
             elif self.path == "/api/workflows/routing-audit":
                 self._json(_run_routing_audit(state))
             else:

@@ -472,9 +472,38 @@ for (const id of [
   "mix-track-count",
   "mix-track-table",
   "mix-note-count",
-  "mix-note-list"
+  "mix-note-list",
+  "low-end-layout",
+  "run-low-end-analysis",
+  "low-end-feedback",
+  "low-end-map-state",
+  "low-end-focus-board",
+  "low-end-score-label",
+  "low-end-score-ring",
+  "low-end-score-value",
+  "low-end-score-caption",
+  "low-end-track-total",
+  "low-end-finding-total",
+  "low-end-master-headroom",
+  "low-end-peak-source",
+  "low-end-findings-count",
+  "low-end-finding-list",
+  "low-end-balance-state",
+  "low-end-band-low",
+  "low-end-band-mid",
+  "low-end-band-high",
+  "low-end-band-low-value",
+  "low-end-band-mid-value",
+  "low-end-band-high-value",
+  "low-end-band-sources",
+  "low-end-stereo-count",
+  "low-end-stereo-field",
+  "low-end-detail-count",
+  "low-end-track-table",
+  "low-end-note-count",
+  "low-end-note-list"
 ]) {
-  register(id, id === "mix-track-table" ? "tbody" : "div");
+  register(id, id === "mix-track-table" || id === "low-end-track-table" ? "tbody" : "div");
 }
 
 const document = {
@@ -593,11 +622,47 @@ controls.state.mixReview.report = {
         stereo_sep: 0,
         plugins: [{ slot: 0, name: "Fruity Parametric EQ 2" }],
         used: true
+      },
+      {
+        track: 2,
+        name: "Sub Bass",
+        peak_db: -4,
+        fader_db: -3,
+        pan: 0.42,
+        stereo_sep: 0.5,
+        plugins: [{ slot: 1, name: "Fruity Parametric EQ 2" }],
+        used: true
       }
     ],
     notes: ["Rough peak-energy estimate only."],
     limits: ["No output spectrum is available."],
-    gather_errors: []
+    gather_errors: [],
+    low_end: {
+      summary: { low_end_tracks: 1, wide_low_end: 1 },
+      tracks: [
+        {
+          track: 2,
+          name: "Sub Bass",
+          pan: 0.42,
+          stereo_sep: 0.5,
+          peak_db: -4
+        }
+      ],
+      findings: [
+        {
+          severity: "medium",
+          title: "Low-End Width Risk",
+          detail: "Sub Bass is wide",
+          track: "Sub Bass"
+        }
+      ],
+      manual_checks: [
+        {
+          topic: "mono_sum",
+          check: "Mono-sum the loudest section."
+        }
+      ]
+    }
   }
 };
 
@@ -614,6 +679,20 @@ assert.match(textTree(elements.get("mix-band-sources")), /Sub Bass/);
 assert.match(textTree(elements.get("mix-stereo-field")), /Sub Bass/);
 assert.match(textTree(elements.get("mix-track-table")), /Fruity Parametric EQ 2/);
 assert.match(textTree(elements.get("mix-note-list")), /output spectrum/);
+
+controls.state.lowEndAnalysis.report = controls.state.mixReview.report;
+controls.renderLowEndAnalysis();
+
+assert.strictEqual(elements.get("run-low-end-analysis").disabled, false);
+assert.strictEqual(elements.get("low-end-track-total").textContent, "1");
+assert.strictEqual(elements.get("low-end-finding-total").textContent, "1");
+assert.match(textTree(elements.get("low-end-feedback")), /Last analysis/);
+assert.match(textTree(elements.get("low-end-focus-board")), /Sub Bass/);
+assert.match(textTree(elements.get("low-end-finding-list")), /Low-End Width Risk/);
+assert.match(textTree(elements.get("low-end-band-sources")), /Sub Bass/);
+assert.match(textTree(elements.get("low-end-stereo-field")), /Sub Bass/);
+assert.match(textTree(elements.get("low-end-track-table")), /Sub Bass/);
+assert.match(textTree(elements.get("low-end-note-list")), /Mono-sum/);
 """
     )
 

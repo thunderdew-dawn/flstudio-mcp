@@ -7,6 +7,11 @@ const state = {
     report: null,
     error: null
   },
+  lowEndAnalysis: {
+    loading: false,
+    report: null,
+    error: null
+  },
   routingAudit: {
     loading: false,
     report: null,
@@ -149,6 +154,7 @@ function render() {
   renderClients();
   renderProjectData();
   renderMixReview();
+  renderLowEndAnalysis();
   renderRoutingAudit();
   renderLogsHistory();
   renderPorts();
@@ -1446,7 +1452,7 @@ function renderMixNotes(report) {
     ...(Array.isArray(details.notes) ? details.notes : []),
     ...(Array.isArray(details.limits) ? details.limits : []),
     ...(Array.isArray(details.gather_errors) ? details.gather_errors : []),
-    ...(Array.isArray(details.low_end?.manual_checks) ? details.low_end.manual_checks : [])
+    ...(Array.isArray(details.low_end?.manual_checks) ? details.low_end.manual_checks.map(lowEndManualCheckText) : [])
   ].filter(Boolean);
   text("mix-note-count", notes.length);
 
@@ -1458,6 +1464,340 @@ function renderMixNotes(report) {
   for (const note of notes.slice(0, 8)) {
     const row = document.createElement("div");
     row.className = "mix-note-row";
+    row.textContent = safeString(note);
+    list.appendChild(row);
+  }
+}
+
+// ─── Low-End Analysis ────────────────────────────────────────────────────────
+async function runLowEndAnalysis() {
+  state.lowEndAnalysis.loading = true;
+  state.lowEndAnalysis.error = null;
+  renderLowEndAnalysis();
+  try {
+    const result = await api("/api/workflows/low-end-analysis", {
+      method: "POST",
+      body: "{}"
+    });
+    state.lowEndAnalysis.report = result;
+    state.lowEndAnalysis.error = result?.ok === false
+      ? (result.error || "Low-End Analysis unavailable.")
+      : null;
+  } catch (error) {
+    state.lowEndAnalysis.error = `Low-End Analysis failed: ${error.message}`;
+  } finally {
+    state.lowEndAnalysis.loading = false;
+    renderLowEndAnalysis();
+  }
+}
+
+function renderLowEndAnalysis() {
+  const layout = document.getElementById("low-end-layout");
+  if (!layout) return;
+
+  const report = state.lowEndAnalysis.report;
+  const isLoading = state.lowEndAnalysis.loading;
+  const error = state.lowEndAnalysis.error;
+
+  const runButton = document.getElementById("run-low-end-analysis");
+  if (runButton) {
+    runButton.disabled = isLoading;
+    runButton.textContent = isLoading ? "Running..." : "Run Low-End Analysis";
+  }
+
+  renderLowEndFeedback(report, error, isLoading);
+  renderLowEndSummary(report, isLoading);
+  renderLowEndFocus(report);
+  renderLowEndFindings(report);
+  renderLowEndBalance(report);
+  renderLowEndStereo(report);
+  renderLowEndTable(report);
+  renderLowEndNotes(report);
+}
+
+function renderLowEndFeedback(report, error, isLoading) {
+  const feedback = document.getElementById("low-end-feedback");
+  if (!feedback) return;
+
+  feedback.className = "low-end-feedback";
+  if (isLoading) {
+    feedback.classList.add("is-loading");
+    feedback.textContent = "Low-End Analysis is reading FL Studio mixer data...";
+    return;
+  }
+  if (error) {
+    feedback.classList.add("is-error");
+    feedback.textContent = error;
+    return;
+  }
+  if (report?.ok) {
+    feedback.classList.add("is-live");
+    const timestamp = new Date(report.generated_at || Date.now()).toLocaleTimeString();
+    feedback.textContent = `Last analysis: ${timestamp}. No project changes were made.`;
+    return;
+  }
+  feedback.textContent = "Analysis has not run yet.";
+}
+
+function renderLowEndSummary(report, isLoading) {
+  const tracks = lowEndTracks(report);
+  const findings = lowEndFindings(report);
+  const score = lowEndScore(report, tracks, findings);
+  const label = lowEndScoreLabel(score, report?.ok);
+  const summary = report?.summary || {};
+
+  text("low-end-score-value", score == null ? "--" : `${Math.round(score)}%`);
+  text("low-end-score-caption", isLoading ? "Reading" : label);
+  text("low-end-score-label", label);
+  text("low-end-track-total", report ? tracks.length : "--");
+  text("low-end-finding-total", report ? findings.length : "--");
+  text("low-end-findings-count", findings.length);
+  text("low-end-detail-count", tracks.length);
+  text("low-end-master-headroom", formatDb(summary.master_headroom_db));
+  text("low-end-peak-source", mixPeakSourceLabel(summary.peak_source));
+
+  const ring = document.getElementById("low-end-score-ring");
+  if (ring) {
+    const clampedScore = score == null ? 0 : Math.max(0, Math.min(100, score));
+    ring.style.setProperty("--score", clampedScore);
+    ring.dataset.state = routingScoreState(score);
+  }
+
+  const scoreLabel = document.getElementById("low-end-score-label");
+  if (scoreLabel) {
+    scoreLabel.className = `badge ${mixBadgeClass(score, report?.ok)}`;
+  }
+
+  const mapState = document.getElementById("low-end-map-state");
+  if (mapState) {
+    mapState.textContent = isLoading ? "Reading" : (report?.ok ? "Live" : "Idle");
+    mapState.className = `badge ${report?.ok ? "badge-ok" : "badge-neutral"}`;
+  }
+}
+
+function renderLowEndFocus(report) {
+  const board = document.getElementById("low-end-focus-board");
+  if (!board) return;
+  board.innerHTML = "";
+
+  const tracks = lowEndTracks(report);
+  if (!tracks.length) {
+    board.appendChild(lowEndPlaceholder("Run Low-End Analysis to populate kick, bass, and sub focus tracks."));
+    return;
+  }
+
+  const lanes = [
+    { id: "kick", title: "Kick", tracks: tracks.filter(track => track.low_end_role === "kick") },
+    { id: "sub", title: "Sub / 808", tracks: tracks.filter(track => track.low_end_role === "sub") },
+    { id: "bass", title: "Bass", tracks: tracks.filter(track => track.low_end_role === "bass") },
+    { id: "other", title: "Other Low-End", tracks: tracks.filter(track => track.low_end_role === "other") }
+  ];
+
+  for (const lane of lanes) {
+    const laneEl = document.createElement("div");
+    laneEl.className = `low-end-lane low-end-lane-${lane.id}`;
+
+    const heading = document.createElement("div");
+    heading.className = "low-end-lane-heading";
+    const title = document.createElement("strong");
+    title.textContent = lane.title;
+    const count = document.createElement("span");
+    count.textContent = lane.tracks.length;
+    heading.append(title, count);
+    laneEl.appendChild(heading);
+
+    if (!lane.tracks.length) {
+      const empty = document.createElement("div");
+      empty.className = "low-end-lane-empty";
+      empty.textContent = "No named track";
+      laneEl.appendChild(empty);
+    }
+
+    for (const track of lane.tracks.slice(0, 4)) {
+      const item = document.createElement("div");
+      item.className = lowEndTrackStereoRisk(track)
+        ? "low-end-focus-item has-stereo-risk"
+        : "low-end-focus-item";
+
+      const meta = document.createElement("div");
+      meta.className = "low-end-focus-meta";
+      const name = document.createElement("strong");
+      name.textContent = safeString(track.name);
+      const detail = document.createElement("span");
+      detail.textContent = `${mixTrackNumber(track.track)} · Peak ${formatDb(track.peak_db)}`;
+      meta.append(name, detail);
+
+      const meter = document.createElement("div");
+      meter.className = "low-end-focus-meter";
+      const fill = document.createElement("i");
+      fill.style.setProperty("--value", mixLevelPercent(track.peak_db));
+      meter.appendChild(fill);
+
+      const stereo = document.createElement("span");
+      stereo.className = "low-end-focus-stereo";
+      stereo.textContent = `Pan ${formatSigned(track.pan)} · Width ${formatSigned(track.stereo_sep)}`;
+
+      item.append(meta, meter, stereo);
+      laneEl.appendChild(item);
+    }
+
+    board.appendChild(laneEl);
+  }
+}
+
+function renderLowEndFindings(report) {
+  const list = document.getElementById("low-end-finding-list");
+  if (!list) return;
+  list.innerHTML = "";
+
+  const findings = lowEndFindings(report);
+  if (!findings.length) {
+    list.appendChild(lowEndPlaceholder(report ? "No low-end findings in the current analysis." : "No analysis result yet."));
+    return;
+  }
+
+  for (const finding of findings) {
+    const row = document.createElement("div");
+    row.className = `low-end-finding ${mixSeverityClass(finding.severity)}`;
+
+    const icon = document.createElement("span");
+    icon.className = "low-end-finding-icon";
+    icon.textContent = mixSeverityIcon(finding.severity);
+
+    const body = document.createElement("div");
+    const title = document.createElement("strong");
+    title.textContent = safeString(finding.title);
+    const detail = document.createElement("span");
+    detail.textContent = mixFindingDetail(finding);
+    body.append(title, detail);
+
+    const severity = document.createElement("span");
+    severity.className = "low-end-finding-severity";
+    severity.textContent = safeString(finding.severity).toUpperCase();
+
+    row.append(icon, body, severity);
+    list.appendChild(row);
+  }
+}
+
+function renderLowEndBalance(report) {
+  const balance = report?.visuals?.band_balance || {};
+  const bands = balance.bands_pct || {};
+  for (const band of ["low", "mid", "high"]) {
+    const value = Number(bands[band] || 0);
+    const meter = document.getElementById(`low-end-band-${band}`);
+    if (meter) meter.style.setProperty("--value", Math.max(0, Math.min(100, value)));
+    text(`low-end-band-${band}-value`, formatPercent(value));
+  }
+
+  const stateEl = document.getElementById("low-end-balance-state");
+  if (stateEl) {
+    stateEl.textContent = report?.ok ? "Estimate" : "Idle";
+    stateEl.className = `badge ${report?.ok ? "badge-ok" : "badge-neutral"}`;
+  }
+
+  const sources = document.getElementById("low-end-band-sources");
+  if (!sources) return;
+  sources.innerHTML = "";
+  const trackBuckets = balance.tracks || {};
+  for (const band of ["low", "mid", "high"]) {
+    const row = document.createElement("span");
+    const names = Array.isArray(trackBuckets[band]) ? trackBuckets[band] : [];
+    row.textContent = `${band.toUpperCase()}: ${names.slice(0, 5).map(safeString).join(", ") || "--"}`;
+    sources.appendChild(row);
+  }
+}
+
+function renderLowEndStereo(report) {
+  const field = document.getElementById("low-end-stereo-field");
+  if (!field) return;
+  field.innerHTML = "";
+
+  const tracks = lowEndTracks(report);
+  text("low-end-stereo-count", tracks.length);
+  if (!tracks.length) {
+    field.appendChild(lowEndPlaceholder("Run Low-End Analysis to populate stereo and mono-safety metadata."));
+    return;
+  }
+
+  for (const track of tracks) {
+    const row = document.createElement("div");
+    row.className = lowEndTrackStereoRisk(track)
+      ? "low-end-stereo-row has-stereo-risk"
+      : "low-end-stereo-row";
+
+    const label = document.createElement("div");
+    label.className = "low-end-stereo-label";
+    const name = document.createElement("strong");
+    name.textContent = safeString(track.name);
+    const detail = document.createElement("span");
+    detail.textContent = `${mixTrackNumber(track.track)} · ${lowEndRoleLabel(track.low_end_role)}`;
+    label.append(name, detail);
+
+    const rail = document.createElement("div");
+    rail.className = "low-end-stereo-rail";
+    const width = document.createElement("span");
+    width.className = "low-end-stereo-width";
+    width.style.setProperty("--width", mixStereoWidth(track.stereo_sep));
+    const dot = document.createElement("i");
+    dot.className = "low-end-stereo-dot";
+    dot.style.setProperty("--pan", mixPanPercent(track.pan));
+    rail.append(width, dot);
+
+    const value = document.createElement("em");
+    value.textContent = `Pan ${formatSigned(track.pan)} · Width ${formatSigned(track.stereo_sep)}`;
+
+    row.append(label, rail, value);
+    field.appendChild(row);
+  }
+}
+
+function renderLowEndTable(report) {
+  const body = document.getElementById("low-end-track-table");
+  if (!body) return;
+  body.innerHTML = "";
+
+  const tracks = lowEndTracks(report);
+  if (!tracks.length) {
+    appendMixTableEmpty(body, 7, "No low-end track rows.");
+    return;
+  }
+
+  for (const track of tracks) {
+    const row = document.createElement("tr");
+    appendCell(row, `${safeString(track.name)} (${safeString(track.track)})`);
+    appendCell(row, lowEndRoleLabel(track.low_end_role));
+    appendCell(row, formatDb(track.peak_db));
+    appendCell(row, formatDb(track.fader_db));
+    appendCell(row, formatSigned(track.pan));
+    appendCell(row, formatSigned(track.stereo_sep), lowEndTrackStereoRisk(track) ? "low-end-risk-value" : "");
+    appendCell(row, mixPluginList(track.plugins));
+    body.appendChild(row);
+  }
+}
+
+function renderLowEndNotes(report) {
+  const list = document.getElementById("low-end-note-list");
+  if (!list) return;
+  list.innerHTML = "";
+
+  const details = report?.details || {};
+  const lowEnd = details.low_end || {};
+  const notes = [
+    ...(Array.isArray(details.limits) ? details.limits : []),
+    ...(Array.isArray(details.gather_errors) ? details.gather_errors : []),
+    ...(Array.isArray(lowEnd.manual_checks) ? lowEnd.manual_checks.map(lowEndManualCheckText) : [])
+  ].filter(Boolean);
+
+  text("low-end-note-count", notes.length);
+  if (!notes.length) {
+    list.appendChild(lowEndPlaceholder("No low-end notes yet."));
+    return;
+  }
+
+  for (const note of notes.slice(0, 8)) {
+    const row = document.createElement("div");
+    row.className = "low-end-note-row";
     row.textContent = safeString(note);
     list.appendChild(row);
   }
@@ -1588,6 +1928,138 @@ function mixStereoWidth(value) {
   const numeric = Math.abs(Number(value));
   if (!Number.isFinite(numeric)) return 10;
   return Math.max(10, Math.min(72, 10 + numeric * 62));
+}
+
+function lowEndFindings(report) {
+  const findings = report?.details?.low_end?.findings;
+  return Array.isArray(findings) ? findings : [];
+}
+
+function lowEndTracks(report) {
+  const rows = new Map();
+
+  function keyFor(track) {
+    if (track.track != null) return `track:${track.track}`;
+    if (track.name) return `name:${String(track.name).toLowerCase()}`;
+    return null;
+  }
+
+  function put(raw, forceLowEnd = false) {
+    if (!raw || typeof raw !== "object") return;
+    const name = raw.name || raw.track_name;
+    if (!forceLowEnd && !lowEndNameMatches(name)) return;
+    const normalized = {
+      track: raw.track,
+      name,
+      role: raw.role,
+      fader_db: raw.fader_db,
+      peak_db: raw.peak_db,
+      pan: raw.pan,
+      stereo_sep: raw.stereo_sep,
+      plugins: raw.plugins,
+      low_end_role: lowEndRole(name)
+    };
+    const key = keyFor(normalized);
+    if (!key) return;
+    const merged = { ...(rows.get(key) || {}) };
+    for (const [field, value] of Object.entries(normalized)) {
+      if (value != null && value !== "") merged[field] = value;
+    }
+    if (!Array.isArray(merged.plugins)) merged.plugins = [];
+    if (!merged.low_end_role) merged.low_end_role = lowEndRole(merged.name);
+    rows.set(key, merged);
+  }
+
+  const details = Array.isArray(report?.details?.tracks) ? report.details.tracks : [];
+  const explicit = Array.isArray(report?.details?.low_end?.tracks)
+    ? report.details.low_end.tracks
+    : [];
+  const stereo = Array.isArray(report?.visuals?.stereo_tracks)
+    ? report.visuals.stereo_tracks
+    : [];
+
+  details.forEach(track => put(track));
+  explicit.forEach(track => put(track, true));
+  stereo.forEach(track => put(track, Boolean(track.low_end)));
+
+  const roleOrder = { kick: 0, sub: 1, bass: 2, other: 3 };
+  return Array.from(rows.values())
+    .sort((a, b) => {
+      const roleDelta = (roleOrder[a.low_end_role] ?? 9) - (roleOrder[b.low_end_role] ?? 9);
+      if (roleDelta !== 0) return roleDelta;
+      return mixPeakSortValue(b.peak_db) - mixPeakSortValue(a.peak_db);
+    })
+    .slice(0, 18);
+}
+
+function lowEndNameMatches(value) {
+  const name = String(value || "").toLowerCase();
+  return ["kick", "sub", "bass", "808", "boom"].some(keyword => name.includes(keyword));
+}
+
+function lowEndRole(value) {
+  const name = String(value || "").toLowerCase();
+  if (name.includes("kick")) return "kick";
+  if (name.includes("sub") || name.includes("808")) return "sub";
+  if (name.includes("bass")) return "bass";
+  return "other";
+}
+
+function lowEndRoleLabel(role) {
+  const labels = {
+    kick: "Kick",
+    sub: "Sub / 808",
+    bass: "Bass",
+    other: "Other Low-End"
+  };
+  return labels[role] || "Low-End";
+}
+
+function lowEndTrackStereoRisk(track) {
+  const pan = Math.abs(Number(track?.pan));
+  const stereo = Number(track?.stereo_sep);
+  return (Number.isFinite(pan) && pan >= 0.2)
+    || (Number.isFinite(stereo) && stereo >= 0.25);
+}
+
+function lowEndScore(report, tracks, findings) {
+  if (!report) return null;
+  if (report.ok === false) return 0;
+  const rows = Array.isArray(findings) ? findings : [];
+  const high = rows.filter(row => ["high", "critical"].includes(String(row.severity || "").toLowerCase())).length;
+  const medium = rows.filter(row => ["medium", "warning"].includes(String(row.severity || "").toLowerCase())).length;
+  const low = rows.filter(row => String(row.severity || "").toLowerCase() === "low").length;
+  const stereoRisks = (tracks || []).filter(lowEndTrackStereoRisk).length;
+  const levelsValid = report?.summary?.levels_valid !== false;
+  const penalty = high * 24 + medium * 12 + low * 4 + stereoRisks * 5 + (levelsValid ? 0 : 8);
+  return Math.max(0, Math.min(100, 100 - penalty));
+}
+
+function lowEndScoreLabel(score, ok) {
+  if (!ok || score == null) return "Idle";
+  if (score >= 90) return "Solid";
+  if (score >= 75) return "Needs Review";
+  return "At Risk";
+}
+
+function lowEndManualCheckText(check) {
+  if (typeof check === "string") return check;
+  if (!check || typeof check !== "object") return "";
+  const topic = check.topic ? `${safeString(check.topic).replaceAll("_", " ")}: ` : "";
+  const detail = check.check || check.reason || "";
+  return `${topic}${safeString(detail)}`;
+}
+
+function lowEndPlaceholder(message) {
+  const node = document.createElement("div");
+  node.className = "low-end-placeholder";
+  node.textContent = message;
+  return node;
+}
+
+function mixPeakSortValue(value) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : -999;
 }
 
 function formatDb(value) {
@@ -2370,6 +2842,7 @@ function selectPanel(targetId) {
     renderSupportSummary();
   }
   if (targetId === "producer_mix_review") renderMixReview();
+  if (targetId === "producer_low_end") renderLowEndAnalysis();
   if (targetId === "producer_routing") renderRoutingAudit();
   if (targetId === "logs_history") renderLogsHistory();
   if (targetId === "ports") renderPorts();
@@ -2445,6 +2918,12 @@ function wireEvents() {
   const mixRefreshButton = document.getElementById("mix-refresh-status");
   if (mixRefreshButton) mixRefreshButton.addEventListener("click", refresh);
 
+  const runLowEndButton = document.getElementById("run-low-end-analysis");
+  if (runLowEndButton) runLowEndButton.addEventListener("click", runLowEndAnalysis);
+
+  const lowEndRefreshButton = document.getElementById("low-end-refresh-status");
+  if (lowEndRefreshButton) lowEndRefreshButton.addEventListener("click", refresh);
+
   const runRoutingButton = document.getElementById("run-routing-audit");
   if (runRoutingButton) runRoutingButton.addEventListener("click", runRoutingAudit);
 
@@ -2484,8 +2963,10 @@ window.flsPilotControlCenter = {
   state,
   processAction,
   runMixReview,
+  runLowEndAnalysis,
   runRoutingAudit,
   renderMixReview,
+  renderLowEndAnalysis,
   renderProjectData,
   renderRoutingAudit,
   renderRuntime,

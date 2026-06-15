@@ -140,7 +140,7 @@
               <button class="nav-item nav-item-preview" type="button" data-target="producer_low_end" id="nav-low-end">
                 <span aria-hidden="true">&#x25f0;</span>
                 <span>Low-End Analysis</span>
-                <span class="nav-badge badge-coming-soon">Upcoming</span>
+                <span class="nav-badge badge-ok">ok</span>
               </button>
               <button class="nav-item nav-item-preview" type="button" data-target="producer_sidechaining"
                 id="nav-sidechaining">
@@ -538,28 +538,136 @@
       </section>
     </main>
 
-    <!-- ── Low-End Analysis Preview ──────────────────────────────────────── -->
+    <!-- ── Low-End Analysis ──────────────────────────────────────────────── -->
     <main class="status-report" id="producer_low_end" style="display: none;">
       <section class="hero">
         <div>
-          <h1>Low-End Analysis <span class="badge badge-pro-preview">Pro Preview</span></h1>
-          <p>Inspect kick, bass and master low-end relationships.</p>
+          <h1>Low-End Analysis <span class="badge badge-read-only">Read-only</span></h1>
+          <p>Kick, bass, sub focus, stereo safety, and Master headroom risk.</p>
+        </div>
+        <div class="hero-actions">
+          <button class="ghost-button primary-action" id="run-low-end-analysis" type="button">Run Low-End
+            Analysis</button>
+          <button class="ghost-button" id="low-end-refresh-status" type="button">Refresh Status</button>
         </div>
       </section>
-      <div class="producer-preview-card panel">
-        <div class="panel-heading">
-          <h2>About Low-End Analysis</h2>
-        </div>
-        <div class="producer-preview-content">
-          <p>Low-End Analysis will inspect the relationship between kick, bass, and master low-end frequency content. It
-            uses read-only analyzer data to surface low-frequency masking and phase issues.</p>
-          <div class="preview-notice">
-            <span class="preview-notice-icon" aria-hidden="true">ℹ</span>
-            <p>This feature is not active in this beta. Current Control Center features focus on setup, diagnostics,
-              safe connection checks, and AI&#8209;client configuration.</p>
+
+      <div id="low-end-feedback" class="low-end-feedback" role="status"></div>
+
+      <section class="low-end-layout" id="low-end-layout">
+        <article class="panel low-end-focus-panel">
+          <div class="panel-heading">
+            <h2>Low-End Focus</h2>
+            <span class="badge badge-neutral" id="low-end-map-state">Idle</span>
           </div>
-        </div>
-      </div>
+          <div class="low-end-focus-board" id="low-end-focus-board"></div>
+        </article>
+
+        <aside class="low-end-side-stack">
+          <article class="panel low-end-score-panel">
+            <div class="panel-heading">
+              <h2>Low-End Safety</h2>
+              <span class="badge badge-neutral" id="low-end-score-label">Idle</span>
+            </div>
+            <div class="low-end-score-body">
+              <div class="low-end-score-ring" id="low-end-score-ring" style="--score: 0;">
+                <strong id="low-end-score-value">--</strong>
+                <span id="low-end-score-caption">Not run</span>
+              </div>
+              <dl class="low-end-score-stats">
+                <div>
+                  <dt>Low-End Tracks</dt>
+                  <dd id="low-end-track-total">--</dd>
+                </div>
+                <div>
+                  <dt>Findings</dt>
+                  <dd id="low-end-finding-total">--</dd>
+                </div>
+                <div>
+                  <dt>Master Headroom</dt>
+                  <dd id="low-end-master-headroom">--</dd>
+                </div>
+                <div>
+                  <dt>Peak Source</dt>
+                  <dd id="low-end-peak-source">--</dd>
+                </div>
+              </dl>
+            </div>
+          </article>
+
+          <article class="panel low-end-findings-panel">
+            <div class="panel-heading">
+              <h2>Low-End Findings</h2>
+              <span class="badge badge-neutral" id="low-end-findings-count">0</span>
+            </div>
+            <div class="low-end-finding-list" id="low-end-finding-list"></div>
+          </article>
+        </aside>
+
+        <article class="panel low-end-balance-panel">
+          <div class="panel-heading">
+            <h2>Energy Balance</h2>
+            <span class="badge badge-neutral" id="low-end-balance-state">Estimate</span>
+          </div>
+          <div class="low-end-balance-grid">
+            <div class="low-end-balance-row is-low">
+              <span>Low</span>
+              <div class="low-end-balance-meter"><i id="low-end-band-low" style="--value: 0;"></i></div>
+              <strong id="low-end-band-low-value">--</strong>
+            </div>
+            <div class="low-end-balance-row is-mid">
+              <span>Mid</span>
+              <div class="low-end-balance-meter"><i id="low-end-band-mid" style="--value: 0;"></i></div>
+              <strong id="low-end-band-mid-value">--</strong>
+            </div>
+            <div class="low-end-balance-row is-high">
+              <span>High</span>
+              <div class="low-end-balance-meter"><i id="low-end-band-high" style="--value: 0;"></i></div>
+              <strong id="low-end-band-high-value">--</strong>
+            </div>
+          </div>
+          <div class="low-end-band-sources" id="low-end-band-sources"></div>
+        </article>
+
+        <article class="panel low-end-stereo-panel">
+          <div class="panel-heading">
+            <h2>Stereo &amp; Mono Safety</h2>
+            <span class="badge badge-neutral" id="low-end-stereo-count">0</span>
+          </div>
+          <div class="low-end-stereo-field" id="low-end-stereo-field"></div>
+        </article>
+
+        <article class="panel low-end-details-panel">
+          <div class="panel-heading">
+            <h2>Low-End Track Detail</h2>
+            <span class="badge badge-neutral" id="low-end-detail-count">0</span>
+          </div>
+          <div class="low-end-table-wrap">
+            <table class="low-end-table">
+              <thead>
+                <tr>
+                  <th>Track</th>
+                  <th>Role</th>
+                  <th>Peak</th>
+                  <th>Fader</th>
+                  <th>Pan</th>
+                  <th>Stereo</th>
+                  <th>Plugins</th>
+                </tr>
+              </thead>
+              <tbody id="low-end-track-table"></tbody>
+            </table>
+          </div>
+        </article>
+
+        <article class="panel low-end-notes-panel">
+          <div class="panel-heading">
+            <h2>Notes</h2>
+            <span class="badge badge-neutral" id="low-end-note-count">0</span>
+          </div>
+          <div class="low-end-note-list" id="low-end-note-list"></div>
+        </article>
+      </section>
     </main>
 
     <!-- ── Routing Audit ──────────────────────────────────────────────────── -->
