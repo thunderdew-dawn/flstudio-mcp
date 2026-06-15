@@ -12,9 +12,11 @@ from pydantic import Field
 
 from .. import protocol, safety
 from ..connection import fetch_all_pages, get_bridge
+from .registration import RETIRED_LOW_LEVEL_TOOLS, hide_retired_tools
 
 
 def register(mcp: FastMCP) -> None:
+    mcp = hide_retired_tools(mcp, RETIRED_LOW_LEVEL_TOOLS)
     _RO = {
         "readOnlyHint": True,
         "idempotentHint": True,

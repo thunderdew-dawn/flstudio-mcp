@@ -132,19 +132,20 @@ Not currently supported:
 
 The current baseline, regenerated on 2026-06-14, reports:
 
-- 94 registered public FastMCP tools with 94 unique public names after v2.0
-  legacy low-level alias removal.
+- 91 registered public FastMCP tools with 91 unique public names after runtime-only
+  MCP cleanup.
 - 167 statically audited tool definitions.
 - 33 registered `write-safe-required` tools.
 - 0 `write-gap` tools.
 - 0 `needs-review` tools.
-- 41 registered `read-only` tools.
+- 50 registered `read-only` tools.
 - 4 `server-state` tools.
 - 2 `external-write` tools.
 - 1 registered `transient` domain tool and 6 statically audited transient
   legacy/helper tools.
-- 13 registered tools are not covered by the static AST audit because they are
-  registered via direct `mcp.tool()(fn)` calls without safety annotations.
+- 1 registered public tool remains unannotated.
+- 10 registered tools are not covered by the static AST audit because they are
+  registered via direct `mcp.tool(...)(fn)` calls.
 - 86 statically audited legacy low-level tool definitions remain in source for
   helper/test compatibility but are intentionally absent from public
   registration.

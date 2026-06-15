@@ -19,8 +19,7 @@ Runtime agents should start with MCP context, not repository file reads:
 
 MCP prompts are available for guided workflows such as Mix Review, Routing
 Review, Project Organizer, Project Preflight, Plugin Chain Planning,
-Composition, Audio Analysis, API probes, bug triage, implementation slices, and
-release preparation.
+Composition, and Audio Analysis.
 
 ## Domain Tools
 

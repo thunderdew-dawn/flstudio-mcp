@@ -14,10 +14,12 @@ from pydantic import Field
 
 from .. import operations, protocol, safety
 from ..connection import FLCommandFailed, FLNotRunning, FLTimeout, get_bridge
+from .registration import RETIRED_LOW_LEVEL_TOOLS, hide_retired_tools
 
 
 def register(mcp: FastMCP) -> None:
     """Attach every tool in this module to the given FastMCP instance."""
+    mcp = hide_retired_tools(mcp, RETIRED_LOW_LEVEL_TOOLS)
 
     @mcp.tool(
         annotations={

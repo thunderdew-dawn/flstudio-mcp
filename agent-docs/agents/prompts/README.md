@@ -2,7 +2,8 @@
 
 MCP Prompt Markdown is bundled with the server under
 `src/fls_pilot/context/prompts/`. That package directory is the canonical
-runtime source used by `src/fls_pilot/prompts.py`.
+runtime source used by `src/fls_pilot/prompts.py`. Only runtime prompts are
+registered as public MCP prompts.
 
 ## Three Layers: Prompts · Resources · Tools
 
@@ -29,15 +30,6 @@ runtime source used by `src/fls_pilot/prompts.py`.
 | `plugin_chain_planner` | `src/fls_pilot/context/prompts/plugin-chain-planner.md` | FX chain planning with already-loaded plugins |
 | `composition_scale_writer` | `src/fls_pilot/context/prompts/composition-scale-writer.md` | Raga/scale melody and chord composition |
 | `audio_to_midi_or_reference_analysis` | `src/fls_pilot/context/prompts/audio-to-midi.md` | Audio analysis and optional MIDI extraction |
-
-### Dev Prompts (Developer / Agent Tooling)
-
-| Prompt name | Source file | Purpose |
-|-------------|------|---------|
-| `api_probe` | `src/fls_pilot/context/prompts/api-probe.md` | Safe FL API compatibility probe |
-| `bug_triage` | `src/fls_pilot/context/prompts/bug-triage.md` | GitHub bug classification and prep |
-| `implementation_slice` | `src/fls_pilot/context/prompts/implementation-slice.md` | Narrow pre-approved dev slice execution |
-| `release_prepare` | `src/fls_pilot/context/prompts/release.md` | Release checks, tagging, validation |
 
 ## Using Prompts via MCP
 
