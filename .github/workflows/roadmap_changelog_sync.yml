@@ -27,14 +27,14 @@ jobs:
 
       - name: Render generated snapshots
         run: |
-          python scripts/render_github_roadmap.py --repo "$GITHUB_REPOSITORY" --output docs/project/ROADMAP.github.md
-          python scripts/render_github_changelog.py --repo "$GITHUB_REPOSITORY" --output docs/project/CHANGELOG.github.md
+          python scripts/render_github_roadmap.py --repo "$GITHUB_REPOSITORY" --output agent-docs/project/ROADMAP.github.md
+          python scripts/render_github_changelog.py --repo "$GITHUB_REPOSITORY" --output agent-docs/project/CHANGELOG.github.md
 
       - name: Create or update snapshot pull request
         run: |
           set -euo pipefail
           branch="automation/github-markdown-snapshots"
-          changed="$(git status --porcelain -- docs/project/ROADMAP.github.md docs/project/CHANGELOG.github.md)"
+          changed="$(git status --porcelain -- agent-docs/project/ROADMAP.github.md agent-docs/project/CHANGELOG.github.md)"
           if [ -z "$changed" ]; then
             echo "No generated markdown changes."
             exit 0
@@ -43,7 +43,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git fetch origin "$branch" || true
           git checkout -B "$branch"
-          git add docs/project/ROADMAP.github.md docs/project/CHANGELOG.github.md
+          git add agent-docs/project/ROADMAP.github.md agent-docs/project/CHANGELOG.github.md
           git commit -m "docs: sync GitHub markdown snapshots"
           git push --force-with-lease origin "$branch"
           existing="$(gh pr list --head "$branch" --json number --jq '.[0].number // empty')"

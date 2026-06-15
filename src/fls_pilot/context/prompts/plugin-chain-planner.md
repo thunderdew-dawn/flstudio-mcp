@@ -14,8 +14,8 @@ mixer track.
 - `fl://mixer`
 - `fls://capabilities/not-possible`
 - `fls://docs/tool-policy`
-- `docs/agents/runtime-usage.md`
-- `docs/concepts/safety-contract.md`
+- `fls://docs/runtime-usage`
+- `fls://docs/safety-contract`
 
 ## Workflow
 

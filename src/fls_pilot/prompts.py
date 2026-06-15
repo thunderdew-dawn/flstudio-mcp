@@ -1,8 +1,8 @@
 """MCP Prompt definitions for FLStudioPilot.
 
-Registers all MCP Prompts via ``@mcp.prompt``. Content is loaded from the
-canonical Markdown files under ``docs/agents/prompts/`` so that documentation
-and MCP-exposed prompts share exactly one source of truth.
+Registers all MCP Prompts via ``@mcp.prompt``. Content is loaded from Markdown
+files bundled under ``fls_pilot.context.prompts`` so installed packages expose
+the same prompts without requiring a repository checkout.
 
 Usage (called from server.py)::
 
@@ -23,7 +23,7 @@ Dev prompts (developer / agent tooling):
 from __future__ import annotations
 
 import logging
-from pathlib import Path
+from importlib import resources
 
 from fastmcp import FastMCP
 from fastmcp.prompts import Message
@@ -36,9 +36,8 @@ logger = logging.getLogger("fls_pilot.prompts")
 # Path helpers
 # ---------------------------------------------------------------------------
 
-# Resolve repo root so prompts load from docs/ regardless of working directory.
-_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-_PROMPTS_DIR = _REPO_ROOT / "docs" / "agents" / "prompts"
+_PROMPTS_PACKAGE = "fls_pilot.context.prompts"
+_PROMPTS_DIR = resources.files(_PROMPTS_PACKAGE)
 
 
 def _load_md(filename: str) -> str:
@@ -48,7 +47,7 @@ def _load_md(filename: str) -> str:
         return p.read_text(encoding="utf-8").strip()
     except FileNotFoundError:
         logger.warning("Prompt Markdown not found: %s", p)
-        return f"(Prompt file {filename} not found \u2013 check docs/agents/prompts/)"
+        return f"(Prompt file {filename} not found \u2013 check fls_pilot.context.prompts)"
     except Exception as exc:
         logger.error("Error loading prompt Markdown %s: %s", p, exc)
         return f"(Error loading {filename}: {exc})"

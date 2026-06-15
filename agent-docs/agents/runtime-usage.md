@@ -10,8 +10,8 @@ checks.
 1. Read `fl://agent-briefing`.
 2. Read `fl://status`; if the bridge is down, troubleshoot connection before
    live FL work.
-3. Use `rg`, `kb_search`, `kb_get`, and capped resources before broad file reads
-   or large tool calls.
+3. Use MCP resources, `kb_search`, `kb_get`, and capped project resources before
+   any repository file reads or large tool calls.
 4. Choose a current workflow/domain tool. Avoid raw FL API calls and removed
    one-off aliases.
 5. For write-capable workflows, scan/read-only first, propose exactly one
@@ -36,15 +36,16 @@ checks.
 | Already-loaded plugin params | `fl_plugin` | `fl_plugin(action="list_params")`, `kb_get_parameter_spec` |
 | Piano Roll notes/transforms | `fl_piano_roll` | Readback-limit reports and dry-run plans |
 | Many reads or grouped writes | `fl_batch` | Capped resources for first pass |
-| Audio file analysis | `fl_analyze_audio`, `fl_extract_melody` | File-level `rg`/path checks first |
+| Audio file analysis | `fl_analyze_audio`, `fl_extract_melody` | Validate the user-provided file path first |
 | MIDI export | `fl_export_midi` | Validate arrangement spec before file write |
 | Values, ranges, mappings, pitfalls | Knowledgebase tools | `kb_search`, then specific `kb_get` |
 
 ## Token-Saving Strategy
 
 - Start with `fl://agent-briefing`, `fl://status`, and capped resources.
-- Use `rg` before reading large docs, scripts, or controller files.
-- Use `kb_search` before opening Knowledgebase files.
+- Use MCP resources and Knowledgebase tools before repository file reads.
+- Treat repository docs and source files as maintenance context, not normal
+  runtime context.
 - Use domain reads or `fl_batch` for known narrow state; avoid broad workflow
   calls until the user intent is clear.
 - Keep detail calls scoped to the active track, channel, pattern, plugin, or
@@ -58,12 +59,12 @@ checks.
   confirmation, applied only one reversible change per confirmation, and stopped
   after the before/after report.
 - Unsupported API behavior is stated as a limit, not implied as completed work.
-- Docs, roadmap/API audit, and Knowledgebase are updated when public MCP
+- Public docs, MCP context, and Knowledgebase are updated when public MCP
   behavior changes.
 - Verification covers the smallest meaningful resource/tool/test surface.
 
 ## When To Expand Context
 
-Read [Development Guide](development.md) only when the task changes repository
-files or tests. Read [GitHub Playbook](github-playbook.md) only when the task
-involves issues, PRs, releases, roadmap planning, CI, security, or backports.
+Switch to `AGENTS.md` and `agent-docs/` only when the task changes repository
+files, tests, issues, PRs, releases, roadmap planning, CI, security, or
+backports.

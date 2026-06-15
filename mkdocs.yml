@@ -9,6 +9,12 @@ edit_uri: edit/main/docs/
 docs_dir: docs
 site_dir: site
 
+exclude_docs: |
+  agents/**
+  concepts/**
+  engineering/**
+  project/**
+
 theme:
   name: material
   language: en
@@ -23,44 +29,17 @@ theme:
 
 nav:
   - Home: index.md
-  - User Guide:
-      - Overview: user-guide/index.md
-      - Workflows: user-guide/workflows.md
-      - Prompts: user-guide/prompts.md
-      - Tool Reference: user-guide/tool-reference.md
-  - Concepts:
-      - Architecture: concepts/architecture.md
-      - Safety Contract: concepts/safety-contract.md
-      - Default Safe UX: concepts/default-safe-ux.md
-      - API Capability and Safety Audit: concepts/api-capability-audit.md
-      - Senior Developer Audit Criteria: concepts/senior-dev-audit-criteria.md
-  - Engineering:
-      - Engineering Standards: engineering/standards.md
-      - GitHub Workflow Governance: engineering/github-workflow-governance.md
-      - Note Bridge Setup: engineering/note-bridge-setup.md
-      - Verification History: engineering/verification-history.md
-  - Agents:
-      - Overview: agents/index.md
-      - Runtime Usage: agents/runtime-usage.md
-      - Development Guide: agents/development.md
-      - GitHub Playbook: agents/github-playbook.md
-      - Knowledgebase Protocol: agents/knowledgebase-protocol.md
-      - Prompts:
-          - Implementation Slice: agents/prompts/implementation-slice.md
-          - Bug Triage: agents/prompts/bug-triage.md
-          - API Probe: agents/prompts/api-probe.md
-          - Mix Review: agents/prompts/mix-review.md
-          - Routing Review: agents/prompts/routing-review.md
-          - Project Organizer: agents/prompts/project-organizer.md
-          - Release: agents/prompts/release.md
-  - Project:
-      - Roadmap: project/ROADMAP.github.md
-      - Changelog: project/CHANGELOG.github.md
+  - Setup: user-guide/setup.md
+  - Control Center: control-center.md
+  - Workflows: user-guide/workflows.md
+  - Prompt Examples: user-guide/prompts.md
+  - Safety & Limits: safety-limits.md
+  - MCP Integration: mcp-integration.md
   - Community:
+      - Support: community/support.md
+      - Security: community/security.md
       - Contributing: community/contributing.md
       - Code of Conduct: community/code-of-conduct.md
-      - Security: community/security.md
-      - Support: community/support.md
       - Notice: community/notice.md
 
 markdown_extensions:

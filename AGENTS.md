@@ -13,17 +13,17 @@ health checks, or other user-facing MCP workflows.
 
 Read:
 
-- `docs/agents/runtime-usage.md`
-- `docs/concepts/safety-contract.md`
+- `agent-docs/agents/runtime-usage.md`
+- `agent-docs/concepts/safety-contract.md`
 
 Optional, only when needed:
 
-- `docs/agents/knowledgebase-protocol.md` when the task involves FL Studio API
+- `agent-docs/agents/knowledgebase-protocol.md` when the task involves FL Studio API
   behavior, mixer/plugin parameters, MIDI, automation, REC events, ranges,
   mappings, or reusable findings.
-- `docs/agents/prompts/mix-review.md` when the user asks for a mix review.
-- `docs/agents/prompts/routing-review.md` when the user asks for routing review.
-- `docs/agents/prompts/project-organizer.md` when the user asks for project
+- `src/fls_pilot/context/prompts/mix-review.md` when the user asks for a mix review.
+- `src/fls_pilot/context/prompts/routing-review.md` when the user asks for routing review.
+- `src/fls_pilot/context/prompts/project-organizer.md` when the user asks for project
   cleanup or organization.
 
 Do not read the GitHub playbook unless the task involves issues, PRs, releases,
@@ -36,15 +36,15 @@ Knowledgebase files, workflows, packaging, or project behavior.
 
 Read:
 
-- `docs/agents/development.md`
-- `docs/concepts/safety-contract.md`
-- `docs/agents/knowledgebase-protocol.md`
-- `docs/engineering/standards.md`
-- `docs/project/ROADMAP.github.md`
+- `agent-docs/agents/development.md`
+- `agent-docs/concepts/safety-contract.md`
+- `agent-docs/agents/knowledgebase-protocol.md`
+- `agent-docs/engineering/standards.md`
+- `agent-docs/project/ROADMAP.github.md`
 
 For live FL Studio verification, also follow:
 
-- `docs/agents/runtime-usage.md`
+- `agent-docs/agents/runtime-usage.md`
 
 ### C) Work On GitHub Planning, PRs, Releases, Security, Or Roadmap
 
@@ -54,10 +54,10 @@ probes, documentation-only changes, or backports.
 
 Read:
 
-- `docs/agents/github-playbook.md`
-- `docs/project/ROADMAP.github.md`
+- `agent-docs/agents/github-playbook.md`
+- `agent-docs/project/ROADMAP.github.md`
 
-Use the focused prompt files in `docs/agents/prompts/` when applicable.
+Use the focused prompt files in `src/fls_pilot/context/prompts/` when applicable.
 
 ## Universal Hard Rules
 

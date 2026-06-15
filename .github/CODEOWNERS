@@ -2,6 +2,7 @@
 
 .github/ @thunderdew-dawn
 docs/ @thunderdew-dawn
+agent-docs/ @thunderdew-dawn
 knowledgebase/ @thunderdew-dawn
 fl_controller/ @thunderdew-dawn
 src/fls_pilot/safety.py @thunderdew-dawn

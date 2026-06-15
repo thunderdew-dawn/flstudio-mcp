@@ -6,11 +6,11 @@ Use this when the release decision has already been made.
 Prepare release <version> for thunderdew-dawn/fls-pilot.
 
 Rules:
-- Read AGENTS.md, docs/agents/github-playbook.md, docs/agents/development.md,
-  docs/engineering/standards.md, docs/project/ROADMAP.github.md, and the latest
+- Read AGENTS.md, agent-docs/agents/github-playbook.md, agent-docs/agents/development.md,
+  agent-docs/engineering/standards.md, agent-docs/project/ROADMAP.github.md, and the latest
   GitHub releases.
-- Inspect pyproject.toml, README.md, docs/project/ROADMAP.github.md,
-  docs/project/CHANGELOG.github.md, .github/workflows/release.yml, and
+- Inspect pyproject.toml, README.md, agent-docs/project/ROADMAP.github.md,
+  agent-docs/project/CHANGELOG.github.md, .github/workflows/release.yml, and
   release-related workflows.
 - Do not change FL Studio state.
 - Run Release Dry Run before tagging.

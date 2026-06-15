@@ -6,9 +6,9 @@ Use this when the user wants to review the current FL Studio mix.
 
 - `fl://agent-briefing`
 - `fl://status`
-- `docs/agents/runtime-usage.md`
-- `docs/concepts/safety-contract.md`
-- `docs/concepts/default-safe-ux.md`
+- `fls://docs/runtime-usage`
+- `fls://docs/safety-contract`
+- `fls://docs/default-safe-ux`
 
 ## Workflow
 

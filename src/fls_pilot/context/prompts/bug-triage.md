@@ -6,9 +6,9 @@ Use this to classify and prepare a bug before implementation.
 Triage GitHub bug issue #<number>.
 
 Tasks:
-- Read AGENTS.md, docs/agents/github-playbook.md,
-  docs/concepts/safety-contract.md, docs/engineering/standards.md,
-  docs/project/ROADMAP.github.md, and the issue.
+- Read AGENTS.md, agent-docs/agents/github-playbook.md,
+  agent-docs/concepts/safety-contract.md, agent-docs/engineering/standards.md,
+  agent-docs/project/ROADMAP.github.md, and the issue.
 - Classify as reproducible, needs-info, duplicate, expected API limitation, or
   real defect.
 - Identify the smallest affected surface.

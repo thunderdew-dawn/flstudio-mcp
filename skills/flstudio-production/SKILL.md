@@ -40,7 +40,7 @@ Read only the references needed for the current task:
 - `references/workflows.md` for common production workflows.
 - `references/troubleshooting.md` when bridge, daemon, readback, or rollback
   behavior is unclear.
-- `../../docs/agents/index.md` for the compact startup and tool-choice
+- `../../agent-docs/agents/index.md` for the compact startup and tool-choice
   protocol.
 
 ## Response Style

@@ -95,7 +95,7 @@ This file stores historical verification evidence, including dated live/offline 
     a rollback-safe Image-Line API path is live-probed.
 - 2026-06-02: User-facing value, workflow, and tool-reference documentation
   added.
-  - Verified path: `../user-guide/index.md` reviewed against
+  - Verified path: `docs/index.md` reviewed against
     `scripts/audit_tool_safety.py --format json` output; README usage entry
     linked to the guide; stale pattern-creation limit language corrected in
     server instructions and this roadmap.

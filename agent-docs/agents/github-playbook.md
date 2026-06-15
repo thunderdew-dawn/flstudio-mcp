@@ -14,7 +14,7 @@ agent chats are execution surfaces, not durable planning storage.
 - Every non-trivial change starts with a GitHub issue or updates an existing
   one.
 - Always use the repository's issue and PR templates (e.g., `.github/ISSUE_TEMPLATE/*` and `.github/pull_request_template.md`) to structure the body when creating or updating issues and pull requests.
-- Keep `docs/project/ROADMAP.github.md` and `docs/project/CHANGELOG.github.md`
+- Keep `agent-docs/project/ROADMAP.github.md` and `agent-docs/project/CHANGELOG.github.md`
   as generated snapshots backed by the snapshot workflow.
 - Use small PRs. Each PR should close or materially advance one issue.
 - Branching, permanent branch protection expectations, release lines, and tag
@@ -72,7 +72,7 @@ agent chats are execution surfaces, not durable planning storage.
 Work on GitHub issue #<number> in thunderdew-dawn/fls-pilot.
 
 Rules:
-- Read AGENTS.md, docs/engineering/standards.md, docs/project/ROADMAP.github.md,
+- Read AGENTS.md, agent-docs/engineering/standards.md, agent-docs/project/ROADMAP.github.md,
   and the issue.
 - Treat GitHub issue/project state as the planning source of truth.
 - Do not perform FL Studio writes.
@@ -257,7 +257,7 @@ Tasks:
 Fix GitHub bug issue #<number>.
 
 Rules:
-- Read AGENTS.md, docs/engineering/standards.md, docs/project/ROADMAP.github.md,
+- Read AGENTS.md, agent-docs/engineering/standards.md, agent-docs/project/ROADMAP.github.md,
   and the issue.
 - Reproduce or explain why reproduction is impossible.
 - Keep the fix minimal and scoped to the bug.
@@ -419,8 +419,8 @@ Release agent prompt:
 Prepare release <version> for thunderdew-dawn/fls-pilot.
 
 Rules:
-- Inspect pyproject.toml, README.md, docs/project/ROADMAP.github.md,
-  docs/project/CHANGELOG.github.md, .github/workflows/release.yml, and the
+- Inspect pyproject.toml, README.md, agent-docs/project/ROADMAP.github.md,
+  agent-docs/project/CHANGELOG.github.md, .github/workflows/release.yml, and the
   latest GitHub releases.
 - Do not change FL Studio state.
 - Run Release Dry Run before tagging.
@@ -620,7 +620,7 @@ Rules:
 - Prefer read-only evidence first.
 - If a write is required, define snapshot, smallest write, readback, changelog,
   and rollback before execution.
-- Store reusable findings in Knowledgebase and docs/concepts/api-capability-audit.md
+- Store reusable findings in Knowledgebase and agent-docs/concepts/api-capability-audit.md
   when confirmed.
 ```
 
@@ -679,7 +679,7 @@ gh workflow run release_dry_run.yml --repo thunderdew-dawn/fls-pilot --ref main
 Agents must stop and ask for human decision when:
 
 - the requested behavior conflicts with `AGENTS.md` or
-  `docs/engineering/standards.md`;
+  `agent-docs/engineering/standards.md`;
 - FL Studio API support, target selection, rollback, readback, or value ranges
   are unclear;
 - implementation would require prohibited automation;

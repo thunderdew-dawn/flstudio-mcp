@@ -9,8 +9,8 @@ raga, scale, or chord structure in the active FL Studio pattern.
 - `fl://channels`
 - `fl://patterns`
 - `fls://capabilities/write-safety`
-- `docs/agents/runtime-usage.md`
-- `docs/concepts/safety-contract.md`
+- `fls://docs/runtime-usage`
+- `fls://docs/safety-contract`
 
 ## Workflow
 

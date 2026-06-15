@@ -34,7 +34,7 @@ Closes # (issue number)
 ## Checklist
 
 - [ ] My code follows the project's engineering standards (English comments & commits).
-- [ ] All safety guidelines in `AGENTS.md` and `docs/engineering/standards.md` are satisfied.
+- [ ] All safety guidelines in `AGENTS.md` and `agent-docs/engineering/standards.md` are satisfied.
 - [ ] Offline unit tests pass successfully locally (`pytest`).
 - [ ] Safety audit scripts pass successfully (`python scripts/audit_tool_safety.py --fail-on-gaps` and `python scripts/audit_tool_safety.py --fail-on-missing-safety-docs --format json`).
 - [ ] Anti-vibe check script passes successfully (`python scripts/audit_anti_vibe.py`).

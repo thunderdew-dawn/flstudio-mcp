@@ -13,11 +13,11 @@ Organizer, bridge/session checks, audio analysis, or MIDI export, read:
 - [Runtime Usage](runtime-usage.md)
 - [Safety Contract](../concepts/safety-contract.md)
 
-Use prompt files only for the active workflow:
+Use bundled prompt source files only for the active workflow:
 
-- [Mix Review Prompt](prompts/mix-review.md)
-- [Routing Review Prompt](prompts/routing-review.md)
-- [Project Organizer Prompt](prompts/project-organizer.md)
+- `src/fls_pilot/context/prompts/mix-review.md`
+- `src/fls_pilot/context/prompts/routing-review.md`
+- `src/fls_pilot/context/prompts/project-organizer.md`
 
 ### Develop Or Maintain The Repository
 
@@ -27,8 +27,8 @@ Knowledgebase changes, read:
 - [Development Guide](development.md)
 - [Safety Contract](../concepts/safety-contract.md)
 - [Knowledgebase Protocol](knowledgebase-protocol.md)
-- `docs/engineering/standards.md`
-- `docs/project/ROADMAP.github.md`
+- `agent-docs/engineering/standards.md`
+- `agent-docs/project/ROADMAP.github.md`
 
 ### GitHub Operations
 
@@ -37,9 +37,9 @@ API probes, backports, or review-only work, read:
 
 - [GitHub Playbook](github-playbook.md)
 - [GitHub Workflow Governance](../engineering/github-workflow-governance.md)
-- `docs/project/ROADMAP.github.md`
+- `agent-docs/project/ROADMAP.github.md`
 
-Then use the focused prompt file for the exact operation.
+Then use the focused prompt source file for the exact operation.
 
 ## Context Rule
 

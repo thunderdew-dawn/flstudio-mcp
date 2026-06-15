@@ -10,9 +10,9 @@ This repository is the maintained `thunderdew-dawn/fls-pilot` fork of
 `rosasynthesiz/flstudio-mcp`. The 3.0 line intentionally uses the breaking
 `fls-pilot` package, command, and import names with no old aliases.
 Contributions should follow this fork's rollback-first safety layer,
-API-evidence discipline, and GitHub roadmap project.
-`docs/project/ROADMAP.github.md` is a readable snapshot, not the planning source
-of truth for open work.
+API-evidence discipline, and GitHub roadmap project. The generated roadmap
+snapshot under `agent-docs/project/` is for repository work; the GitHub project
+board remains the planning source of truth.
 
 ## Code of Conduct
 
@@ -22,7 +22,8 @@ By participating in this project, you agree to abide by our [Code of Conduct](co
 
 - **Report a bug** — open an issue with steps to reproduce, your FL Studio build, and the relevant Script output / server log.
 - **Request or add a tool** — propose a new capability (a mixing intent, an analysis tool, etc.) in an issue first, so we can agree on the shape before you build it.
-- **Improve docs** — README, setup, troubleshooting, and the design notes in docs/ are all fair game.
+- **Improve docs** — README, setup, troubleshooting, public docs, and internal
+  agent docs are all fair game.
 - **Port to Linux** — the server is cross-platform Python; the friction is the virtual MIDI ports and the controller-script paths. This is the most valuable open contribution. Open an issue before starting so we can coordinate.
 
 ## Before you start
@@ -58,7 +59,8 @@ confirm `[FLStudioPilot] Ready` in FL's Script output, start the bridge with
 - fl_pyscripts/ — the note-bridge pyscript (MCP_Apply).
 - scripts/ — installer and tooling.
 - skills/ — the production skill packaged with the server.
-- docs/ — design notes and findings.
+- docs/ — public user and MCP integration documentation.
+- agent-docs/ — internal agent, engineering, roadmap, and safety contracts.
 
 The guiding split: the controller returns cheap raw data; all judgement (diagnosis, calibration, planning) happens server-side. New tools should follow this — don't push decision-making into the controller.
 

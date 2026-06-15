@@ -14,10 +14,10 @@ truth. If it conflicts with any of the following sources, the more specific
 source wins:
 
 1. `AGENTS.md`
-2. `docs/agents/github-playbook.md`
-3. `docs/agents/development.md`
-4. `docs/engineering/standards.md`
-5. `docs/concepts/safety-contract.md`
+2. `agent-docs/agents/github-playbook.md`
+3. `agent-docs/agents/development.md`
+4. `agent-docs/engineering/standards.md`
+5. `agent-docs/concepts/safety-contract.md`
 6. GitHub Issues, Milestones, and Project #7
 7. GitHub branch protection settings
 8. GitHub Actions workflow files

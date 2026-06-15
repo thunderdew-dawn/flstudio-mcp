@@ -8,8 +8,8 @@ free of critical health or export blockers.
 - `fl://agent-briefing`
 - `fl://status`
 - `fls://capabilities/write-safety`
-- `docs/agents/runtime-usage.md`
-- `docs/concepts/safety-contract.md`
+- `fls://docs/runtime-usage`
+- `fls://docs/safety-contract`
 
 ## Workflow
 

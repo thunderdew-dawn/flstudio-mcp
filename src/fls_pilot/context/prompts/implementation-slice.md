@@ -6,9 +6,9 @@ Use this for a narrow, pre-approved development slice.
 Claim and execute the first unclaimed implementation slice in issue #<number>.
 
 Rules:
-- Read AGENTS.md, docs/agents/development.md, docs/concepts/safety-contract.md,
-  docs/agents/knowledgebase-protocol.md, docs/engineering/standards.md,
-  docs/project/ROADMAP.github.md, and the issue.
+- Read AGENTS.md, agent-docs/agents/development.md, agent-docs/concepts/safety-contract.md,
+  agent-docs/agents/knowledgebase-protocol.md, agent-docs/engineering/standards.md,
+  agent-docs/project/ROADMAP.github.md, and the issue.
 - Use only the slice instructions and listed files unless blocked.
 - Do not redesign the feature.
 - Do not change FL Studio state unless the slice explicitly requires a

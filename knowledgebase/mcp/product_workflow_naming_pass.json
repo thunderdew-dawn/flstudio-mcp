@@ -7,7 +7,7 @@
     "src/fls_pilot/tools/routing.py",
     "src/fls_pilot/tools/project_doctor.py",
     "FastMCP public tool registration",
-    "docs/USER_GUIDE.md",
+    "docs/mcp-integration.md",
     "ROADMAP.md",
     "evals/evals.json",
     "knowledgebase policy tool_implications"

@@ -8,8 +8,8 @@ reference data, or prepare a MIDI representation of audio content.
 - `fl://agent-briefing`
 - `fls://capabilities/supported`
 - `fls://capabilities/not-possible`
-- `docs/agents/runtime-usage.md`
-- `docs/concepts/safety-contract.md`
+- `fls://docs/runtime-usage`
+- `fls://docs/safety-contract`
 
 ## Workflow
 

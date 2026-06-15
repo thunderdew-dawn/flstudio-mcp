@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: Roadmap snapshot
-    url: https://github.com/thunderdew-dawn/fls-pilot/blob/main/docs/project/ROADMAP.github.md
+    url: https://github.com/thunderdew-dawn/fls-pilot/blob/main/agent-docs/project/ROADMAP.github.md
     about: Review the generated public roadmap snapshot before opening broad planning issues. The GitHub project board remains the source of truth.
   - name: User guide
-    url: https://github.com/thunderdew-dawn/fls-pilot/blob/main/docs/USER_GUIDE.md
+    url: https://github.com/thunderdew-dawn/fls-pilot/blob/main/docs/user-guide/setup.md
     about: Review supported workflows, safety classes, and API limits.

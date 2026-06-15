@@ -1,107 +1,64 @@
 # fls-pilot
 
-fls-pilot is (not only) a Model Context Protocol (MCP) server that lets MCP-compatible clients such as Claude Desktop, ChatGPT Desktop, Cursor, and other MCP hosts control FL Studio through FL Studio's scripting API and a safety-focused server layer.
+![fls-pilot logo](assets/fls-pilot-logo-with-text.png)
 
-It is built for real music-production workflows: mix diagnosis, live peak watching, project cleanup, naming and color standards, routing review, plugin-chain planning, MIDI export, piano-roll composition, audio analysis, and export-readiness checks.
+fls-pilot connects FL Studio to MCP-compatible AI clients. It gives assistants
+readable project context, production workflow tools, and rollback-first write
+paths for supported FL Studio actions.
 
-## Knowledgebase-first architecture
+Use it for mix review, routing checks, project organization, Piano Roll
+composition, plugin-chain planning, audio analysis, MIDI export, and
+export-readiness checks.
 
-fls-pilot keeps verified FL Studio knowledge in a local, human- and machine-readable Knowledgebase: parameter ranges, dB/Hz/normalized mappings, known API limits, pitfalls, and safe workflow recipes. Agents are instructed to consult and extend this Knowledgebase instead of guessing.
+## Why It Exists
 
-## Token-efficient LLM workflows
+AI assistants are useful in a DAW only when they can see real project state and
+respect the DAW's limits. fls-pilot provides that boundary:
 
-The project treats token cost, tool-selection noise, and unnecessary MCP roundtrips as product-quality concerns. Runtime resources, KB lookup tools, capped context endpoints, and domain-specific workflows are designed to give LLMs the smallest useful context instead of dumping the whole project or tool surface into the prompt.
+- Live project context through MCP resources and domain tools.
+- Knowledgebase-backed ranges and API limits instead of guessed values.
+- Proposal-first workflows for changes that could affect a project.
+- Rollback-backed writes where FL Studio exposes enough state to restore them.
+- Clear manual guidance where FL Studio does not expose safe automation.
 
-The project is intentionally **rollback-first**. Supported project mutations are routed through scoped snapshots, smallest-practical writes, readback where FL Studio exposes it, changelog entries, and rollback paths. Where FL Studio's API does not expose functionality, fls-pilot states that boundary explicitly instead of pretending the assistant can do it.
+## Start Here
 
-It is designed for real production workflows: mix review, project cleanup, routing checks, naming and color standards, plugin-chain planning, MIDI export, piano-roll composition, audio analysis, and export-readiness checks.
+1. Install fls-pilot and configure the virtual MIDI ports.
+2. Open the local Control Center.
+3. Run the guided setup checks.
+4. Connect your MCP client.
+5. Ask for a read-only scan before approving any edit.
 
-## What fls-pilot helps with
+```text
+Scan my mix first, explain the top three issues, and do not change anything yet.
+```
 
-- Review mixes while FL Studio is playing
-- Detect clipping, peak risks, and routing problems
-- Organize channels and mixer tracks
-- Apply naming, color, and routing standards where the FL Studio API supports it
-- Suggest plugin chains and presets
-- Generate piano-roll material through the script bridge
-- Export MIDI files
-- Analyze external audio files
-- Create project health and preflight reports
+## Common Workflows
 
-## Safety first
+| Workflow | What fls-pilot does |
+|---|---|
+| Mix Review | Finds clipping, headroom, balance, low-end, and stereo risks. |
+| Routing Audit | Reviews bus structure, unrouted channels, and fragile send paths. |
+| Project Organizer | Plans naming, color, grouping, and routing cleanup. |
+| Piano Roll Composition | Writes approved notes through the armed script bridge. |
+| Plugin Chain Planning | Suggests chains and configures already-loaded plugins where supported. |
+| Project Preflight | Combines health, routing, mix, and export-readiness checks. |
 
-fls-pilot is intentionally **rollback-first**.
+## Safety Model
 
-Supported project changes use:
+fls-pilot is intentionally conservative. Read-only checks can run immediately.
+Persistent FL Studio project writes require explicit approval, scoped state,
+the smallest practical change, readback where supported, a changelog entry, and
+a rollback path.
 
-- scoped snapshots
-- smallest-practical writes
-- readback where FL Studio exposes it
-- changelog entries
-- rollback paths
+Unsupported DAW actions are not hidden behind automation claims. Plugin loading,
+audio rendering, playlist clip editing, destructive deletion, broad UI
+automation, and full-FLP restore remain manual or out of scope.
 
-Where FL Studio does not expose a feature through its API, fls-pilot documents that boundary instead of pretending the assistant can perform the action.
+## Next Steps
 
-## Core workflows
-
-### Mix Review
-
-fls-pilot can watch live mixer peaks while the user plays the project and report clipping, headroom risks, and balance issues.
-
-### Project Organizer
-
-Rename, color, group, and route channels or mixer tracks where FL Studio exposes the required metadata.
-
-### Routing Review
-
-Detect fragile routing, unrouted channels, and bus-layout problems. Supported fixes are applied as rollback units.
-
-### Plugin and Preset Assistant
-
-Scan plugin databases and preset folders, suggest chains, and configure supported parameters after the user manually loads the plugin.
-
-### Composition and Piano Roll
-
-Generate scale-aware melodies, chords, and patterns through the armed piano-roll script bridge.
-
-### Audio Analysis
-
-Analyze `.wav` or `.mp3` files from disk for tempo, key, and melody extraction when optional audio extras are installed.
-
-### Project Preflight
-
-Combine mix review, routing review, organization checks, and cleanup suggestions into an export-readiness report.
-
-## FL Studio API reality
-
-FL Studio's Python API is useful, but it does not expose the whole DAW.
-
-fls-pilot can work reliably with exposed API areas such as mixer peaks, channel metadata, supported routing, MIDI file writing, and scripted piano-roll workflows.
-
-Some actions remain unavailable or manual:
-
-- loading or inserting plugins
-- moving or splitting playlist clips directly
-- rendering audio to WAV
-- changing deep Audio Clip internals such as Stretch Pro or Normalize
-
-These limits are part of the product contract and are documented explicitly.
-
-## Project status
-
-The GitHub project board is the source of truth for roadmap and release planning.
-
-Useful links:
-
-- [User Guide](user-guide/index.md)
-- [Generated roadmap](project/ROADMAP.github.md)
-- [Issues and support](https://github.com/thunderdew-dawn/fls-pilot/issues)
-- [Security policy](community/security.md)
-
-## Maintained fork
-
-fls-pilot is a materially extended and actively maintained fork of `rosasynthesiz/flstudio-mcp`.
-
-The rename from `flstudio-mcp` to `fls-pilot` is intentional and breaking. It avoids package and command-name collisions and makes clear that this fork follows its own release path, compatibility contract, and engineering direction.
-
-Attribution and provenance are documented in `docs/community/notice.md`.
+- [Setup](user-guide/setup.md)
+- [Control Center](control-center.md)
+- [Workflows](user-guide/workflows.md)
+- [Safety & Limits](safety-limits.md)
+- [MCP Integration](mcp-integration.md)

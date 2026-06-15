@@ -1,89 +1,88 @@
 # Workflows
 
-This page explains how users normally work with fls-pilot through an AI assistant and how the safety model should be communicated.
+fls-pilot is designed around producer workflows rather than one-off API calls.
+The safe default is read-only diagnosis first, then one explicit reversible
+change only after approval.
 
-## How Users Interact With The AI
+## Mix Review
 
-The normal workflow is conversational:
+Mix Review reads live mixer and project context to find clipping, headroom,
+balance, routing, and low-end risks.
 
-1. The user asks for an outcome, for example "scan my mix and fix the worst
-   headroom issue".
-2. The assistant reads `fl://agent-briefing`, checks `fl://status`, and uses
-   relevant resources such as `fl://mixer`, `fl://channels`, or specific tools.
-3. The assistant scans/read-only first and explains findings in normal user
-   language.
-4. The assistant proposes exactly one safest reversible next action with a risk
-   level and asks for explicit confirmation.
-5. After confirmation, the assistant applies at most one reversible change or
-   one named rollback unit.
-6. The assistant reads back where supported, reports before/after plus rollback
-   or `change_id`, then stops and waits.
+![Mix Review results](../assets/control-center-mix-review-2.png)
 
-Users do not need to know tool names, but direct tool names are available for
-precision. These are both valid:
+<video controls muted playsinline preload="metadata" style="width: 100%; max-width: 960px;">
+  <source src="../assets/ai-apply-gain-staging-example.mp4" type="video/mp4">
+</video>
+
+Use prompts like:
 
 ```text
-Please rename mixer track 8 to Drums.
+Scan my mix first. Do not change anything yet. Tell me the safest next action.
 ```
 
-```text
-Use fl_mixer with action set_name on track 8.
-```
+## Low-End Analysis
 
-## Safety Classes
+Low-End Analysis focuses on bass/sub structure, mono compatibility, suspicious
+stereo width, and master headroom.
 
-| Safety class | Meaning |
-|---|---|
-| `read-only` | Reads FL Studio, files, or server context without mutating the project. |
-| `write-safe-required` | Mutates FL Studio through the safety layer with snapshot, readback, changelog, and rollback. |
-| `transient` | Controls runtime state such as playback or song position; it should not persist in the project. |
-| `server-state` | Changes MCP server state, safety history, dry-run mode, or rollback state. |
-| `external-write` | Writes outside FL Studio, such as a MIDI file or exported change log. |
+![Low-end analysis details](../assets/control-center-low-end-analysis-2.png)
 
-## Rollback-First Operating Model
+## Routing Audit
 
-For any persistent FL Studio write, the assistant should follow this sequence:
+Routing Audit reviews mixer routes, bus structure, channels that skip groups,
+and fragile send/return layouts. Cleanup remains proposal-first.
 
-1. Read the current state.
-2. Snapshot the affected state.
-3. Make the smallest practical change.
-4. Read back the result.
-5. Log restore data.
-6. Report what changed and how it can be rolled back.
+![Routing Audit overview](../assets/control-center-routing-audit.png)
 
-Workflow reports use the v3 contract `fls-pilot.workflow-report.v1`. Planned
-changes appear in `proposed_changes` with observed state, proposed state, safety
-class, risk level, limitations or skipped work where relevant, readback
-expectation, and rollback expectation. Applied changes appear in
-`applied_changes` with before, requested change, after, readback status,
-`change_id`, and rollback guidance from the safety changelog.
+<video controls muted playsinline preload="metadata" style="width: 100%; max-width: 960px;">
+  <source src="../assets/ai-based-mixer-routing-example.mp4" type="video/mp4">
+</video>
 
-The v3 report shape intentionally omits compatibility-only legacy fields and
-aliases. Use `json_report` for structured clients and `markdown_report` for
-compact human-facing summaries.
+## Project Organizer
 
-## Default Safe UX
+Project Organizer finds naming, color, grouping, and routing cleanup
+candidates. It can propose one reversible cleanup step at a time.
 
-The default assistant posture is scan/read-only first. A write-capable workflow
-should propose one reversible action at a time, include a risk level
-(`read-only`, `low`, `medium`, `high`, or `unsupported`), and ask for explicit
-confirmation before calling a write tool.
+![Project Organizer scan](../assets/control-center-project-organizer.png)
 
-After an approved write, the assistant should show before/after, readback status
-where supported, and rollback or `change_id` information. It should then stop
-instead of continuing through a cleanup queue.
+<video controls muted playsinline preload="metadata" style="width: 100%; max-width: 960px;">
+  <source src="../assets/ai-color-my-tracks-example.mp4" type="video/mp4">
+</video>
 
-## Recommended Assistant Behavior
+## Plugin and EQ Workflows
 
-- Prefer diagnosis before mutation.
-- Use dry-run mode for broad cleanup or export-readiness work.
-- Apply only one approved reversible change or one named rollback unit per
-  confirmation.
-- Clearly state skipped actions when FL Studio API boundaries prevent safe automation.
+fls-pilot can inspect already-loaded plugins and configure supported parameters
+when parameter ranges are known. It cannot load or insert plugins.
 
-## Related Pages
+<video controls muted playsinline preload="metadata" style="width: 100%; max-width: 960px;">
+  <source src="../assets/ai-set-highpass-on-eq-batch-example.mp4" type="video/mp4">
+</video>
 
-- [Prompts](prompts.md) for practical examples.
-- [Default Safe UX](../concepts/default-safe-ux.md) for the risk levels and
-  response shape.
-- [Tool Reference](tool-reference.md) for exact tool names and safety annotations.
+## Composition
+
+Composition tools can generate scale-aware melodies, chords, and patterns. The
+assistant should preview notes first and wait for approval before writing to
+the Piano Roll.
+
+<video controls muted playsinline preload="metadata" style="width: 100%; max-width: 960px;">
+  <source src="../assets/ai-generate-bassline-example.mp4" type="video/mp4">
+</video>
+
+## Project Health and Preflight
+
+Project Health combines mix, routing, organization, and export-readiness checks
+into a single read-only overview.
+
+![Project health status](../assets/control-center-flstudio-project-health-status.png)
+
+## Safe Operating Pattern
+
+For any workflow that might write to FL Studio:
+
+1. Scan first.
+2. Explain the finding.
+3. Propose one reversible action.
+4. Ask for explicit approval.
+5. Apply one rollback unit.
+6. Report before/after and rollback details.

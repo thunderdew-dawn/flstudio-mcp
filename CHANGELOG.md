@@ -1,7 +1,8 @@
 # Changelog
 
-This repository keeps the detailed changelog in the documentation site.
+This repository keeps the generated changelog snapshot with the internal
+roadmap material.
 
-See: [docs/project/CHANGELOG.github.md](docs/project/CHANGELOG.github.md)
+See: [agent-docs/project/CHANGELOG.github.md](agent-docs/project/CHANGELOG.github.md)
 
 For release notes, changes, and migration-relevant updates, use the linked documentation page as the source of truth.

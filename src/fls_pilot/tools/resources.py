@@ -5,15 +5,15 @@ Kept COMPACT: summaries + counts, capped, with a note pointing to the detail
 tool when a list is large. Every resource degrades gracefully if the bridge is
 down (returns an {error} dict instead of throwing) so an auto-pull never breaks.
 
-Static ``fls://docs/...`` resources serve compact excerpts from repo Markdown
-documentation so local LLMs can quickly orient without reading full files.
+Static ``fls://docs/...`` resources serve compact bundled Markdown excerpts so
+local LLMs can quickly orient without reading repository files.
 ``fls://capabilities/...`` resources document hard FL API limits.
 """
 
 from __future__ import annotations
 
 import logging
-from pathlib import Path
+from importlib import resources
 
 from fastmcp import FastMCP
 
@@ -22,8 +22,7 @@ from ..connection import fetch_all_pages, get_bridge
 
 logger = logging.getLogger("fls_pilot.resources")
 
-# Repo root (two parents up from this file's src/fls_pilot/tools/ location)
-_REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+_DOCS_PACKAGE = "fls_pilot.context.docs"
 
 _CAPS = {
     "channels": 24,
@@ -212,7 +211,8 @@ def register(mcp: FastMCP) -> None:
             "domain_tools": _DOMAIN_TOOLS,
             "workflows": _WORKFLOWS,
             "token_strategy": [
-                "Use rg, kb_search, and resources before large file reads.",
+                "Use MCP resources and kb_search/kb_get before any repository file reads.",
+                "Repository files are for maintenance tasks, not normal FL Studio runtime use.",
                 "Use capped resources for orientation; call detail tools only for the active task.",
                 "Use fl_batch for strict registry reads or safe homogeneous persistent writes.",
             ],
@@ -282,51 +282,51 @@ def register(mcp: FastMCP) -> None:
     # Max ~3 KB each; longer docs are summarised with a kb_get pointer.
     # ------------------------------------------------------------------
 
-    def _read_doc(rel_path: str, max_chars: int = 3000) -> dict:
-        """Load a repo-relative Markdown file as a compact resource."""
-        p = _REPO_ROOT / rel_path
+    def _read_doc(filename: str, max_chars: int = 3000) -> dict:
+        """Load a bundled Markdown file as a compact MCP resource."""
+        p = resources.files(_DOCS_PACKAGE) / filename
         try:
             text = p.read_text(encoding="utf-8")
             if len(text) > max_chars:
                 text = text[:max_chars] + (
-                    f"\n\n[Truncated. Use kb_get({rel_path!r}) or read the "
-                    "full file for complete content.]"
+                    "\n\n[Truncated. Use the matching MCP resource, prompt, "
+                    "or Knowledgebase tool for complete task-specific context.]"
                 )
-            return {"source": rel_path, "content": text}
+            return {"source": f"{_DOCS_PACKAGE}/{filename}", "content": text}
         except FileNotFoundError:
-            return {"error": f"File not found: {rel_path}"}
+            return {"error": f"Bundled doc not found: {filename}"}
         except Exception as exc:
             return {"error": f"{type(exc).__name__}: {exc}"}
 
     @mcp.resource("fls://docs/safety-contract")
     def docs_safety_contract() -> dict:
         """Compact safety contract: what the agent may and may not do."""
-        return _read_doc("docs/concepts/safety-contract.md")
+        return _read_doc("safety-contract.md")
 
     @mcp.resource("fls://docs/api-capability-audit")
     def docs_api_capability_audit() -> dict:
         """Compact excerpt from the FL API capability audit."""
-        return _read_doc("docs/concepts/api-capability-audit.md", max_chars=2500)
+        return _read_doc("api-capability-audit.md", max_chars=2500)
 
     @mcp.resource("fls://docs/default-safe-ux")
     def docs_default_safe_ux() -> dict:
         """Default safe UX rules for write-capable workflows."""
-        return _read_doc("docs/concepts/default-safe-ux.md")
+        return _read_doc("default-safe-ux.md")
 
     @mcp.resource("fls://docs/runtime-usage")
     def docs_runtime_usage() -> dict:
         """Startup protocol and tool-choice matrix for runtime agents."""
-        return _read_doc("docs/agents/runtime-usage.md")
+        return _read_doc("runtime-usage.md")
 
     @mcp.resource("fls://docs/knowledgebase-protocol")
     def docs_knowledgebase_protocol() -> dict:
         """Knowledgebase protocol: when and how to record findings."""
-        return _read_doc("docs/agents/knowledgebase-protocol.md")
+        return _read_doc("knowledgebase-protocol.md")
 
     @mcp.resource("fls://docs/tool-policy")
     def docs_tool_policy() -> dict:
         """MCP tool policy: hierarchy, examples of allowed vs forbidden calls."""
-        return _read_doc("knowledgebase/MCP_TOOL_POLICY.md")
+        return _read_doc("tool-policy.md")
 
     # ------------------------------------------------------------------
     # Capability resources  fls://capabilities/…

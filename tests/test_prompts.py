@@ -211,7 +211,7 @@ def test_existing_resources_still_registered():
 
 
 def test_prompt_content_from_markdown(tmp_path, monkeypatch):
-    """Prompts must load content from docs/agents/prompts/ Markdown files."""
+    """Prompts must load content from bundled Markdown files."""
     # Just verify the prompt module can locate its MD dir without error
     from fls_pilot.prompts import _PROMPTS_DIR
     assert _PROMPTS_DIR.exists(), f"Prompt MD directory not found: {_PROMPTS_DIR}"
