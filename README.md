@@ -10,7 +10,7 @@
 ![macOS](https://img.shields.io/badge/macOS-12%2B-000000?logo=apple&logoColor=white)
 ![FL Studio](https://img.shields.io/badge/FL%20Studio-2025%2B-orange)
 
-[![Documentation Status](https://readthedocs.org/projects/fl-studio-pilot/badge/?version=v3-alpha)](https://fl-studio-pilot.readthedocs.io/en/v3-alpha/)
+[![Documentation Status](https://readthedocs.org/projects/fl-studio-pilot/badge/?version=beta)](https://fl-studio-pilot.readthedocs.io/en/beta/)
 
 ![fls-pilot](docs/assets/fls-pilot-logo-with-text.png)
 
@@ -144,7 +144,7 @@ part of the public ReadTheDocs site.
 
 Public documentation:
 
-<https://fl-studio-pilot.readthedocs.io/en/v3-alpha/>
+<https://fl-studio-pilot.readthedocs.io/en/beta/>
 
 Useful local pages:
 
