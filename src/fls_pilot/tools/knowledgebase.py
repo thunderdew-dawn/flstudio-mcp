@@ -483,9 +483,9 @@ def kb_explain_limit(intent: str) -> dict:
             "is_hard_limit": True,
         },
         {
-            "keywords": ["normalized value", "guess parameter", "interpolate"],
-            "action": "Guess normalized plugin/EQ parameter values",
-            "reason": "Mapping is non-linear and plugin-specific; guessing causes silent corruption.",
+            "keywords": ["normalized value", "parameter mapping", "value interpolation"],
+            "action": "Map normalized plugin/EQ parameter values without verification",
+            "reason": "Parameter mapping is non-linear and plugin-specific; unverified mappings cause silent corruption.",
             "workaround": "Use kb_get_parameter_spec or kb_get_conversion for verified mappings only.",
             "is_hard_limit": True,
         },
