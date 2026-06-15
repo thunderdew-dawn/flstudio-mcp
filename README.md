@@ -39,33 +39,23 @@ export-readiness checks.
 
 ### Mix Review & Gain Staging
 
-<video controls muted playsinline preload="metadata" style="width: 100%; max-width: 960px;">
-  <source src="docs/assets/ai-apply-gain-staging-example.mp4" type="video/mp4">
-</video>
+[▶️ Video: Mix Review & Gain Staging](https://github.com/thunderdew-dawn/fls-pilot/raw/main/docs/assets/ai-apply-gain-staging-example.mp4)
 
 ### Routing Audit
 
-<video controls muted playsinline preload="metadata" style="width: 100%; max-width: 960px;">
-  <source src="docs/assets/ai-based-mixer-routing-example.mp4" type="video/mp4">
-</video>
+[▶️ Video: Routing Audit](https://github.com/thunderdew-dawn/fls-pilot/raw/main/docs/assets/ai-based-mixer-routing-example.mp4)
 
 ### Project Organizer
 
-<video controls muted playsinline preload="metadata" style="width: 100%; max-width: 960px;">
-  <source src="docs/assets/ai-color-my-tracks-example.mp4" type="video/mp4">
-</video>
+[▶️ Video: Project Organizer](https://github.com/thunderdew-dawn/fls-pilot/raw/main/docs/assets/ai-color-my-tracks-example.mp4)
 
 ### Plugin & EQ Workflows
 
-<video controls muted playsinline preload="metadata" style="width: 100%; max-width: 960px;">
-  <source src="docs/assets/ai-set-highpass-on-eq-batch-example.mp4" type="video/mp4">
-</video>
+[▶️ Video: Plugin & EQ Workflows](https://github.com/thunderdew-dawn/fls-pilot/raw/main/docs/assets/ai-set-highpass-on-eq-batch-example.mp4)
 
 ### Composition
 
-<video controls muted playsinline preload="metadata" style="width: 100%; max-width: 960px;">
-  <source src="docs/assets/ai-generate-bassline-example.mp4" type="video/mp4">
-</video>
+[▶️ Video: Composition](https://github.com/thunderdew-dawn/fls-pilot/raw/main/docs/assets/ai-generate-bassline-example.mp4)
 
 ## Requirements
 
