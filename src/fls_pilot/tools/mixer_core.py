@@ -18,10 +18,12 @@ from pydantic import Field
 from .. import protocol, safety
 from ..connection import fetch_all_pages, get_bridge
 from ..music import levels
+from .registration import RETIRED_LOW_LEVEL_TOOLS, hide_retired_tools
 from .targets import mixer_track_error
 
 
 def register(mcp: FastMCP) -> None:
+    mcp = hide_retired_tools(mcp, RETIRED_LOW_LEVEL_TOOLS)
     _RO = {
         "readOnlyHint": True,
         "idempotentHint": True,

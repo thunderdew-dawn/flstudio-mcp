@@ -37,7 +37,6 @@ from .tools import channels as channel_tools
 from .tools import color as color_tools
 from .tools import compose as compose_tools
 from .tools import effect as effect_domain_tools
-from .tools import effects as effects_tools
 from .tools import export as export_tools
 from .tools import knowledgebase as knowledgebase_tools
 from .tools import mix_doctor as mix_doctor_tools
@@ -45,7 +44,6 @@ from .tools import mixer as mixer_tools
 from .tools import mixer_core as mixer_core_tools
 from .tools import mixing as mixing_tools
 from .tools import pattern as pattern_domain_tools
-from .tools import patterns_playlist as patterns_playlist_tools
 from .tools import pianoroll as pianoroll_tools
 from .tools import playlist as playlist_domain_tools
 from .tools import plugin as plugin_tools
@@ -59,103 +57,6 @@ from .tools import transport as transport_tools
 from .tools import workflow_context as workflow_context_tools
 
 logger = logging.getLogger("fls_pilot")
-
-_LEGACY_LOW_LEVEL_TOOLS = {
-    # Transport one-off aliases. Use fl_transport(action, params).
-    "fl_ping",
-    "fl_get_tempo",
-    "fl_set_tempo",
-    "fl_play",
-    "fl_stop",
-    "fl_toggle_play",
-    "fl_record",
-    "fl_get_play_state",
-    "fl_get_song_position",
-    "fl_set_song_position",
-    "fl_get_time_signature",
-    "fl_set_time_signature",
-    # Mixer/channel core aliases. Use fl_mixer/fl_channel or retained safety tools.
-    "fl_get_mixer_state",
-    "fl_get_channel_state",
-    "fl_set_mixer_volume",
-    "fl_set_mixer_pan",
-    "fl_set_mixer_mute",
-    "fl_set_mixer_solo",
-    "fl_set_mixer_name",
-    "fl_set_channel_volume",
-    "fl_set_channel_pan",
-    "fl_set_channel_mute",
-    "fl_set_channel_solo",
-    "fl_mixer_list_tracks",
-    "fl_mixer_get_track",
-    "fl_mixer_set_volume",
-    "fl_mixer_set_pan",
-    "fl_mixer_set_mute",
-    "fl_mixer_set_solo",
-    "fl_mixer_select_track",
-    "fl_mixer_get_route",
-    "fl_mixer_set_route",
-    "fl_mixer_set_stereo_separation",
-    # Channel organizer aliases that are covered by fl_channel.
-    "fl_get_channel_details",
-    "fl_set_channel_name",
-    "fl_set_channel_mixer_track",
-    "fl_channel_get_grid",
-    "fl_channel_set_grid_bit",
-    "fl_channel_set_step_param",
-    "fl_channel_set_steps",
-    "fl_channel_clear_grid",
-    "fl_classify_channels",
-    # Routing one-off aliases covered by fl_mixer route actions.
-    "fl_get_routing",
-    "fl_set_route",
-    # Pattern and playlist one-off aliases. Use fl_pattern/fl_playlist.
-    "fl_pattern_list",
-    "fl_pattern_get",
-    "fl_pattern_get_length",
-    "fl_pattern_select",
-    "fl_pattern_rename",
-    "fl_pattern_set_color",
-    "fl_pattern_set_length",
-    "fl_pattern_find_empty",
-    "fl_playlist_list_tracks",
-    "fl_playlist_get_track",
-    "fl_playlist_set_mute",
-    "fl_playlist_set_solo",
-    "fl_playlist_set_name",
-    "fl_playlist_set_color",
-    "fl_playlist_select_track",
-    # Effect slot and native EQ one-off aliases. Use fl_effect.
-    "fl_effect_get_slot",
-    "fl_effect_list_slots",
-    "fl_effect_set_slot_mix",
-    "fl_effect_get_track_slots_enabled",
-    "fl_effect_set_track_slots_enabled",
-    "fl_effect_set_slot_enabled",
-    "fl_eq_get",
-    "fl_eq_set_band",
-    # Already-loaded plugin parameter aliases. Use fl_plugin.
-    "fl_plugin_list",
-    "fl_plugin_get_params",
-    "fl_plugin_set_param",
-    "fl_plugin_list_params",
-    "fl_plugin_get_param",
-    # Piano Roll one-off aliases. Use fl_piano_roll.
-    "fl_write_piano_roll_notes",
-    "fl_quantize_pattern",
-    "fl_piano_write_notes",
-    "fl_piano_write_chord",
-    "fl_piano_clear",
-    "fl_piano_quantize",
-    "fl_piano_transpose",
-    "fl_piano_duplicate",
-    "fl_piano_velocity_ramp",
-    "fl_piano_probe_return_channel",
-    "fl_piano_add_marker",
-    "fl_piano_add_time_signature_marker",
-    "fl_piano_clear_markers",
-    "fl_piano_get_notes",
-}
 
 
 SERVER_INSTRUCTIONS = """\
@@ -219,7 +120,6 @@ def build_server() -> FastMCP:
     channel_tools.register(mcp)  # Channel organizer: details, names, mixer assignment
     pianoroll_tools.register(mcp)  # Phase 2: write notes into the piano roll
     plugin_tools.register(mcp)  # Phase 1B: plugin param read/write (name or index)
-    effects_tools.register(mcp)  # Effect slot + native EQ pack
     mixing_tools.register(mcp)  # Slice B: high-level EQ mixing intents
     routing_tools.register(mcp)  # Routing/cleanup Slice 1: read-only
     bulk_tools.register(mcp)  # Bulk mute/solo: server-side group orchestration
@@ -234,12 +134,9 @@ def build_server() -> FastMCP:
     export_tools.register(mcp)  # MIDI export: arrangement spec -> type-1 .mid on disk
     presets_tools.register(mcp)  # Preset suggester: read preset names from disk
     mix_doctor_tools.register(mcp)  # Mix Review: diagnose whole mix + gated adjustments
-    patterns_playlist_tools.register(mcp)  # Phase 3: Patterns & Playlist pack
     knowledgebase_tools.register(mcp)  # KB Tools
     workflow_context_tools.register(mcp)  # Workflow context: read-only fl_get_workflow_context
     prompt_defs.register(mcp)  # MCP Prompts: guided workflow templates
-    for name in sorted(_LEGACY_LOW_LEVEL_TOOLS):
-        mcp.local_provider.remove_tool(name)
     return mcp
 
 

@@ -14,6 +14,7 @@ from pydantic import Field
 
 from .. import protocol, safety
 from ..connection import fetch_all_pages, get_bridge
+from .registration import RETIRED_LOW_LEVEL_TOOLS, hide_retired_tools
 from .targets import mixer_track_error, no_free_mixer_track_response
 
 
@@ -116,6 +117,7 @@ def _find_free_mixer_track(bridge, *, start_track: int = 1) -> int | None:
 
 
 def register(mcp: FastMCP) -> None:
+    mcp = hide_retired_tools(mcp, RETIRED_LOW_LEVEL_TOOLS)
     _RO = {
         "readOnlyHint": True,
         "idempotentHint": True,

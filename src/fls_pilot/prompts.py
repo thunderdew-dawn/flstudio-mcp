@@ -15,9 +15,6 @@ Runtime prompts (user-facing workflows):
   mix_review, routing_review, project_organizer, project_preflight,
   plugin_chain_planner, composition_scale_writer,
   audio_to_midi_or_reference_analysis
-
-Dev prompts (developer / agent tooling):
-  api_probe, bug_triage, implementation_slice, release_prepare
 """
 
 from __future__ import annotations
@@ -125,31 +122,6 @@ _PROMPT_MAP: list[tuple[str, str, str | None, str]] = [
         "audio-to-midi.md",
         "audio_analysis",
         "Analyze an audio file for tempo/key/melody; optionally write MIDI to Piano Roll.",
-    ),
-    # Dev prompts
-    (
-        "api_probe",
-        "api-probe.md",
-        None,
-        "Plan a safe API/compatibility probe for an undocumented FL Studio behavior.",
-    ),
-    (
-        "bug_triage",
-        "bug-triage.md",
-        None,
-        "Classify and prepare a GitHub bug report before implementation.",
-    ),
-    (
-        "implementation_slice",
-        "implementation-slice.md",
-        None,
-        "Claim and execute a narrow pre-approved development slice.",
-    ),
-    (
-        "release_prepare",
-        "release.md",
-        None,
-        "Prepare a release: checks, tagging, dist validation, rollback plan.",
     ),
 ]
 

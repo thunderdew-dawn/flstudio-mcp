@@ -526,16 +526,23 @@ def kb_explain_limit(intent: str) -> dict:
 
 
 def register(mcp: FastMCP) -> None:
-    mcp.tool()(kb_search)
-    mcp.tool()(kb_get)
-    mcp.tool()(kb_get_parameter_spec)
-    mcp.tool()(kb_get_conversion)
-    mcp.tool()(kb_record_finding)
-    mcp.tool()(kb_record_verified_finding)
-    mcp.tool()(kb_list_open_questions)
-    # New structured and workflow-pack tools (backwards-compatible additions)
-    mcp.tool()(kb_search_structured)
-    mcp.tool()(kb_get_many)
-    mcp.tool()(kb_get_workflow_pack)
-    mcp.tool()(kb_get_capability)
-    mcp.tool()(kb_explain_limit)
+    _RO = {
+        "readOnlyHint": True,
+        "idempotentHint": True,
+        "openWorldHint": True,
+        "safetyClass": "read-only",
+    }
+
+    mcp.tool(annotations={"title": "Search Knowledgebase", **_RO})(kb_search)
+    mcp.tool(annotations={"title": "Get Knowledgebase file", **_RO})(kb_get)
+    mcp.tool(annotations={"title": "Get KB parameter spec", **_RO})(kb_get_parameter_spec)
+    mcp.tool(annotations={"title": "Get KB conversion mapping", **_RO})(kb_get_conversion)
+    mcp.tool(annotations={"title": "Search structured Knowledgebase", **_RO})(
+        kb_search_structured
+    )
+    mcp.tool(annotations={"title": "Get multiple Knowledgebase files", **_RO})(kb_get_many)
+    mcp.tool(annotations={"title": "Get workflow Knowledgebase pack", **_RO})(
+        kb_get_workflow_pack
+    )
+    mcp.tool(annotations={"title": "Get capability guidance", **_RO})(kb_get_capability)
+    mcp.tool(annotations={"title": "Explain capability limit", **_RO})(kb_explain_limit)

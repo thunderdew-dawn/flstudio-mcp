@@ -285,18 +285,31 @@ def test_new_kb_tools_registered_in_server():
 
 
 def test_original_kb_tools_still_registered():
-    """Original KB tools must remain registered."""
+    """Runtime KB tools must remain read-only and public."""
+    server = build_server()
+    tools = _run(server.list_tools())
+    tool_by_name = {t.name: t for t in tools}
+
+    runtime = {"kb_search", "kb_get", "kb_get_parameter_spec", "kb_get_conversion"}
+    missing = runtime - set(tool_by_name)
+    assert not missing, f"Runtime KB tools missing: {missing}"
+
+    for name in runtime:
+        annotations = tool_by_name[name].annotations
+        assert annotations.readOnlyHint is True
+        assert getattr(annotations, "safetyClass", None) == "read-only"
+
+
+def test_dev_kb_tools_not_registered():
+    """Dev-only KB write/open-question helpers must not be public MCP tools."""
     server = build_server()
     tools = _run(server.list_tools())
     tool_names = {t.name for t in tools}
-    original = {
-        "kb_search",
-        "kb_get",
-        "kb_get_parameter_spec",
-        "kb_get_conversion",
+
+    dev_only = {
         "kb_record_finding",
         "kb_record_verified_finding",
         "kb_list_open_questions",
     }
-    missing = original - tool_names
-    assert not missing, f"Original KB tools missing: {missing}"
+    unexpected = dev_only & tool_names
+    assert not unexpected, f"Dev-only KB tools should not be public: {unexpected}"

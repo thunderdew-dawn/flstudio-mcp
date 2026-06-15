@@ -21,6 +21,7 @@ from pydantic import Field
 from .. import kb_policy, operations, protocol, safety, workflow_report
 from .. import project_templates as templates
 from ..connection import fetch_all_pages, get_bridge
+from .registration import RETIRED_LOW_LEVEL_TOOLS, hide_retired_tools
 from .targets import mixer_track_error
 
 
@@ -155,6 +156,7 @@ def detect_cleanup(bridge, *, max_plugin_checks: int = 60) -> dict:
 
 
 def register(mcp: FastMCP) -> None:
+    mcp = hide_retired_tools(mcp, RETIRED_LOW_LEVEL_TOOLS)
     _RO = {
         "readOnlyHint": True,
         "idempotentHint": True,

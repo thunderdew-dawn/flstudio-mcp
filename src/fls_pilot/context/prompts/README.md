@@ -1,6 +1,6 @@
 # MCP Prompts — Agent Guide
 
-This directory contains the canonical Markdown content for all MCP Prompts
+This directory contains the canonical Markdown content for runtime MCP Prompts
 registered by the FLStudioPilot server.
 
 ## Three Layers: Prompts · Resources · Tools
@@ -28,15 +28,6 @@ registered by the FLStudioPilot server.
 | `plugin_chain_planner` | `plugin-chain-planner.md` | FX chain planning with already-loaded plugins |
 | `composition_scale_writer` | `composition-scale-writer.md` | Raga/scale melody and chord composition |
 | `audio_to_midi_or_reference_analysis` | `audio-to-midi.md` | Audio analysis and optional MIDI extraction |
-
-### Dev Prompts (Developer / Agent Tooling)
-
-| Prompt name | File | Purpose |
-|-------------|------|---------|
-| `api_probe` | `api-probe.md` | Safe FL API compatibility probe |
-| `bug_triage` | `bug-triage.md` | GitHub bug classification and prep |
-| `implementation_slice` | `implementation-slice.md` | Narrow pre-approved dev slice execution |
-| `release_prepare` | `release.md` | Release checks, tagging, validation |
 
 ## Using Prompts via MCP
 
