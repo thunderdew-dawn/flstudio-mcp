@@ -621,6 +621,44 @@ def test_http_routing_audit_endpoint(monkeypatch):
     assert payload == {"ok": True, "workflow": "routing_audit", "state": "live"}
 
 
+def test_http_project_organizer_endpoint(monkeypatch):
+    monkeypatch.setattr(
+        control_center,
+        "_run_project_organizer",
+        lambda state: {"ok": True, "workflow": "project_organizer", "state": "live"},
+    )
+    state = _state(port=0)
+    handler_cls = control_center._handler_factory(state)
+    request = (
+        b"POST /api/workflows/project-organizer HTTP/1.1\r\n"
+        b"Host: localhost\r\n"
+        b"Content-Type: application/json\r\n"
+        b"Content-Length: 2\r\n"
+        b"\r\n"
+        b"{}"
+    )
+
+    class OneShotHandler(handler_cls):
+        def setup(self):  # noqa: ANN001
+            self.rfile = io.BytesIO(request)
+            self.wfile = io.BytesIO()
+
+        def finish(self):  # noqa: ANN001
+            pass
+
+    server = mock.Mock()
+    server.server_version = "test"
+    server.sys_version = ""
+    server.timeout = 1
+    server._BaseServer__is_shut_down = mock.Mock()
+    server._BaseServer__shutdown_request = False
+
+    handler = OneShotHandler(request=None, client_address=("127.0.0.1", 1234), server=server)
+    response = handler.wfile.getvalue().decode("utf-8")
+    payload = json.loads(response.split("\r\n\r\n", 1)[1])
+    assert payload == {"ok": True, "workflow": "project_organizer", "state": "live"}
+
+
 def test_http_mix_review_and_low_end_endpoints(monkeypatch):
     monkeypatch.setattr(
         control_center,
@@ -677,6 +715,57 @@ def test_http_mix_review_and_low_end_endpoints(monkeypatch):
         assert payload["workflow"] == expected["workflow"]
         if expected["title"]:
             assert payload["title"] == expected["title"]
+
+
+def test_build_project_organizer_report_surfaces_cleanup_plan():
+    report = control_center._build_project_organizer_report(
+        channels=[
+            {
+                "channel": 1,
+                "name": "Channel 1",
+                "type": {"label": "genplug"},
+                "target_mixer_track": 0,
+                "target_name": "Master",
+            },
+            {
+                "channel": 2,
+                "name": "Lead",
+                "type": {"label": "genplug"},
+                "target_mixer_track": 5,
+                "target_name": "Lead",
+            },
+        ],
+        mixer_tracks=[
+            {"i": 0, "name": "Master", "color": 1},
+            {"i": 5, "name": "Lead", "color": 2},
+            {"i": 6, "name": "Lead", "color": 3},
+        ],
+        patterns=[
+            {"index": 1, "name": "Pattern 1", "color": None},
+            {"index": 2, "name": "Drop", "color": 4},
+            {"index": 3, "name": "Drop", "color": 5},
+        ],
+        playlist_tracks=[
+            {"index": 1, "name": "Track 1", "color": None, "mute": False},
+        ],
+        routing=[
+            {"i": 0, "name": "Master", "routes_to": []},
+            {"i": 5, "name": "Lead", "routes_to": [{"dst": 0, "dst_name": "Master"}]},
+        ],
+        template_context={},
+    )
+
+    assert report["ok"] is True
+    assert report["workflow"] == "project_organizer"
+    assert report["summary"]["unnamed_channels"] == 1
+    assert report["summary"]["routing_cleanup"] == 1
+    assert report["summary"]["proposed_changes"] >= 3
+    assert any(
+        step["tool"] == "fl_apply_project_cleanup_step"
+        for step in report["cleanup_plan"]["steps"]
+    )
+    assert report["guided"]["next_tool"] == "fl_apply_project_cleanup_step"
+    assert report["safety"]["read_only"] is True
 
 
 def test_build_mix_review_report_summarizes_levels_findings_and_visuals():

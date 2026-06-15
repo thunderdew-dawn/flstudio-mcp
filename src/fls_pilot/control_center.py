@@ -1106,6 +1106,987 @@ ROUTING_POLICY_RULE_IDS = [
 ]
 
 
+ORGANIZER_POLICY_RULE_IDS = [
+    "preserve_existing_structure_first",
+    "instrument_audio_track_workflow",
+    "channel_rack_workflow_requires_routing_inference",
+    "routing_ui_guidance_vs_mcp_write",
+]
+
+
+def _run_project_organizer(state: ControlCenterState) -> dict[str, Any]:
+    """Run the read-only Project Organizer workflow for the Control Center UI."""
+    with state.lock:
+        daemon_host, daemon_port = _selected_daemon_endpoint(state)
+
+    bridge = None
+    try:
+        bridge = TCPBridge(daemon_host, daemon_port)
+        wait = getattr(bridge, "wait_for_heartbeat", None)
+        if callable(wait):
+            wait(timeout=1.0)
+        alive = bool(getattr(bridge, "is_alive", lambda: False)())
+        if not alive:
+            return _project_organizer_unavailable_report(
+                "No fresh FL Studio controller heartbeat. Open FL Studio and refresh "
+                "the connection."
+            )
+
+        channel_routing = fetch_all_pages(
+            bridge,
+            protocol.CMD_CHANNEL_ROUTING_SUMMARY,
+            "channels",
+        ).get("channels", [])
+        channel_list = fetch_all_pages(
+            bridge,
+            protocol.CMD_CHANNEL_LIST,
+            "channels",
+        ).get("channels", [])
+        mixer_tracks = fetch_all_pages(
+            bridge,
+            protocol.CMD_MIXER_LIST_TRACKS,
+            "tracks",
+        ).get("tracks", [])
+        patterns = fetch_all_pages(
+            bridge,
+            protocol.CMD_PATTERN_LIST,
+            "patterns",
+        ).get("patterns", [])
+        playlist_tracks = fetch_all_pages(
+            bridge,
+            protocol.CMD_PLAYLIST_LIST_TRACKS,
+            "tracks",
+        ).get("tracks", [])
+        routing = fetch_all_pages(
+            bridge,
+            protocol.CMD_MIXER_GET_ROUTING_ALL,
+            "routing",
+        ).get("routing", [])
+        channels = _merge_channel_snapshots(
+            routing_rows=_dict_rows(channel_routing),
+            channel_rows=_dict_rows(channel_list),
+        )
+        template_context = templates.classify_topology(mixer_tracks, routing, channels)
+        return _build_project_organizer_report(
+            channels=channels,
+            mixer_tracks=_dict_rows(mixer_tracks),
+            patterns=_dict_rows(patterns),
+            playlist_tracks=_dict_rows(playlist_tracks),
+            routing=_dict_rows(routing),
+            template_context=template_context,
+        )
+    except Exception as exc:
+        return _project_organizer_unavailable_report(f"{type(exc).__name__}: {exc}")
+    finally:
+        if bridge is not None:
+            with contextlib.suppress(Exception):
+                bridge.close()
+
+
+def _project_organizer_unavailable_report(message: str) -> dict[str, Any]:
+    return {
+        "ok": False,
+        "state": "unavailable",
+        "workflow": "project_organizer",
+        "title": "Project Organizer",
+        "generated_at": _now_iso(),
+        "error": message,
+        "summary": {
+            "organization_score": 0,
+            "health_label": "Unavailable",
+            "channels": 0,
+            "mixer_tracks": 0,
+            "patterns": 0,
+            "playlist_tracks": 0,
+            "diagnostics": 1,
+            "proposed_changes": 0,
+            "unnamed_channels": 0,
+            "routing_cleanup": 0,
+            "naming_cleanup": 0,
+            "color_readback_missing": 0,
+            "grouping_candidates": 0,
+        },
+        "findings": [
+            {
+                "id": "project_organizer_unavailable",
+                "severity": "warning",
+                "title": "Project data unavailable",
+                "detail": message,
+                "count": 1,
+                "items": [],
+            }
+        ],
+        "cleanup_plan": {"steps": []},
+        "guided": {
+            "state": "unavailable",
+            "priority": "Connection",
+            "next_issue": "Connect FL Studio before starting Project Organizer.",
+            "steps": _organizer_guided_steps(active_index=0),
+        },
+        "standards": _organizer_standards([], []),
+        "grouping": {"candidate_groups": [], "tool": "fl_group_tracks"},
+        "details": {
+            "items": [],
+            "notes": [
+                "Project Organizer is read-only in Control Center.",
+                "Writes must be approved and run through MCP write-safe tools.",
+            ],
+            "kb_policy_refs": kb_policy.rule_refs(ORGANIZER_POLICY_RULE_IDS),
+        },
+        "safety": {
+            "read_only": True,
+            "project_changes": False,
+            "requires_explicit_approval": True,
+        },
+    }
+
+
+def _build_project_organizer_report(
+    *,
+    channels: list[dict[str, Any]],
+    mixer_tracks: list[dict[str, Any]],
+    patterns: list[dict[str, Any]],
+    playlist_tracks: list[dict[str, Any]],
+    routing: list[dict[str, Any]],
+    template_context: dict[str, Any],
+) -> dict[str, Any]:
+    mixer_by_index = {
+        idx: dict(row)
+        for row in mixer_tracks
+        if (idx := _as_int(row.get("i", row.get("index")))) is not None
+    }
+    routing_by_index = {
+        idx: dict(row)
+        for row in routing
+        if (idx := _as_int(row.get("i", row.get("index")))) is not None
+    }
+    track_by_index = {
+        idx: {**routing_by_index.get(idx, {}), **mixer_by_index.get(idx, {})}
+        for idx in set(mixer_by_index) | set(routing_by_index)
+    }
+    routes_by_src = {
+        idx: _normalise_routes(row.get("routes_to") or [])
+        for idx, row in routing_by_index.items()
+    }
+
+    unnamed_channels = [
+        _organizer_channel_item(row)
+        for row in channels
+        if _looks_default_channel_name(row.get("name"))
+    ]
+    routing_cleanup = [
+        _organizer_channel_item(row)
+        for row in channels
+        if _organizer_channel_needs_routing(row, template_context)
+    ]
+    unnamed_patterns = [
+        _organizer_named_item(row, "pattern")
+        for row in patterns
+        if _looks_default_named_item(row, "pattern")
+    ]
+    unnamed_playlist_tracks = [
+        _organizer_named_item(row, "playlist_track")
+        for row in playlist_tracks
+        if _looks_default_named_item(row, "playlist_track")
+    ]
+    duplicate_mixer = _duplicate_name_rows(mixer_tracks, "mixer")
+    duplicate_patterns = _duplicate_name_rows(patterns, "pattern")
+    color_readback_missing = _color_readback_missing(
+        channels + mixer_tracks + patterns + playlist_tracks
+    )
+    direct_master_tracks = _direct_master_source_tracks(
+        channels=channels,
+        routes_by_src=routes_by_src,
+        track_by_index=track_by_index,
+        template_context=template_context,
+    )
+    candidate_groups = _organizer_group_candidates(direct_master_tracks)
+
+    findings = _organizer_findings(
+        unnamed_channels=unnamed_channels,
+        routing_cleanup=routing_cleanup,
+        unnamed_patterns=unnamed_patterns,
+        unnamed_playlist_tracks=unnamed_playlist_tracks,
+        duplicate_mixer=duplicate_mixer,
+        duplicate_patterns=duplicate_patterns,
+        color_readback_missing=color_readback_missing,
+        candidate_groups=candidate_groups,
+        template_context=template_context,
+    )
+    cleanup_steps = _organizer_cleanup_steps(
+        unnamed_channels=unnamed_channels,
+        routing_cleanup=routing_cleanup,
+        duplicate_mixer=duplicate_mixer,
+        unnamed_patterns=unnamed_patterns,
+        candidate_groups=candidate_groups,
+    )
+    naming_rules = [
+        step
+        for step in cleanup_steps
+        if step.get("kind") in {"channel_naming", "mixer_naming", "pattern_naming"}
+    ]
+    color_rules = _organizer_color_standard_rules(channels, mixer_tracks)
+    score = _organizer_score(
+        unnamed_channels=len(unnamed_channels),
+        routing_cleanup=len(routing_cleanup),
+        unnamed_patterns=len(unnamed_patterns),
+        unnamed_playlist_tracks=len(unnamed_playlist_tracks),
+        duplicate_mixer=len(duplicate_mixer),
+        duplicate_patterns=len(duplicate_patterns),
+        grouping_candidates=len(candidate_groups),
+    )
+
+    return {
+        "ok": True,
+        "state": "live",
+        "workflow": "project_organizer",
+        "title": "Project Organizer",
+        "generated_at": _now_iso(),
+        "summary": {
+            "organization_score": score,
+            "health_label": _organizer_health_label(score),
+            "channels": len(channels),
+            "mixer_tracks": len(mixer_tracks),
+            "patterns": len(patterns),
+            "playlist_tracks": len(playlist_tracks),
+            "diagnostics": len(findings),
+            "proposed_changes": len(cleanup_steps),
+            "unnamed_channels": len(unnamed_channels),
+            "routing_cleanup": len(routing_cleanup),
+            "naming_cleanup": len(naming_rules),
+            "color_readback_missing": color_readback_missing,
+            "grouping_candidates": len(candidate_groups),
+        },
+        "findings": findings,
+        "cleanup_plan": {
+            "steps": cleanup_steps,
+            "mode": "proposal",
+            "apply_tool": "fl_apply_project_cleanup_step",
+        },
+        "guided": _organizer_guided_context(findings, cleanup_steps),
+        "standards": _organizer_standards(naming_rules, color_rules),
+        "grouping": {
+            "candidate_groups": candidate_groups,
+            "tool": "fl_group_tracks",
+            "approval_required": True,
+        },
+        "details": {
+            "items": _organizer_detail_rows(
+                channels=channels,
+                mixer_tracks=mixer_tracks,
+                patterns=patterns,
+                playlist_tracks=playlist_tracks,
+            ),
+            "routing_rows": len(routing),
+            "template_context": templates.compact_context(template_context),
+            "notes": [
+                "Project Organizer is read-only in Control Center.",
+                "Apply only one approved cleanup step or one named rollback unit at a time.",
+                (
+                    "Color counts only flag missing readback fields; default FL colors "
+                    "are not guessed."
+                ),
+                (
+                    "Playlist clip editing, pattern deletion, plugin loading, save, "
+                    "and render are not part of cleanup."
+                ),
+            ],
+            "kb_policy_refs": kb_policy.rule_refs(ORGANIZER_POLICY_RULE_IDS),
+        },
+        "safety": {
+            "read_only": True,
+            "project_changes": False,
+            "requires_explicit_approval": True,
+            "apply_path": "Use MCP write-safe tools after reviewing an exact proposal.",
+        },
+    }
+
+
+def _dict_rows(rows: Any) -> list[dict[str, Any]]:
+    if not isinstance(rows, list):
+        return []
+    return [dict(row) for row in rows if isinstance(row, dict)]
+
+
+def _merge_channel_snapshots(
+    *,
+    routing_rows: list[dict[str, Any]],
+    channel_rows: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    by_index = {
+        idx: dict(row)
+        for row in channel_rows
+        if (idx := _organizer_item_index(row)) is not None
+    }
+    merged = []
+    seen: set[int] = set()
+    for row in routing_rows:
+        idx = _organizer_item_index(row)
+        if idx is None:
+            merged.append(dict(row))
+            continue
+        seen.add(idx)
+        merged.append({**by_index.get(idx, {}), **row})
+    for idx, row in sorted(by_index.items()):
+        if idx not in seen:
+            merged.append(dict(row))
+    return merged
+
+
+def _looks_default_channel_name(name: Any) -> bool:
+    value = str(name or "").strip()
+    if not value:
+        return True
+    return value.split(" ")[0] in {"Channel", "Sampler", "Insert", "AudioClip"}
+
+
+def _looks_default_named_item(row: dict[str, Any], kind: str) -> bool:
+    name = str(row.get("name") or "").strip()
+    if not name:
+        return True
+    idx = _organizer_item_index(row)
+    if kind == "pattern":
+        return idx is not None and name == f"Pattern {idx}"
+    if kind == "playlist_track":
+        return idx is not None and name in {f"Track {idx}", f"Playlist Track {idx}"}
+    return False
+
+
+def _organizer_item_index(row: dict[str, Any]) -> int | None:
+    return _as_int(row.get("index", row.get("i", row.get("channel", row.get("pattern")))))
+
+
+def _organizer_channel_needs_routing(
+    row: dict[str, Any],
+    template_context: dict[str, Any],
+) -> bool:
+    target = _as_int(row.get("target_mixer_track"))
+    return target is None or (
+        target == 0 and not templates.is_template_bus(template_context, target)
+    )
+
+
+def _organizer_channel_item(row: dict[str, Any]) -> dict[str, Any]:
+    idx = _organizer_item_index(row)
+    return {
+        "type": "channel",
+        "index": idx,
+        "name": _channel_name(row),
+        "kind": _channel_type_label(row),
+        "target": _as_int(row.get("target_mixer_track")),
+        "target_name": row.get("target_name"),
+    }
+
+
+def _organizer_named_item(row: dict[str, Any], kind: str) -> dict[str, Any]:
+    idx = _organizer_item_index(row)
+    return {
+        "type": kind,
+        "index": idx,
+        "name": str(row.get("name") or "").strip() or _organizer_default_label(kind, idx),
+        "color": row.get("color"),
+    }
+
+
+def _organizer_default_label(kind: str, idx: int | None) -> str:
+    if kind == "pattern":
+        return f"Pattern {idx}" if idx is not None else "Pattern"
+    if kind == "playlist_track":
+        return f"Playlist Track {idx}" if idx is not None else "Playlist Track"
+    return f"Item {idx}" if idx is not None else "Item"
+
+
+def _duplicate_name_rows(rows: list[dict[str, Any]], kind: str) -> list[dict[str, Any]]:
+    by_name: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        name = str(row.get("name") or "").strip()
+        if not name:
+            continue
+        by_name.setdefault(name, []).append(row)
+    duplicates = []
+    for name, grouped in by_name.items():
+        if len(grouped) < 2:
+            continue
+        for row in grouped[1:]:
+            idx = _organizer_item_index(row)
+            duplicates.append(
+                {
+                    "type": kind,
+                    "index": idx,
+                    "name": name,
+                    "suggested_name": f"{name} ({idx})" if idx is not None else name,
+                }
+            )
+    return duplicates
+
+
+def _color_readback_missing(rows: list[dict[str, Any]]) -> int:
+    missing = 0
+    for row in rows:
+        if "color" not in row and "color_hex" not in row:
+            missing += 1
+            continue
+        color = row.get("color_hex", row.get("color"))
+        if color in (None, "", "N/A"):
+            missing += 1
+    return missing
+
+
+def _direct_master_source_tracks(
+    *,
+    channels: list[dict[str, Any]],
+    routes_by_src: dict[int, list[dict[str, Any]]],
+    track_by_index: dict[int, dict[str, Any]],
+    template_context: dict[str, Any],
+) -> list[dict[str, Any]]:
+    source_tracks: dict[int, dict[str, Any]] = {}
+    for channel in channels:
+        target = _as_int(channel.get("target_mixer_track"))
+        if target in (None, 0) or templates.is_template_bus(template_context, target):
+            continue
+        routes = routes_by_src.get(target, [])
+        if not any(_as_int(route.get("dst")) == 0 for route in routes):
+            continue
+        source_tracks.setdefault(
+            target,
+            {
+                "track": target,
+                "name": _track_name(track_by_index, target),
+                "channels": [],
+            },
+        )["channels"].append(_channel_name(channel))
+    return list(source_tracks.values())
+
+
+def _organizer_group_candidates(
+    direct_master_tracks: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    if len(direct_master_tracks) < 2:
+        return []
+    groups: dict[str, list[dict[str, Any]]] = {
+        "Drum Bus": [],
+        "Bass Bus": [],
+        "Music Bus": [],
+        "Vocal Bus": [],
+        "FX Bus": [],
+    }
+    fallback: list[dict[str, Any]] = []
+    for row in direct_master_tracks:
+        name = str(row.get("name") or "").lower()
+        if any(token in name for token in ("kick", "snare", "hat", "drum", "perc", "clap")):
+            groups["Drum Bus"].append(row)
+        elif any(token in name for token in ("bass", "sub", "808")):
+            groups["Bass Bus"].append(row)
+        elif any(token in name for token in ("vox", "vocal", "voice", "lead vocal")):
+            groups["Vocal Bus"].append(row)
+        elif any(token in name for token in ("fx", "riser", "impact", "sweep")):
+            groups["FX Bus"].append(row)
+        else:
+            fallback.append(row)
+    if len(fallback) >= 2:
+        groups["Music Bus"].extend(fallback)
+    candidates = []
+    for name, rows in groups.items():
+        if len(rows) < 2:
+            continue
+        candidates.append(
+            {
+                "name": name,
+                "sources": [row["track"] for row in rows if row.get("track") is not None],
+                "source_names": [row["name"] for row in rows],
+                "tool": "fl_group_tracks",
+                "risk": "medium",
+                "requires_bus": True,
+            }
+        )
+    return candidates[:4]
+
+
+def _organizer_findings(
+    *,
+    unnamed_channels: list[dict[str, Any]],
+    routing_cleanup: list[dict[str, Any]],
+    unnamed_patterns: list[dict[str, Any]],
+    unnamed_playlist_tracks: list[dict[str, Any]],
+    duplicate_mixer: list[dict[str, Any]],
+    duplicate_patterns: list[dict[str, Any]],
+    color_readback_missing: int,
+    candidate_groups: list[dict[str, Any]],
+    template_context: dict[str, Any],
+) -> list[dict[str, Any]]:
+    findings = []
+    _append_organizer_finding(
+        findings,
+        "unnamed_channels",
+        "warning",
+        "Default Channel Names",
+        "Channels with empty or default-looking names.",
+        unnamed_channels,
+    )
+    _append_organizer_finding(
+        findings,
+        "routing_cleanup",
+        "critical",
+        "Channels Need Mixer Targets",
+        "Channels routed only to Master or with unknown routing.",
+        routing_cleanup,
+    )
+    _append_organizer_finding(
+        findings,
+        "unnamed_patterns",
+        "warning",
+        "Default Pattern Names",
+        "Patterns with empty or default-looking names.",
+        unnamed_patterns,
+    )
+    _append_organizer_finding(
+        findings,
+        "unnamed_playlist_tracks",
+        "info",
+        "Playlist Track Names",
+        "Playlist tracks with empty or default-looking names.",
+        unnamed_playlist_tracks,
+    )
+    _append_organizer_finding(
+        findings,
+        "duplicate_mixer_names",
+        "warning",
+        "Duplicate Mixer Names",
+        "Mixer tracks sharing the same visible name.",
+        duplicate_mixer,
+    )
+    _append_organizer_finding(
+        findings,
+        "duplicate_pattern_names",
+        "warning",
+        "Duplicate Pattern Names",
+        "Patterns sharing the same visible name.",
+        duplicate_patterns,
+    )
+    if color_readback_missing:
+        findings.append(
+            {
+                "id": "color_readback_missing",
+                "severity": "info",
+                "title": "Color Readback Limited",
+                "detail": "Some rows did not include color data in the read-only snapshot.",
+                "count": color_readback_missing,
+                "items": [],
+            }
+        )
+    if candidate_groups:
+        findings.append(
+            {
+                "id": "grouping_candidates",
+                "severity": "info",
+                "title": "Possible Mixer Groups",
+                "detail": "Direct Master source tracks could be grouped after bus review.",
+                "count": len(candidate_groups),
+                "items": candidate_groups,
+            }
+        )
+    compact_template = templates.compact_context(template_context)
+    if compact_template:
+        findings.append(
+            {
+                "id": "template_context",
+                "severity": "ok",
+                "title": "Template Context Detected",
+                "detail": f"{compact_template.get('template_name')} structure is preserved.",
+                "count": 1,
+                "items": [],
+            }
+        )
+    if not findings:
+        findings.append(
+            {
+                "id": "organizer_clear",
+                "severity": "ok",
+                "title": "No Organizer Blockers",
+                "detail": "The read-only organizer scan did not find naming or routing cleanup.",
+                "count": 0,
+                "items": [],
+            }
+        )
+    return findings
+
+
+def _append_organizer_finding(
+    findings: list[dict[str, Any]],
+    finding_id: str,
+    severity: str,
+    title: str,
+    detail: str,
+    items: list[dict[str, Any]],
+) -> None:
+    if not items:
+        return
+    findings.append(
+        {
+            "id": finding_id,
+            "severity": severity,
+            "title": title,
+            "detail": detail,
+            "count": len(items),
+            "items": items[:8],
+        }
+    )
+
+
+def _organizer_cleanup_steps(
+    *,
+    unnamed_channels: list[dict[str, Any]],
+    routing_cleanup: list[dict[str, Any]],
+    duplicate_mixer: list[dict[str, Any]],
+    unnamed_patterns: list[dict[str, Any]],
+    candidate_groups: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    steps = []
+    for item in routing_cleanup[:6]:
+        channel = item.get("index")
+        if channel is None:
+            continue
+        steps.append(
+            _organizer_step(
+                step_id=f"route_channel_{channel}",
+                kind="channel_routing",
+                priority="high",
+                title=f"Route channel {channel} to a free mixer track",
+                detail="Creates a one-step routing proposal using an existing free mixer track.",
+                tool="fl_apply_project_cleanup_step",
+                params={"routing": [{"channel": channel, "mode": "free"}], "approved": True},
+                risk="low",
+            )
+        )
+    for item in unnamed_channels[:6]:
+        channel = item.get("index")
+        if channel is None:
+            continue
+        suggested = _suggest_organizer_channel_name(item)
+        steps.append(
+            _organizer_step(
+                step_id=f"rename_channel_{channel}",
+                kind="channel_naming",
+                priority="medium",
+                title=f"Rename channel {channel} to {suggested}",
+                detail="Uses the current channel type and mixer target as naming evidence.",
+                tool="fl_apply_project_cleanup_step",
+                params={
+                    "renames": [{"type": "channel", "index": channel, "name": suggested}],
+                    "approved": True,
+                },
+                risk="low",
+            )
+        )
+    for item in duplicate_mixer[:4]:
+        track = item.get("index")
+        if track is None:
+            continue
+        steps.append(
+            _organizer_step(
+                step_id=f"rename_mixer_{track}",
+                kind="mixer_naming",
+                priority="low",
+                title=f"Rename mixer track {track} to {item.get('suggested_name')}",
+                detail="Avoids duplicate mixer labels while preserving the original name.",
+                tool="fl_apply_project_cleanup_step",
+                params={
+                    "renames": [
+                        {
+                            "type": "mixer",
+                            "index": track,
+                            "name": item.get("suggested_name"),
+                        }
+                    ],
+                    "approved": True,
+                },
+                risk="low",
+            )
+        )
+    for item in unnamed_patterns[:4]:
+        pattern = item.get("index")
+        if pattern is None:
+            continue
+        steps.append(
+            _organizer_step(
+                step_id=f"rename_pattern_{pattern}",
+                kind="pattern_naming",
+                priority="low",
+                title=f"Rename pattern {pattern}",
+                detail="Pattern names use the pattern domain tool and need the same approval flow.",
+                tool="fl_pattern",
+                params={"action": "set_name", "index": pattern, "name": f"Pattern {pattern}"},
+                risk="low",
+            )
+        )
+    for group in candidate_groups[:2]:
+        steps.append(
+            _organizer_step(
+                step_id=f"group_{str(group.get('name', 'bus')).lower().replace(' ', '_')}",
+                kind="mixer_grouping",
+                priority="medium",
+                title=f"Prepare {group.get('name')}",
+                detail="Select an existing bus track before applying grouped routing.",
+                tool="fl_group_tracks",
+                params={
+                    "sources": group.get("sources", []),
+                    "bus": "select_existing_bus",
+                    "name": group.get("name"),
+                    "approved": True,
+                },
+                risk="medium",
+            )
+        )
+    return steps[:12]
+
+
+def _organizer_step(
+    *,
+    step_id: str,
+    kind: str,
+    priority: str,
+    title: str,
+    detail: str,
+    tool: str,
+    params: dict[str, Any],
+    risk: str,
+) -> dict[str, Any]:
+    return {
+        "id": step_id,
+        "kind": kind,
+        "priority": priority,
+        "title": title,
+        "detail": detail,
+        "tool": tool,
+        "params": params,
+        "risk": risk,
+        "requires_explicit_approval": True,
+        "readback": "Read back the affected channel, mixer, pattern, or route after applying.",
+        "rollback": "Rollback through the MCP changelog if the result is not intended.",
+    }
+
+
+def _suggest_organizer_channel_name(item: dict[str, Any]) -> str:
+    target_name = str(item.get("target_name") or "").strip()
+    if target_name and target_name.lower() != "master" and not target_name.startswith("Insert "):
+        return target_name
+    idx = item.get("index")
+    kind = str(item.get("kind") or "channel").strip().lower()
+    if kind == "audioclip":
+        return f"Audio Clip {idx}"
+    if kind == "genplug":
+        return f"Instrument {idx}"
+    return f"Channel {idx}"
+
+
+def _organizer_color_standard_rules(
+    channels: list[dict[str, Any]],
+    mixer_tracks: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    rules = []
+    for row in channels[:6]:
+        idx = _organizer_item_index(row)
+        if idx is None:
+            continue
+        ctype = _channel_type_label(row).lower()
+        color = "#55EF87" if "audio" in ctype else "#27D7FF"
+        rules.append({"type": "channel", "index": idx, "hex": color})
+    bus_tracks = [
+        row for row in mixer_tracks
+        if _looks_like_bus_name(row.get("name")) and _organizer_item_index(row) is not None
+    ]
+    for row in bus_tracks[:4]:
+        rules.append({"type": "mixer", "index": _organizer_item_index(row), "hex": "#9D75FF"})
+    return rules[:10]
+
+
+def _organizer_standards(
+    naming_rules: list[dict[str, Any]],
+    color_rules: list[dict[str, Any]],
+) -> dict[str, Any]:
+    return {
+        "naming": {
+            "tool": "fl_apply_naming_standard",
+            "style": "dynamic",
+            "suggested_rule_count": len(naming_rules),
+            "rules": [
+                _standard_naming_rule_from_step(step)
+                for step in naming_rules
+                if _standard_naming_rule_from_step(step)
+            ],
+            "approval_required": True,
+        },
+        "color": {
+            "tool": "fl_apply_color_standard",
+            "style": "dynamic",
+            "suggested_rule_count": len(color_rules),
+            "rules": color_rules,
+            "approval_required": True,
+        },
+    }
+
+
+def _standard_naming_rule_from_step(step: dict[str, Any]) -> dict[str, Any] | None:
+    renames = step.get("params", {}).get("renames")
+    if not isinstance(renames, list) or not renames:
+        return None
+    first = renames[0]
+    if not isinstance(first, dict):
+        return None
+    return {
+        "type": first.get("type"),
+        "index": first.get("index"),
+        "name": first.get("name"),
+    }
+
+
+def _organizer_guided_context(
+    findings: list[dict[str, Any]],
+    cleanup_steps: list[dict[str, Any]],
+) -> dict[str, Any]:
+    next_step = next((step for step in cleanup_steps if step.get("priority") == "high"), None)
+    if next_step is None and cleanup_steps:
+        next_step = cleanup_steps[0]
+    if next_step:
+        return {
+            "state": "ready",
+            "priority": next_step.get("priority", "medium").title(),
+            "next_issue": next_step.get("title"),
+            "next_tool": next_step.get("tool"),
+            "next_step_id": next_step.get("id"),
+            "steps": _organizer_guided_steps(active_index=1),
+        }
+    ok_finding = next((finding for finding in findings if finding.get("severity") == "ok"), None)
+    return {
+        "state": "clear",
+        "priority": "Review",
+        "next_issue": ok_finding.get("title") if ok_finding else "No cleanup step is queued.",
+        "next_tool": None,
+        "next_step_id": None,
+        "steps": _organizer_guided_steps(active_index=0),
+    }
+
+
+def _organizer_guided_steps(active_index: int) -> list[dict[str, Any]]:
+    labels = [
+        ("Scan", "fl_analyze_project_organization"),
+        ("Plan", "fl_plan_project_cleanup"),
+        ("Approve One Step", "User confirmation"),
+        ("Apply", "fl_apply_project_cleanup_step"),
+        ("Read Back", "MCP readback and rollback note"),
+    ]
+    return [
+        {
+            "label": label,
+            "tool": tool,
+            "state": (
+                "active"
+                if index == active_index
+                else ("done" if index < active_index else "pending")
+            ),
+        }
+        for index, (label, tool) in enumerate(labels)
+    ]
+
+
+def _organizer_detail_rows(
+    *,
+    channels: list[dict[str, Any]],
+    mixer_tracks: list[dict[str, Any]],
+    patterns: list[dict[str, Any]],
+    playlist_tracks: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for row in channels[:18]:
+        rows.append(
+            {
+                "area": "Channel",
+                "index": _organizer_item_index(row),
+                "name": _channel_name(row),
+                "status": "Needs name" if _looks_default_channel_name(row.get("name")) else "Named",
+                "detail": _organizer_route_detail(row),
+            }
+        )
+    for row in mixer_tracks[:12]:
+        idx = _organizer_item_index(row)
+        rows.append(
+            {
+                "area": "Mixer",
+                "index": idx,
+                "name": _display_track_name(idx or 0, row.get("name")),
+                "status": "Default" if _is_default_mixer_name(idx, row.get("name")) else "Named",
+                "detail": "Bus-like" if _looks_like_bus_name(row.get("name")) else "Insert",
+            }
+        )
+    for row in patterns[:12]:
+        rows.append(
+            {
+                "area": "Pattern",
+                "index": _organizer_item_index(row),
+                "name": str(row.get("name") or "").strip() or "Unnamed pattern",
+                "status": "Needs name" if _looks_default_named_item(row, "pattern") else "Named",
+                "detail": f"Color: {safe_debug_value(row.get('color'))}",
+            }
+        )
+    for row in playlist_tracks[:8]:
+        rows.append(
+            {
+                "area": "Playlist",
+                "index": _organizer_item_index(row),
+                "name": str(row.get("name") or "").strip() or "Unnamed playlist track",
+                "status": "Needs name"
+                if _looks_default_named_item(row, "playlist_track")
+                else "Named",
+                "detail": "Muted" if row.get("mute") else "Visible",
+            }
+        )
+    return rows[:48]
+
+
+def _organizer_route_detail(row: dict[str, Any]) -> str:
+    target = _as_int(row.get("target_mixer_track"))
+    if target is None or target == 0:
+        return "No mixer target"
+    target_name = str(row.get("target_name") or "").strip()
+    return f"{target_name} ({target})" if target_name else f"Track {target}"
+
+
+def safe_debug_value(value: Any) -> str:
+    if value in (None, ""):
+        return "N/A"
+    return str(value)
+
+
+def _organizer_score(
+    *,
+    unnamed_channels: int,
+    routing_cleanup: int,
+    unnamed_patterns: int,
+    unnamed_playlist_tracks: int,
+    duplicate_mixer: int,
+    duplicate_patterns: int,
+    grouping_candidates: int,
+) -> int:
+    penalty = (
+        routing_cleanup * 12
+        + unnamed_channels * 5
+        + unnamed_patterns * 4
+        + unnamed_playlist_tracks * 2
+        + duplicate_mixer * 5
+        + duplicate_patterns * 4
+        + grouping_candidates * 3
+    )
+    return max(0, min(100, 100 - penalty))
+
+
+def _organizer_health_label(score: int) -> str:
+    if score >= 90:
+        return "Organized"
+    if score >= 75:
+        return "Needs Cleanup"
+    return "At Risk"
+
+
 def _run_routing_audit(state: ControlCenterState) -> dict[str, Any]:
     """Run the read-only Routing Audit workflow for the Control Center UI."""
     with state.lock:
@@ -1911,6 +2892,8 @@ def _handler_factory(state: ControlCenterState):
                 self._json(_run_mix_review(state))
             elif self.path == "/api/workflows/low-end-analysis":
                 self._json(_run_low_end_analysis(state))
+            elif self.path == "/api/workflows/project-organizer":
+                self._json(_run_project_organizer(state))
             elif self.path == "/api/workflows/routing-audit":
                 self._json(_run_routing_audit(state))
             else:

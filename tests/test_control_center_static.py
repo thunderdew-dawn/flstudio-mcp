@@ -968,3 +968,569 @@ assert.match(textTree(elements.get("routing-route-table")), /Vocal Bus/);
 assert.match(textTree(elements.get("routing-track-table")), /Vocal Bus/);
 """
     )
+
+
+def test_control_center_static_project_organizer_render() -> None:
+    _run_node_dom_check(
+        r"""
+const assert = require("assert");
+const fs = require("fs");
+const vm = require("vm");
+
+class ClassList {
+  constructor(element) {
+    this.element = element;
+    this.values = new Set();
+  }
+
+  setFromString(value) {
+    this.values = new Set(String(value || "").split(/\s+/).filter(Boolean));
+  }
+
+  sync() {
+    this.element._className = Array.from(this.values).join(" ");
+  }
+
+  add(name) {
+    this.values.add(name);
+    this.sync();
+  }
+
+  remove(name) {
+    this.values.delete(name);
+    this.sync();
+  }
+
+  contains(name) {
+    return this.values.has(name);
+  }
+}
+
+class Element {
+  constructor(tagName = "div", id = "") {
+    this.tagName = tagName.toUpperCase();
+    this.id = id;
+    this.children = [];
+    this.dataset = {};
+    this.disabled = false;
+    this.listeners = {};
+    this.parentElement = null;
+    this.textContent = "";
+    this.colSpan = 1;
+    this._className = "";
+    this.classList = new ClassList(this);
+    this.style = {
+      setProperty(name, value) {
+        this[name] = value;
+      }
+    };
+  }
+
+  set className(value) {
+    this._className = String(value || "");
+    this.classList.setFromString(this._className);
+  }
+
+  get className() {
+    return this._className;
+  }
+
+  append(...nodes) {
+    for (const node of nodes) this.appendChild(node);
+  }
+
+  appendChild(node) {
+    node.parentElement = this;
+    this.children.push(node);
+    return node;
+  }
+
+  addEventListener(name, handler) {
+    this.listeners[name] = handler;
+  }
+}
+
+function textTree(root) {
+  let out = root.textContent || "";
+  for (const child of root.children || []) out += "\n" + textTree(child);
+  return out;
+}
+
+const elements = new Map();
+const root = new Element("div", "root");
+
+function register(id, tagName = "div") {
+  const element = new Element(tagName, id);
+  elements.set(id, element);
+  root.appendChild(element);
+  return element;
+}
+
+for (const id of [
+  "organizer-layout",
+  "run-project-organizer",
+  "organizer-feedback",
+  "organizer-map-state",
+  "organizer-name-total",
+  "organizer-routing-total",
+  "organizer-color-total",
+  "organizer-group-total",
+  "organizer-map-grid",
+  "organizer-score-label",
+  "organizer-score-ring",
+  "organizer-score-value",
+  "organizer-score-caption",
+  "organizer-channel-total",
+  "organizer-pattern-total",
+  "organizer-finding-total",
+  "organizer-proposal-total",
+  "organizer-guided-state",
+  "organizer-next-priority",
+  "organizer-next-issue",
+  "organizer-next-tool",
+  "organizer-guided-steps",
+  "organizer-findings-count",
+  "organizer-finding-list",
+  "organizer-plan-count",
+  "organizer-plan-list",
+  "organizer-standard-count",
+  "organizer-standard-grid",
+  "organizer-grouping-count",
+  "organizer-group-list",
+  "organizer-detail-count",
+  "organizer-detail-table",
+  "organizer-note-count",
+  "organizer-note-list"
+]) {
+  register(id, id === "organizer-detail-table" ? "tbody" : "div");
+}
+
+const document = {
+  createElement: (tagName) => new Element(tagName),
+  getElementById: (id) => elements.get(id) || null,
+  querySelectorAll: () => [],
+  querySelector: () => null
+};
+
+const context = {
+  Blob,
+  URL,
+  clearInterval,
+  console,
+  document,
+  fetch: async () => ({
+    ok: true,
+    headers: { get: () => "application/json" },
+    json: async () => ({})
+  }),
+  navigator: { clipboard: { writeText: async () => undefined } },
+  setInterval,
+  window: { __FLS_PILOT_TEST__: true }
+};
+context.window.document = document;
+
+vm.createContext(context);
+vm.runInContext(fs.readFileSync(process.argv[1], "utf8"), context);
+
+const controls = context.window.flsPilotControlCenter;
+controls.state.projectOrganizer.report = {
+  ok: true,
+  state: "live",
+  generated_at: "2026-06-14T12:00:00Z",
+  summary: {
+    organization_score: 76,
+    health_label: "Needs Cleanup",
+    channels: 8,
+    mixer_tracks: 12,
+    patterns: 5,
+    playlist_tracks: 4,
+    diagnostics: 3,
+    proposed_changes: 4,
+    naming_cleanup: 2,
+    routing_cleanup: 1,
+    color_readback_missing: 6,
+    grouping_candidates: 1
+  },
+  findings: [
+    {
+      id: "unnamed_channels",
+      severity: "warning",
+      title: "Default Channel Names",
+      detail: "Channels with empty or default-looking names.",
+      count: 2
+    },
+    {
+      id: "routing_cleanup",
+      severity: "critical",
+      title: "Channels Need Mixer Targets",
+      detail: "Channels routed only to Master or with unknown routing.",
+      count: 1
+    }
+  ],
+  cleanup_plan: {
+    steps: [
+      {
+        id: "route_channel_1",
+        kind: "channel_routing",
+        priority: "high",
+        title: "Route channel 1 to a free mixer track",
+        detail: "Creates a one-step routing proposal using an existing free mixer track.",
+        tool: "fl_apply_project_cleanup_step",
+        risk: "low",
+        requires_explicit_approval: true
+      },
+      {
+        id: "rename_channel_2",
+        kind: "channel_naming",
+        priority: "medium",
+        title: "Rename channel 2 to Lead",
+        detail: "Uses channel metadata as naming evidence.",
+        tool: "fl_apply_naming_standard",
+        risk: "low",
+        requires_explicit_approval: true
+      }
+    ]
+  },
+  guided: {
+    state: "ready",
+    priority: "High",
+    next_issue: "Route channel 1 to a free mixer track",
+    next_tool: "fl_apply_project_cleanup_step",
+    steps: [
+      { label: "Scan", tool: "fl_analyze_project_organization", state: "done" },
+      { label: "Plan", tool: "fl_plan_project_cleanup", state: "active" },
+      { label: "Approve One Step", tool: "User confirmation", state: "pending" }
+    ]
+  },
+  standards: {
+    naming: {
+      tool: "fl_apply_naming_standard",
+      style: "dynamic",
+      suggested_rule_count: 2
+    },
+    color: {
+      tool: "fl_apply_color_standard",
+      style: "dynamic",
+      suggested_rule_count: 4
+    }
+  },
+  grouping: {
+    candidate_groups: [
+      {
+        name: "Drum Bus",
+        source_names: ["Kick", "Snare"],
+        tool: "fl_group_tracks"
+      }
+    ]
+  },
+  details: {
+    items: [
+      {
+        area: "Channel",
+        index: 1,
+        name: "Channel 1",
+        status: "Needs name",
+        detail: "No mixer target"
+      },
+      {
+        area: "Mixer",
+        index: 5,
+        name: "Lead",
+        status: "Named",
+        detail: "Insert"
+      }
+    ],
+    notes: [
+      "Project Organizer is read-only in Control Center.",
+      "Apply only one approved cleanup step at a time."
+    ]
+  }
+};
+
+controls.renderProjectOrganizer();
+
+assert.strictEqual(elements.get("run-project-organizer").disabled, false);
+assert.strictEqual(elements.get("organizer-score-value").textContent, "76%");
+assert.strictEqual(elements.get("organizer-routing-total").textContent, "1");
+assert.match(textTree(elements.get("organizer-feedback")), /Last scan/);
+assert.match(textTree(elements.get("organizer-map-grid")), /fl_analyze_project_organization/);
+assert.match(textTree(elements.get("organizer-guided-steps")), /fl_plan_project_cleanup/);
+assert.match(textTree(elements.get("organizer-finding-list")), /Default Channel Names/);
+assert.match(textTree(elements.get("organizer-plan-list")), /fl_apply_project_cleanup_step/);
+assert.match(textTree(elements.get("organizer-standard-grid")), /fl_apply_color_standard/);
+assert.match(textTree(elements.get("organizer-group-list")), /Drum Bus/);
+assert.match(textTree(elements.get("organizer-detail-table")), /No mixer target/);
+assert.match(textTree(elements.get("organizer-note-list")), /read-only/);
+"""
+    )
+
+
+def test_control_center_static_project_health_render() -> None:
+    _run_node_dom_check(
+        r"""
+const assert = require("assert");
+const fs = require("fs");
+const vm = require("vm");
+
+class ClassList {
+  constructor(element) {
+    this.element = element;
+    this.values = new Set();
+  }
+
+  setFromString(value) {
+    this.values = new Set(String(value || "").split(/\s+/).filter(Boolean));
+  }
+
+  sync() {
+    this.element._className = Array.from(this.values).join(" ");
+  }
+
+  add(name) {
+    this.values.add(name);
+    this.sync();
+  }
+
+  remove(name) {
+    this.values.delete(name);
+    this.sync();
+  }
+
+  contains(name) {
+    return this.values.has(name);
+  }
+
+  toggle(name, force) {
+    const enabled = force === undefined ? !this.values.has(name) : Boolean(force);
+    if (enabled) {
+      this.values.add(name);
+    } else {
+      this.values.delete(name);
+    }
+    this.sync();
+    return enabled;
+  }
+}
+
+class Element {
+  constructor(tagName = "div", id = "") {
+    this.tagName = tagName.toUpperCase();
+    this.id = id;
+    this.children = [];
+    this.dataset = {};
+    this.disabled = false;
+    this.listeners = {};
+    this.parentElement = null;
+    this.textContent = "";
+    this._className = "";
+    this.classList = new ClassList(this);
+    this.style = {
+      setProperty(name, value) {
+        this[name] = value;
+      }
+    };
+  }
+
+  set className(value) {
+    this._className = String(value || "");
+    this.classList.setFromString(this._className);
+  }
+
+  get className() {
+    return this._className;
+  }
+
+  append(...nodes) {
+    for (const node of nodes) this.appendChild(node);
+  }
+
+  appendChild(node) {
+    node.parentElement = this;
+    this.children.push(node);
+    return node;
+  }
+
+  addEventListener(name, handler) {
+    this.listeners[name] = handler;
+  }
+}
+
+function textTree(root) {
+  let out = root.textContent || "";
+  for (const child of root.children || []) out += "\n" + textTree(child);
+  return out;
+}
+
+const elements = new Map();
+const root = new Element("div", "root");
+
+function register(id, tagName = "div") {
+  const element = new Element(tagName, id);
+  elements.set(id, element);
+  root.appendChild(element);
+  return element;
+}
+
+for (const id of [
+  "health-layout",
+  "run-project-health",
+  "health-feedback",
+  "health-status-label",
+  "health-risk-ring",
+  "health-risk-value",
+  "health-risk-caption",
+  "health-score-value",
+  "health-coverage-value",
+  "health-finding-total",
+  "health-blocker-total",
+  "health-section-count",
+  "health-ready-total",
+  "health-section-grid",
+  "health-warning-count",
+  "health-warning-list",
+  "health-nav-list",
+  "health-note-count",
+  "health-note-list"
+]) {
+  register(id);
+}
+
+const document = {
+  createElement: (tagName) => new Element(tagName),
+  getElementById: (id) => elements.get(id) || null,
+  querySelectorAll: () => [],
+  querySelector: () => null
+};
+
+const context = {
+  Blob,
+  URL,
+  clearInterval,
+  console,
+  document,
+  fetch: async () => ({
+    ok: true,
+    headers: { get: () => "application/json" },
+    json: async () => ({})
+  }),
+  navigator: { clipboard: { writeText: async () => undefined } },
+  setInterval,
+  window: { __FLS_PILOT_TEST__: true }
+};
+context.window.document = document;
+
+vm.createContext(context);
+vm.runInContext(fs.readFileSync(process.argv[1], "utf8"), context);
+
+const controls = context.window.flsPilotControlCenter;
+controls.state.projectHealth.lastRun = "2026-06-14T12:00:00Z";
+controls.state.projectOrganizer.report = {
+  ok: true,
+  summary: {
+    organization_score: 76,
+    health_label: "Needs Cleanup",
+    proposed_changes: 4,
+    routing_cleanup: 1
+  },
+  findings: [
+    {
+      severity: "warning",
+      title: "Default Channel Names",
+      detail: "Channels with empty or default-looking names.",
+      count: 2
+    },
+    {
+      severity: "critical",
+      title: "Channels Need Mixer Targets",
+      detail: "Channels routed only to Master or with unknown routing.",
+      count: 1
+    }
+  ]
+};
+controls.state.mixReview.report = {
+  ok: true,
+  summary: {
+    health_score: 72,
+    health_label: "At Risk",
+    hot_tracks: 1,
+    master_peak_db: 0.2,
+    master_headroom_db: 2.4
+  },
+  findings: [
+    {
+      severity: "high",
+      title: "Clipping",
+      detail: "Lead Vox clips on the loudest section.",
+      track: "Lead Vox"
+    }
+  ]
+};
+controls.state.routingAudit.report = {
+  ok: true,
+  summary: {
+    health_score: 81,
+    health_label: "Needs Review",
+    unrouted_channels: 1,
+    dead_end_tracks: 0,
+    direct_to_master: 1
+  },
+  findings: [
+    {
+      severity: "critical",
+      title: "Unrouted Channels",
+      detail: "FX Riser has no mixer target.",
+      count: 1
+    }
+  ]
+};
+controls.state.lowEndAnalysis.report = {
+  ok: true,
+  summary: {
+    master_headroom_db: 2.4,
+    levels_valid: true
+  },
+  details: {
+    tracks: [
+      {
+        track: 2,
+        name: "Sub Bass",
+        peak_db: -4,
+        pan: 0.42,
+        stereo_sep: 0.5
+      }
+    ],
+    low_end: {
+      findings: [
+        {
+          severity: "medium",
+          title: "Low-End Width Risk",
+          detail: "Sub Bass is wide.",
+          track: "Sub Bass"
+        }
+      ],
+      manual_checks: [
+        {
+          topic: "mono_sum",
+          check: "Mono-sum the loudest section."
+        }
+      ]
+    }
+  }
+};
+
+controls.renderProjectHealth();
+
+assert.strictEqual(elements.get("run-project-health").disabled, false);
+assert.strictEqual(elements.get("health-risk-value").textContent, "22%");
+assert.strictEqual(elements.get("health-score-value").textContent, "78%");
+assert.strictEqual(elements.get("health-coverage-value").textContent, "4/4");
+assert.strictEqual(elements.get("health-ready-total").textContent, "4 ready");
+assert.match(textTree(elements.get("health-feedback")), /No project changes were made/);
+assert.match(textTree(elements.get("health-section-grid")), /Organizer/);
+assert.match(textTree(elements.get("health-section-grid")), /Mix Review/);
+assert.match(textTree(elements.get("health-warning-list")), /Master Peak Over 0 dB/);
+assert.match(textTree(elements.get("health-warning-list")), /Channels Need Mixer Targets/);
+assert.match(textTree(elements.get("health-nav-list")), /Routing/);
+assert.match(textTree(elements.get("health-note-list")), /warning finding/);
+"""
+    )

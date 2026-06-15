@@ -47,14 +47,8 @@
           <button class="nav-item active" type="button" data-target="overview" id="nav-overview">
             <span aria-hidden="true">&#x25a4;</span><span>Overview</span>
           </button>
-          <button class="nav-item" type="button" data-target="connection_check" id="nav-connection-check">
-            <span aria-hidden="true">&#x2713;</span><span>Connection Check</span>
-          </button>
           <button class="nav-item" type="button" data-target="setup" id="nav-setup">
             <span aria-hidden="true">&#x2699;</span><span>Setup Doctor</span>
-          </button>
-          <button class="nav-item" type="button" data-target="runtime" id="nav-runtime">
-            <span aria-hidden="true">&#x25b6;</span><span>Services</span>
           </button>
 
           <!-- Subgroup: Support -->
@@ -96,7 +90,7 @@
               <button class="nav-item nav-item-preview" type="button" data-target="producer_health" id="nav-health">
                 <span aria-hidden="true">&#x25f0;</span>
                 <span>Health</span>
-                <span class="nav-badge badge-ok">ok</span>
+                <span class="nav-badge badge-ok">beta</span>
               </button>
               <button class="nav-item nav-item-preview" type="button" data-target="producer_preflight"
                 id="nav-preflight">
@@ -108,7 +102,7 @@
                 id="nav-organizer">
                 <span aria-hidden="true">&#x25f0;</span>
                 <span>Organizer</span>
-                <span class="nav-badge badge-ok">ok</span>
+                <span class="nav-badge badge-ok">beta</span>
               </button>
               <button class="nav-item nav-item-preview" type="button" data-target="producer_jam_2_project"
                 id="nav-jam-2-project">
@@ -130,17 +124,17 @@
                 id="nav-mix-review">
                 <span aria-hidden="true">&#x25f0;</span>
                 <span>Mix Review</span>
-                <span class="nav-badge badge-ok">ok</span>
+                <span class="nav-badge badge-ok">beta</span>
               </button>
               <button class="nav-item nav-item-preview" type="button" data-target="producer_routing" id="nav-routing">
                 <span aria-hidden="true">&#x25f0;</span>
                 <span>Routing Audit</span>
-                <span class="nav-badge badge-ok">ok</span>
+                <span class="nav-badge badge-ok">beta</span>
               </button>
               <button class="nav-item nav-item-preview" type="button" data-target="producer_low_end" id="nav-low-end">
                 <span aria-hidden="true">&#x25f0;</span>
                 <span>Low-End Analysis</span>
-                <span class="nav-badge badge-ok">ok</span>
+                <span class="nav-badge badge-ok">beta</span>
               </button>
               <button class="nav-item nav-item-preview" type="button" data-target="producer_sidechaining"
                 id="nav-sidechaining">
@@ -212,26 +206,18 @@
         </div>
       </section>
 
-      <!-- Status Cards (4-up) -->
+      <!-- 1. Status Cards (4-up) -->
       <div class="overview-cards" id="overview-status-cards" aria-label="Setup status">
         <!-- Populated by renderOverviewCards() -->
       </div>
 
-      <!-- Beta Card -->
-      <div class="beta-card" role="note">
-        <div class="beta-card-header">
-          <span class="beta-card-icon" aria-hidden="true">&#x25c6;</span>
-          <strong>Beta Status</strong>
-          <span class="badge badge-beta">Beta</span>
-        </div>
-        <p>This FLS Pilot Control Center currently focuses on setup, diagnostics, safe connection checks,
-          AI&#8209;client
-          configuration. Other panels are still preview areas.</p>
+      <!-- 1b. Connection Check Details -->
+      <div class="grid" id="connection-check-grid" style="margin-bottom: 24px;">
+        <!-- Populated by renderConnectionCheck() -->
       </div>
 
-      <!-- Connection Details (collapsible) -->
-      <details class="connection-details-section" id="connection-details">
-        <summary class="connection-details-summary">Connection Details</summary>
+      <!-- 2. Connection Details (always open) -->
+      <div class="connection-details-section" id="connection-details" style="margin-bottom: 24px;">
         <p class="connection-details-subtitle">Verified: fls&#8209;pilot can safely read basic data from FL Studio.</p>
 
         <section class="grid" id="project-data-grid">
@@ -301,20 +287,10 @@
             <div class="evidence-table" id="evidence-table"></div>
           </article>
         </section>
-      </details>
-    </main>
-
-    <!-- ── Connection Check ──────────────────────────────────────────────── -->
-    <main class="status-report" id="connection_check" style="display: none;">
-      <section class="hero">
-        <div>
-          <h1>Connection Check</h1>
-          <p>Quick health check for FL Studio, services, and AI client readiness.</p>
-        </div>
-      </section>
-      <div class="grid" id="connection-check-grid">
-        <!-- Populated by renderConnectionCheck() -->
       </div>
+
+      <!-- 3. Services -->
+      <section class="grid" id="runtime-status" style="margin-bottom: 24px;"></section>
     </main>
 
     <!-- ── Setup Doctor ───────────────────────────────────────────────────── -->
@@ -326,17 +302,6 @@
         </div>
       </section>
       <section class="grid" id="setup-steps"></section>
-    </main>
-
-    <!-- ── Services ──────────────────────────────────────────────────────── -->
-    <main class="status-report" id="runtime" style="display: none;">
-      <section class="hero">
-        <div>
-          <h1>Services</h1>
-          <p>Start and stop services launched by this Control Center. For full logs and port details, use Advanced.</p>
-        </div>
-      </section>
-      <section class="grid" id="runtime-status"></section>
     </main>
 
     <!-- ── AI Clients ─────────────────────────────────────────────────────── -->
@@ -389,7 +354,7 @@
     <main class="status-report" id="producer_mix_review" style="display: none;">
       <section class="hero">
         <div>
-          <h1>Mix Review <span class="badge badge-read-only">Read-only</span></h1>
+          <h1>Mix Review <span class="badge badge-pro-preview">Preview</span></h1>
           <p>Headroom, clipping, tonal balance, stereo width, and mix-action risks.</p>
         </div>
         <div class="hero-actions">
@@ -542,7 +507,7 @@
     <main class="status-report" id="producer_low_end" style="display: none;">
       <section class="hero">
         <div>
-          <h1>Low-End Analysis <span class="badge badge-read-only">Read-only</span></h1>
+          <h1>Low-End Analysis <span class="badge badge-pro-preview">Preview</span></h1>
           <p>Kick, bass, sub focus, stereo safety, and Master headroom risk.</p>
         </div>
         <div class="hero-actions">
@@ -674,7 +639,7 @@
     <main class="status-report" id="producer_routing" style="display: none;">
       <section class="hero">
         <div>
-          <h1>Routing Audit <span class="badge badge-read-only">Read-only</span></h1>
+          <h1>Routing Audit <span class="badge badge-pro-preview">Preview</span></h1>
           <p>Signal flow, bus structure, direct Master paths, and unrouted sources.</p>
         </div>
         <div class="hero-actions">
@@ -824,29 +789,157 @@
       </section>
     </main>
 
-    <!-- ── Project Organizer Preview ─────────────────────────────────────── -->
+    <!-- ── Project Organizer ─────────────────────────────────────────────── -->
     <main class="status-report" id="producer_organizer" style="display: none;">
       <section class="hero">
         <div>
-          <h1>Project Organizer <span class="badge badge-pro-preview">Pro Preview</span></h1>
-          <p>Suggest safe cleanup actions before anything is changed.</p>
+          <h1>Project Organizer <span class="badge badge-pro-preview">Preview</span></h1>
+          <p>Names, colors, routing cleanup, guided steps, standards, and mixer grouping proposals.</p>
+        </div>
+        <div class="hero-actions">
+          <button class="ghost-button primary-action" id="run-project-organizer" type="button">Run Organizer</button>
+          <button class="ghost-button" id="organizer-refresh-status" type="button">Refresh Status</button>
         </div>
       </section>
-      <div class="producer-preview-card panel">
-        <div class="panel-heading">
-          <h2>About Project Organizer</h2>
-        </div>
-        <div class="producer-preview-content">
-          <p>Project Organizer will scan your project and suggest safe naming, color, and routing cleanup actions. All
-            suggestions are presented before any changes are applied.</p>
-          <div class="preview-notice">
-            <span class="preview-notice-icon" aria-hidden="true">ℹ</span>
-            <p>This feature is not active in this beta. Current Control Center features focus on setup, diagnostics,
-              safe
-              connection checks, and AI&#8209;client configuration.</p>
+
+      <div id="organizer-feedback" class="organizer-feedback" role="status"></div>
+
+      <section class="organizer-layout" id="organizer-layout">
+        <article class="panel organizer-board-panel">
+          <div class="panel-heading">
+            <h2>Cleanup Map</h2>
+            <span class="badge badge-neutral" id="organizer-map-state">Idle</span>
           </div>
-        </div>
-      </div>
+          <div class="organizer-health-strip">
+            <div>
+              <span>Names</span>
+              <strong id="organizer-name-total">--</strong>
+            </div>
+            <div>
+              <span>Routing</span>
+              <strong id="organizer-routing-total">--</strong>
+            </div>
+            <div>
+              <span>Colors</span>
+              <strong id="organizer-color-total">--</strong>
+            </div>
+            <div>
+              <span>Groups</span>
+              <strong id="organizer-group-total">--</strong>
+            </div>
+          </div>
+          <div class="organizer-map-grid" id="organizer-map-grid"></div>
+        </article>
+
+        <aside class="organizer-side-stack">
+          <article class="panel organizer-score-panel">
+            <div class="panel-heading">
+              <h2>Organization</h2>
+              <span class="badge badge-neutral" id="organizer-score-label">Idle</span>
+            </div>
+            <div class="organizer-score-body">
+              <div class="organizer-score-ring" id="organizer-score-ring" style="--score: 0;">
+                <strong id="organizer-score-value">--</strong>
+                <span id="organizer-score-caption">Not run</span>
+              </div>
+              <dl class="organizer-score-stats">
+                <div>
+                  <dt>Channels</dt>
+                  <dd id="organizer-channel-total">--</dd>
+                </div>
+                <div>
+                  <dt>Patterns</dt>
+                  <dd id="organizer-pattern-total">--</dd>
+                </div>
+                <div>
+                  <dt>Findings</dt>
+                  <dd id="organizer-finding-total">--</dd>
+                </div>
+                <div>
+                  <dt>Proposals</dt>
+                  <dd id="organizer-proposal-total">--</dd>
+                </div>
+              </dl>
+            </div>
+          </article>
+
+          <article class="panel organizer-guided-panel">
+            <div class="panel-heading">
+              <h2>Guided Cleanup</h2>
+              <span class="badge badge-neutral" id="organizer-guided-state">Idle</span>
+            </div>
+            <div class="organizer-guided-body">
+              <div class="organizer-next-step">
+                <span id="organizer-next-priority">--</span>
+                <strong id="organizer-next-issue">Run Organizer to get the next step.</strong>
+                <em id="organizer-next-tool">No tool selected.</em>
+              </div>
+              <div class="organizer-guided-steps" id="organizer-guided-steps"></div>
+            </div>
+          </article>
+        </aside>
+
+        <article class="panel organizer-findings-panel">
+          <div class="panel-heading">
+            <h2>Findings</h2>
+            <span class="badge badge-neutral" id="organizer-findings-count">0</span>
+          </div>
+          <div class="organizer-finding-list" id="organizer-finding-list"></div>
+        </article>
+
+        <article class="panel organizer-plan-panel">
+          <div class="panel-heading">
+            <h2>Cleanup Plan</h2>
+            <span class="badge badge-neutral" id="organizer-plan-count">0</span>
+          </div>
+          <div class="organizer-plan-list" id="organizer-plan-list"></div>
+        </article>
+
+        <article class="panel organizer-standards-panel">
+          <div class="panel-heading">
+            <h2>Standards</h2>
+            <span class="badge badge-neutral" id="organizer-standard-count">0</span>
+          </div>
+          <div class="organizer-standard-grid" id="organizer-standard-grid"></div>
+        </article>
+
+        <article class="panel organizer-grouping-panel">
+          <div class="panel-heading">
+            <h2>Mixer Groups</h2>
+            <span class="badge badge-neutral" id="organizer-grouping-count">0</span>
+          </div>
+          <div class="organizer-group-list" id="organizer-group-list"></div>
+        </article>
+
+        <article class="panel organizer-details-panel">
+          <div class="panel-heading">
+            <h2>Project Detail</h2>
+            <span class="badge badge-neutral" id="organizer-detail-count">0</span>
+          </div>
+          <div class="organizer-table-wrap">
+            <table class="organizer-table">
+              <thead>
+                <tr>
+                  <th>Area</th>
+                  <th>Index</th>
+                  <th>Name</th>
+                  <th>Status</th>
+                  <th>Detail</th>
+                </tr>
+              </thead>
+              <tbody id="organizer-detail-table"></tbody>
+            </table>
+          </div>
+        </article>
+
+        <article class="panel organizer-notes-panel">
+          <div class="panel-heading">
+            <h2>Safety Notes</h2>
+            <span class="badge badge-neutral" id="organizer-note-count">0</span>
+          </div>
+          <div class="organizer-note-list" id="organizer-note-list"></div>
+        </article>
+      </section>
     </main>
 
     <!-- ── Safe Apply Preview ────────────────────────────────────────────── -->
@@ -871,6 +964,189 @@
               connection checks, and AI&#8209;client configuration.</p>
           </div>
         </div>
+      </div>
+    </main>
+
+    <!-- ── Health ────────────────────────────────────────────────────────── -->
+    <main class="status-report" id="producer_health" style="display: none;">
+      <section class="hero">
+        <div>
+          <h1>Health <span class="badge badge-pro-preview">Preview</span></h1>
+          <p>Risk, blockers, and next actions across Organizer, Mix Review, Routing, and Low-End.</p>
+        </div>
+        <div class="hero-actions">
+          <button class="ghost-button primary-action" id="run-project-health" type="button">Run Health Scan</button>
+          <button class="ghost-button" id="health-refresh-status" type="button">Refresh Status</button>
+        </div>
+      </section>
+
+      <div id="health-feedback" class="health-feedback" role="status"></div>
+
+      <section class="health-layout" id="health-layout">
+        <article class="panel health-overview-panel">
+          <div class="panel-heading">
+            <h2>Project Health</h2>
+            <span class="badge badge-neutral" id="health-status-label">Idle</span>
+          </div>
+          <div class="health-score-body">
+            <div class="health-risk-ring" id="health-risk-ring" style="--risk: 0;">
+              <strong id="health-risk-value">--</strong>
+              <span id="health-risk-caption">Not run</span>
+            </div>
+            <dl class="health-score-stats">
+              <div>
+                <dt>Score</dt>
+                <dd id="health-score-value">--</dd>
+              </div>
+              <div>
+                <dt>Coverage</dt>
+                <dd id="health-coverage-value">0/4</dd>
+              </div>
+              <div>
+                <dt>Findings</dt>
+                <dd id="health-finding-total">--</dd>
+              </div>
+              <div>
+                <dt>Blockers</dt>
+                <dd id="health-blocker-total">--</dd>
+              </div>
+            </dl>
+          </div>
+        </article>
+
+        <article class="panel health-section-panel">
+          <div class="panel-heading">
+            <h2>Sections</h2>
+            <span class="badge badge-neutral" id="health-section-count">0/4</span>
+          </div>
+          <div class="health-section-grid" id="health-section-grid"></div>
+        </article>
+
+        <aside class="health-side-stack">
+          <article class="panel health-warnings-panel">
+            <div class="panel-heading">
+              <h2>Top Warnings</h2>
+              <span class="badge badge-neutral" id="health-warning-count">0</span>
+            </div>
+            <div class="health-warning-list" id="health-warning-list"></div>
+          </article>
+
+          <article class="panel health-navigation-panel">
+            <div class="panel-heading">
+              <h2>Detail Views</h2>
+              <span class="badge badge-neutral" id="health-ready-total">0 ready</span>
+            </div>
+            <div class="health-nav-list" id="health-nav-list"></div>
+          </article>
+        </aside>
+
+        <article class="panel health-notes-panel">
+          <div class="panel-heading">
+            <h2>Health Notes</h2>
+            <span class="badge badge-neutral" id="health-note-count">0</span>
+          </div>
+          <div class="health-note-list" id="health-note-list"></div>
+        </article>
+      </section>
+    </main>
+
+    <!-- ── Preflight Preview ─────────────────────────────────────────────── -->
+    <main class="status-report" id="producer_preflight" style="display: none;">
+      <section class="hero">
+        <div>
+          <h1>Preflight <span class="badge badge-pro-preview">Preview</span></h1>
+          <p>Preflight checks before exporting or publishing.</p>
+        </div>
+      </section>
+      <div class="beta-card" role="note">
+        <div class="beta-card-header">
+          <span class="beta-card-icon" aria-hidden="true">&#x25c6;</span>
+          <strong>Beta Status</strong>
+          <span class="badge badge-beta">Beta</span>
+        </div>
+        <p>This FLS Pilot Control Center currently focuses on setup, diagnostics, safe connection checks,
+          AI&#8209;client
+          configuration. Other panels are still preview areas.</p>
+      </div>
+    </main>
+
+    <!-- ── Jam 2 Project Preview ─────────────────────────────────────────── -->
+    <main class="status-report" id="producer_jam_2_project" style="display: none;">
+      <section class="hero">
+        <div>
+          <h1>Jam 2 Project <span class="badge badge-planned">Planned</span></h1>
+          <p>Convert your jam sessions into structured project files.</p>
+        </div>
+      </section>
+      <div class="beta-card" role="note">
+        <div class="beta-card-header">
+          <span class="beta-card-icon" aria-hidden="true">&#x25c6;</span>
+          <strong>Beta Status</strong>
+          <span class="badge badge-beta">Beta</span>
+        </div>
+        <p>This FLS Pilot Control Center currently focuses on setup, diagnostics, safe connection checks,
+          AI&#8209;client
+          configuration. Other panels are still preview areas.</p>
+      </div>
+    </main>
+
+    <!-- ── Sidechaining Preview ──────────────────────────────────────────── -->
+    <main class="status-report" id="producer_sidechaining" style="display: none;">
+      <section class="hero">
+        <div>
+          <h1>Sidechaining <span class="badge badge-planned">Planned</span></h1>
+          <p>Automated sidechain routing and configuration.</p>
+        </div>
+      </section>
+      <div class="beta-card" role="note">
+        <div class="beta-card-header">
+          <span class="beta-card-icon" aria-hidden="true">&#x25c6;</span>
+          <strong>Beta Status</strong>
+          <span class="badge badge-beta">Beta</span>
+        </div>
+        <p>This FLS Pilot Control Center currently focuses on setup, diagnostics, safe connection checks,
+          AI&#8209;client
+          configuration. Other panels are still preview areas.</p>
+      </div>
+    </main>
+
+    <!-- ── Plugin Assistant Preview ──────────────────────────────────────── -->
+    <main class="status-report" id="producer_plugin_assistant" style="display: none;">
+      <section class="hero">
+        <div>
+          <h1>Plugin Assistant <span class="badge badge-planned">Planned</span></h1>
+          <p>AI-powered suggestions for plugin parameters and chains.</p>
+        </div>
+      </section>
+      <div class="beta-card" role="note">
+        <div class="beta-card-header">
+          <span class="beta-card-icon" aria-hidden="true">&#x25c6;</span>
+          <strong>Beta Status</strong>
+          <span class="badge badge-beta">Beta</span>
+        </div>
+        <p>This FLS Pilot Control Center currently focuses on setup, diagnostics, safe connection checks,
+          AI&#8209;client
+          configuration. Other panels are still preview areas.</p>
+      </div>
+    </main>
+
+    <!-- ── Preset Assistant Preview ──────────────────────────────────────── -->
+    <main class="status-report" id="producer_preset_assistant" style="display: none;">
+      <section class="hero">
+        <div>
+          <h1>Preset Assistant <span class="badge badge-planned">Planned</span></h1>
+          <p>Discover and organize presets intelligently.</p>
+        </div>
+      </section>
+      <div class="beta-card" role="note">
+        <div class="beta-card-header">
+          <span class="beta-card-icon" aria-hidden="true">&#x25c6;</span>
+          <strong>Beta Status</strong>
+          <span class="badge badge-beta">Beta</span>
+        </div>
+        <p>This FLS Pilot Control Center currently focuses on setup, diagnostics, safe connection checks,
+          AI&#8209;client
+          configuration. Other panels are still preview areas.</p>
       </div>
     </main>
 
@@ -937,7 +1213,7 @@
       <div>
         <span aria-hidden="true">&#x25a3;</span>
         <strong>FLS Pilot Control Center</strong>
-          <span>Setup, diagnostics, and service management for FL Studio.</span>
+        <span>Setup, diagnostics, and service management for FL Studio.</span>
       </div>
       <div id="footer-cc-port" style="margin-left: auto; font-size: 11px; opacity: 0.8;"></div>
     </footer>

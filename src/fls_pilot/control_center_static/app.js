@@ -17,6 +17,16 @@ const state = {
     report: null,
     error: null
   },
+  projectOrganizer: {
+    loading: false,
+    report: null,
+    error: null
+  },
+  projectHealth: {
+    loading: false,
+    error: null,
+    lastRun: null
+  },
   setupFeedback: {},
   actionFeedback: {},
   evidenceKeys: new Set()
@@ -156,6 +166,8 @@ function render() {
   renderMixReview();
   renderLowEndAnalysis();
   renderRoutingAudit();
+  renderProjectOrganizer();
+  renderProjectHealth();
   renderLogsHistory();
   renderPorts();
   renderConnection();
@@ -197,7 +209,7 @@ function renderOverviewCards(data) {
   const bridgeLabel = live ? "Connected" : "Not Connected";
   const bridgeDesc = live
     ? `FL Studio is responding. ${safeString(bridge.fl_version || data?.project?.fl_version) !== "N/A" ? "Version: " + safeString(bridge.fl_version || data?.project?.fl_version) : "Bridge heartbeat is live."}`
-    : "FL Studio is not sending controller data yet. Run a connection check to diagnose.";
+    : "FL Studio is not sending controller data yet. See the checklist below to diagnose.";
   cardsEl.appendChild(makeStatusCard({
     id: "card-fl-connection",
     icon: "◈",
@@ -205,8 +217,9 @@ function renderOverviewCards(data) {
     status: bridgeStatus,
     statusLabel: bridgeLabel,
     description: bridgeDesc,
-    actionLabel: "Run Connection Check",
-    actionTarget: "connection_check",
+    actionLabel: "Refresh Status",
+    actionTarget: null,
+    actionDirect: () => refresh(),
     live
   }));
 
@@ -223,9 +236,9 @@ function renderOverviewCards(data) {
     status: svcStatus,
     statusLabel: svcLabel,
     description: svcDesc,
-    actionLabel: daemonRunning ? "View Services" : "Start Service",
-    actionTarget: "runtime",
-    actionDirect: !daemonRunning ? () => processAction("/api/process/daemon/start") : null,
+    actionLabel: daemonRunning ? "Refresh Status" : "Start Service",
+    actionTarget: null,
+    actionDirect: daemonRunning ? () => refresh() : () => processAction("/api/process/daemon/start"),
     live: daemonRunning
   }));
 
@@ -385,11 +398,12 @@ function renderConnectionCheck() {
   ];
 
   // Summary card
-  const summaryCard = document.createElement("article");
+  const summaryCard = document.createElement("details");
   summaryCard.className = "panel connection-check-summary";
 
-  const summaryHeading = document.createElement("div");
+  const summaryHeading = document.createElement("summary");
   summaryHeading.className = "panel-heading";
+  summaryHeading.style.cursor = "pointer";
   const summaryH2 = document.createElement("h2");
   summaryH2.textContent = "Connection Status";
   summaryHeading.appendChild(summaryH2);
@@ -432,44 +446,6 @@ function renderConnectionCheck() {
 
   summaryCard.append(summaryHeading, summaryList, nextStepEl);
   container.appendChild(summaryCard);
-
-  // Action buttons
-  const actionsCard = document.createElement("article");
-  actionsCard.className = "panel";
-  const actionsHeading = document.createElement("div");
-  actionsHeading.className = "panel-heading";
-  const actionsH2 = document.createElement("h2");
-  actionsH2.textContent = "Actions";
-  actionsHeading.appendChild(actionsH2);
-
-  const btnRow = document.createElement("div");
-  btnRow.className = "check-action-row";
-
-  const actions = [
-    { text: "Refresh / Run Check Again", onclick: () => refresh() },
-    { text: "Open Setup Doctor", onclick: () => selectPanel("setup") },
-    { text: "Open Services", onclick: () => selectPanel("runtime") },
-    { text: "Open AI Clients", onclick: () => selectPanel("clients") },
-    { text: "Copy Support Report", onclick: async () => {
-        await loadReport();
-        await navigator.clipboard.writeText(state.report);
-        btn.textContent = "Copied!";
-        setTimeout(() => { btn.textContent = "Copy Support Report"; }, 1400);
-      }
-    },
-  ];
-
-  for (const action of actions) {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "ghost-button";
-    btn.textContent = action.text;
-    btn.addEventListener("click", action.onclick);
-    btnRow.appendChild(btn);
-  }
-
-  actionsCard.append(actionsHeading, btnRow);
-  container.appendChild(actionsCard);
 }
 
 function _recommendedNextStep() {
@@ -2537,6 +2513,1087 @@ function formatRouteLevel(value) {
   return numeric.toFixed(3);
 }
 
+// ─── Project Organizer ──────────────────────────────────────────────────────
+async function runProjectOrganizer() {
+  state.projectOrganizer.loading = true;
+  state.projectOrganizer.error = null;
+  renderProjectOrganizer();
+  try {
+    const result = await api("/api/workflows/project-organizer", {
+      method: "POST",
+      body: "{}"
+    });
+    state.projectOrganizer.report = result;
+    state.projectOrganizer.error = result?.ok === false
+      ? (result.error || "Project Organizer unavailable.")
+      : null;
+  } catch (error) {
+    state.projectOrganizer.error = `Project Organizer failed: ${error.message}`;
+  } finally {
+    state.projectOrganizer.loading = false;
+    renderProjectOrganizer();
+  }
+}
+
+function renderProjectOrganizer() {
+  const layout = document.getElementById("organizer-layout");
+  if (!layout) return;
+
+  const report = state.projectOrganizer.report;
+  const isLoading = state.projectOrganizer.loading;
+  const error = state.projectOrganizer.error;
+
+  const runButton = document.getElementById("run-project-organizer");
+  if (runButton) {
+    runButton.disabled = isLoading;
+    runButton.textContent = isLoading ? "Running..." : "Run Organizer";
+  }
+
+  renderOrganizerFeedback(report, error, isLoading);
+  renderOrganizerSummary(report, isLoading);
+  renderOrganizerMap(report);
+  renderOrganizerGuided(report);
+  renderOrganizerFindings(report);
+  renderOrganizerPlan(report);
+  renderOrganizerStandards(report);
+  renderOrganizerGrouping(report);
+  renderOrganizerDetails(report);
+  renderOrganizerNotes(report);
+}
+
+function renderOrganizerFeedback(report, error, isLoading) {
+  const feedback = document.getElementById("organizer-feedback");
+  if (!feedback) return;
+
+  feedback.className = "organizer-feedback";
+  if (isLoading) {
+    feedback.classList.add("is-loading");
+    feedback.textContent = "Project Organizer is reading channels, mixer tracks, patterns, and playlist tracks...";
+    return;
+  }
+  if (error) {
+    feedback.classList.add("is-error");
+    feedback.textContent = error;
+    return;
+  }
+  if (report?.ok) {
+    feedback.classList.add("is-live");
+    const timestamp = new Date(report.generated_at || Date.now()).toLocaleTimeString();
+    feedback.textContent = `Last scan: ${timestamp}. Control Center did not change the project.`;
+    return;
+  }
+  feedback.textContent = "Organizer has not run yet.";
+}
+
+function renderOrganizerSummary(report, isLoading) {
+  const summary = report?.summary || {};
+  const score = Number.isFinite(Number(summary.organization_score))
+    ? Number(summary.organization_score)
+    : null;
+  const label = summary.health_label || (report?.ok ? "Live" : "Idle");
+
+  text("organizer-score-value", score == null ? "--" : `${Math.round(score)}%`);
+  text("organizer-score-caption", isLoading ? "Reading" : label);
+  text("organizer-score-label", label);
+  text("organizer-channel-total", summary.channels ?? "--");
+  text("organizer-pattern-total", summary.patterns ?? "--");
+  text("organizer-finding-total", summary.diagnostics ?? "--");
+  text("organizer-proposal-total", summary.proposed_changes ?? "--");
+  text("organizer-name-total", summary.naming_cleanup ?? "--");
+  text("organizer-routing-total", summary.routing_cleanup ?? "--");
+  text("organizer-color-total", summary.color_readback_missing ?? "--");
+  text("organizer-group-total", summary.grouping_candidates ?? "--");
+  text("organizer-findings-count", summary.diagnostics ?? 0);
+  text("organizer-plan-count", summary.proposed_changes ?? 0);
+
+  const ring = document.getElementById("organizer-score-ring");
+  if (ring) {
+    const clampedScore = score == null ? 0 : Math.max(0, Math.min(100, score));
+    ring.style.setProperty("--score", clampedScore);
+    ring.dataset.state = routingScoreState(score);
+  }
+
+  const scoreLabel = document.getElementById("organizer-score-label");
+  if (scoreLabel) {
+    scoreLabel.className = `badge ${mixBadgeClass(score, report?.ok)}`;
+  }
+
+  const mapState = document.getElementById("organizer-map-state");
+  if (mapState) {
+    mapState.textContent = isLoading ? "Reading" : (report?.ok ? "Live" : "Idle");
+    mapState.className = `badge ${report?.ok ? "badge-ok" : "badge-neutral"}`;
+  }
+}
+
+function renderOrganizerMap(report) {
+  const grid = document.getElementById("organizer-map-grid");
+  if (!grid) return;
+  grid.innerHTML = "";
+
+  const summary = report?.summary || {};
+  const cards = [
+    {
+      title: "Analyze Organization",
+      tool: "fl_analyze_project_organization",
+      value: summary.diagnostics ?? "--",
+      detail: "Finds naming, routing, color-readback, pattern, and playlist cleanup signals.",
+      state: Number(summary.diagnostics || 0) ? "warning" : "ok"
+    },
+    {
+      title: "Plan Cleanup",
+      tool: "fl_plan_project_cleanup",
+      value: summary.proposed_changes ?? "--",
+      detail: "Builds proposal-mode actions before any write is considered.",
+      state: Number(summary.proposed_changes || 0) ? "info" : "ok"
+    },
+    {
+      title: "Apply One Step",
+      tool: "fl_apply_project_cleanup_step",
+      value: summary.routing_cleanup ?? "--",
+      detail: "Routes, renames, or colors one approved cleanup unit with rollback.",
+      state: Number(summary.routing_cleanup || 0) ? "warning" : "ok"
+    },
+    {
+      title: "Guided Cleanup",
+      tool: "fl_start_guided_cleanup",
+      value: safeString(report?.guided?.state || "idle"),
+      detail: "Presents the next issue, one proposed fix, approval, readback, and rollback note.",
+      state: report?.guided?.state === "ready" ? "info" : "ok"
+    },
+    {
+      title: "Naming Standard",
+      tool: "fl_apply_naming_standard",
+      value: summary.naming_cleanup ?? "--",
+      detail: "Collects consistent channel and mixer naming rules for approval.",
+      state: Number(summary.naming_cleanup || 0) ? "info" : "ok"
+    },
+    {
+      title: "Color Standard",
+      tool: "fl_apply_color_standard",
+      value: summary.color_readback_missing ?? "--",
+      detail: "Shows color coverage limits and prepares approved color rules.",
+      state: Number(summary.color_readback_missing || 0) ? "info" : "ok"
+    },
+    {
+      title: "Group Tracks",
+      tool: "fl_group_tracks",
+      value: summary.grouping_candidates ?? "--",
+      detail: "Suggests bus grouping candidates without selecting a bus automatically.",
+      state: Number(summary.grouping_candidates || 0) ? "info" : "ok"
+    }
+  ];
+
+  for (const card of cards) {
+    const node = document.createElement("div");
+    node.className = `organizer-map-card ${routingSeverityClass(card.state)}`;
+
+    const top = document.createElement("div");
+    top.className = "organizer-map-card-top";
+    const title = document.createElement("strong");
+    title.textContent = card.title;
+    const value = document.createElement("span");
+    value.textContent = safeString(card.value);
+    top.append(title, value);
+
+    const detail = document.createElement("p");
+    detail.textContent = card.detail;
+    const tool = document.createElement("code");
+    tool.textContent = card.tool;
+
+    node.append(top, detail, tool);
+    grid.appendChild(node);
+  }
+}
+
+function renderOrganizerGuided(report) {
+  const guided = report?.guided || {};
+  const stateValue = guided.state || "idle";
+  text("organizer-next-priority", guided.priority || "--");
+  text("organizer-next-issue", guided.next_issue || "Run Organizer to get the next step.");
+  text("organizer-next-tool", guided.next_tool || "No write tool selected.");
+
+  const stateBadge = document.getElementById("organizer-guided-state");
+  if (stateBadge) {
+    stateBadge.textContent = stateValue === "ready" ? "Ready" : stateValue === "clear" ? "Clear" : "Idle";
+    stateBadge.className = `badge ${stateValue === "ready" ? "badge-warn" : stateValue === "clear" ? "badge-ok" : "badge-neutral"}`;
+  }
+
+  const steps = document.getElementById("organizer-guided-steps");
+  if (!steps) return;
+  steps.innerHTML = "";
+  const rows = Array.isArray(guided.steps) ? guided.steps : [];
+  if (!rows.length) {
+    steps.appendChild(organizerPlaceholder("Run Organizer to start guided cleanup context."));
+    return;
+  }
+  for (const row of rows) {
+    const item = document.createElement("div");
+    item.className = `organizer-guided-step is-${safeClassName(row.state || "pending")}`;
+    const dot = document.createElement("span");
+    dot.className = "organizer-guided-dot";
+    const body = document.createElement("div");
+    const label = document.createElement("strong");
+    label.textContent = safeString(row.label);
+    const tool = document.createElement("em");
+    tool.textContent = safeString(row.tool);
+    body.append(label, tool);
+    item.append(dot, body);
+    steps.appendChild(item);
+  }
+}
+
+function renderOrganizerFindings(report) {
+  const list = document.getElementById("organizer-finding-list");
+  if (!list) return;
+  list.innerHTML = "";
+  const findings = Array.isArray(report?.findings) ? report.findings : [];
+  if (!findings.length) {
+    list.appendChild(organizerPlaceholder("Run Organizer to populate findings."));
+    return;
+  }
+
+  for (const finding of findings) {
+    const row = document.createElement("div");
+    row.className = `organizer-finding ${routingSeverityClass(finding.severity)}`;
+
+    const icon = document.createElement("span");
+    icon.className = "organizer-finding-icon";
+    icon.textContent = routingSeverityIcon(finding.severity);
+
+    const body = document.createElement("div");
+    const title = document.createElement("strong");
+    title.textContent = safeString(finding.title);
+    const detail = document.createElement("span");
+    detail.textContent = safeString(finding.detail);
+    body.append(title, detail);
+
+    const count = document.createElement("span");
+    count.className = "organizer-finding-count";
+    count.textContent = safeString(finding.count ?? 0);
+
+    row.append(icon, body, count);
+    list.appendChild(row);
+  }
+}
+
+function renderOrganizerPlan(report) {
+  const list = document.getElementById("organizer-plan-list");
+  if (!list) return;
+  list.innerHTML = "";
+
+  const steps = Array.isArray(report?.cleanup_plan?.steps) ? report.cleanup_plan.steps : [];
+  if (!steps.length) {
+    list.appendChild(organizerPlaceholder("No cleanup proposals yet."));
+    return;
+  }
+
+  for (const step of steps) {
+    const row = document.createElement("div");
+    row.className = `organizer-plan-step priority-${safeClassName(step.priority || "low")}`;
+
+    const header = document.createElement("div");
+    header.className = "organizer-plan-header";
+    const title = document.createElement("strong");
+    title.textContent = safeString(step.title);
+    const risk = document.createElement("span");
+    risk.textContent = `Risk: ${safeString(step.risk)}`;
+    header.append(title, risk);
+
+    const detail = document.createElement("p");
+    detail.textContent = safeString(step.detail);
+
+    const footer = document.createElement("div");
+    footer.className = "organizer-plan-footer";
+    const tool = document.createElement("code");
+    tool.textContent = safeString(step.tool);
+    const approval = document.createElement("em");
+    approval.textContent = step.requires_explicit_approval ? "Approval required" : "Read-only";
+    footer.append(tool, approval);
+
+    row.append(header, detail, footer);
+    list.appendChild(row);
+  }
+}
+
+function renderOrganizerStandards(report) {
+  const grid = document.getElementById("organizer-standard-grid");
+  if (!grid) return;
+  grid.innerHTML = "";
+
+  const standards = report?.standards || {};
+  const entries = [
+    {
+      title: "Naming Standard",
+      tool: standards.naming?.tool || "fl_apply_naming_standard",
+      style: standards.naming?.style || "dynamic",
+      count: standards.naming?.suggested_rule_count ?? 0,
+      detail: "Applies consistent names across approved channel and mixer rules."
+    },
+    {
+      title: "Color Standard",
+      tool: standards.color?.tool || "fl_apply_color_standard",
+      style: standards.color?.style || "dynamic",
+      count: standards.color?.suggested_rule_count ?? 0,
+      detail: "Applies a color palette only after exact rules are reviewed."
+    }
+  ];
+  text("organizer-standard-count", entries.reduce((sum, entry) => sum + Number(entry.count || 0), 0));
+
+  for (const entry of entries) {
+    const card = document.createElement("div");
+    card.className = "organizer-standard-card";
+    const top = document.createElement("div");
+    top.className = "organizer-standard-top";
+    const title = document.createElement("strong");
+    title.textContent = entry.title;
+    const count = document.createElement("span");
+    count.textContent = safeString(entry.count);
+    top.append(title, count);
+
+    const detail = document.createElement("p");
+    detail.textContent = entry.detail;
+
+    const meta = document.createElement("div");
+    meta.className = "organizer-standard-meta";
+    const tool = document.createElement("code");
+    tool.textContent = entry.tool;
+    const style = document.createElement("em");
+    style.textContent = `Style: ${entry.style}`;
+    meta.append(tool, style);
+
+    card.append(top, detail, meta);
+    grid.appendChild(card);
+  }
+}
+
+function renderOrganizerGrouping(report) {
+  const list = document.getElementById("organizer-group-list");
+  if (!list) return;
+  list.innerHTML = "";
+  const groups = Array.isArray(report?.grouping?.candidate_groups)
+    ? report.grouping.candidate_groups
+    : [];
+  text("organizer-grouping-count", groups.length);
+  if (!groups.length) {
+    list.appendChild(organizerPlaceholder("No grouping candidates yet."));
+    return;
+  }
+
+  for (const group of groups) {
+    const row = document.createElement("div");
+    row.className = "organizer-group-row";
+    const title = document.createElement("strong");
+    title.textContent = safeString(group.name);
+    const sources = document.createElement("span");
+    const sourceNames = Array.isArray(group.source_names) ? group.source_names : [];
+    sources.textContent = sourceNames.slice(0, 5).map(safeString).join(", ") || "No sources";
+    const meta = document.createElement("em");
+    meta.textContent = `${safeString(group.tool || "fl_group_tracks")} · bus required`;
+    row.append(title, sources, meta);
+    list.appendChild(row);
+  }
+}
+
+function renderOrganizerDetails(report) {
+  const body = document.getElementById("organizer-detail-table");
+  if (!body) return;
+  body.innerHTML = "";
+  const rows = Array.isArray(report?.details?.items) ? report.details.items : [];
+  text("organizer-detail-count", rows.length);
+  if (!rows.length) {
+    appendRoutingTableEmpty(body, 5, "No project detail rows.");
+    return;
+  }
+  for (const item of rows) {
+    const row = document.createElement("tr");
+    appendCell(row, safeString(item.area));
+    appendCell(row, safeString(item.index));
+    appendCell(row, safeString(item.name));
+    appendCell(row, safeString(item.status), `organizer-status-${safeClassName(item.status)}`);
+    appendCell(row, safeString(item.detail));
+    body.appendChild(row);
+  }
+}
+
+function renderOrganizerNotes(report) {
+  const list = document.getElementById("organizer-note-list");
+  if (!list) return;
+  list.innerHTML = "";
+  const notes = Array.isArray(report?.details?.notes) ? report.details.notes : [];
+  text("organizer-note-count", notes.length);
+  if (!notes.length) {
+    list.appendChild(organizerPlaceholder("No safety notes yet."));
+    return;
+  }
+  for (const note of notes) {
+    const row = document.createElement("div");
+    row.className = "organizer-note-row";
+    row.textContent = safeString(note);
+    list.appendChild(row);
+  }
+}
+
+function organizerPlaceholder(message) {
+  const node = document.createElement("div");
+  node.className = "organizer-placeholder";
+  node.textContent = message;
+  return node;
+}
+
+function safeClassName(value) {
+  return String(value || "unknown").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "unknown";
+}
+
+// ─── Project Health ─────────────────────────────────────────────────────────
+async function runProjectHealth() {
+  state.projectHealth.loading = true;
+  state.projectHealth.error = null;
+  state.projectHealth.lastRun = null;
+  renderProjectHealth();
+
+  const steps = [
+    { title: "Project Organizer", run: runProjectOrganizer },
+    { title: "Mix Review", run: runMixReview },
+    { title: "Routing Audit", run: runRoutingAudit },
+    { title: "Low-End Analysis", run: runLowEndAnalysis }
+  ];
+  const failures = [];
+
+  for (const step of steps) {
+    try {
+      await step.run();
+    } catch (error) {
+      failures.push(`${step.title}: ${error.message}`);
+    }
+    renderProjectHealth();
+  }
+
+  state.projectHealth.loading = false;
+  state.projectHealth.lastRun = new Date().toISOString();
+  const aggregate = buildHealthOverview();
+  const unavailable = aggregate.sections.filter(section => section.error);
+  state.projectHealth.error = failures.length || unavailable.length === aggregate.sections.length
+    ? (failures.join(" · ") || "Health scan could not read any section.")
+    : null;
+  renderProjectHealth();
+}
+
+function renderProjectHealth() {
+  const layout = document.getElementById("health-layout");
+  if (!layout) return;
+
+  const aggregate = buildHealthOverview();
+  const isLoading = state.projectHealth.loading
+    || aggregate.sections.some(section => section.loading);
+
+  const runButton = document.getElementById("run-project-health");
+  if (runButton) {
+    runButton.disabled = isLoading;
+    runButton.textContent = isLoading ? "Running..." : "Run Health Scan";
+  }
+
+  renderHealthFeedback(aggregate, isLoading);
+  renderHealthSummary(aggregate, isLoading);
+  renderHealthSections(aggregate.sections);
+  renderHealthWarnings(aggregate);
+  renderHealthNavigation(aggregate.sections);
+  renderHealthNotes(aggregate);
+}
+
+function buildHealthOverview() {
+  const sections = [
+    buildOrganizerHealthSection(),
+    buildMixHealthSection(),
+    buildRoutingHealthSection(),
+    buildLowEndHealthSection()
+  ];
+  const scores = sections
+    .map(section => section.score)
+    .filter(score => Number.isFinite(score));
+  const score = scores.length
+    ? Math.round(scores.reduce((sum, value) => sum + value, 0) / scores.length)
+    : null;
+  const risk = score == null ? null : Math.max(0, Math.min(100, 100 - score));
+  const warnings = healthDedupeFindings(sections.flatMap(section => section.findings))
+    .sort(healthWarningSort);
+  const availableSections = sections.filter(section => section.hasReport).length;
+  const readySections = sections.filter(section => section.hasReport && !section.error).length;
+  const findingTotal = sections.reduce((sum, section) => sum + section.findingsCount, 0);
+  const blockerTotal = warnings.filter(row => healthSeverityRank(row.severity) >= 3).length;
+  const warningTotal = warnings.filter(row => healthSeverityRank(row.severity) >= 2).length;
+
+  return {
+    sections,
+    score,
+    risk,
+    warnings,
+    availableSections,
+    readySections,
+    findingTotal,
+    blockerTotal,
+    warningTotal,
+    totalSections: sections.length
+  };
+}
+
+function buildOrganizerHealthSection() {
+  const report = state.projectOrganizer.report;
+  const summary = report?.summary || {};
+  const findings = healthNormalizeFindings(
+    "Organizer",
+    "producer_organizer",
+    Array.isArray(report?.findings) ? report.findings : []
+  );
+  const proposed = Number(summary.proposed_changes || 0);
+  if (proposed > 0) {
+    findings.push({
+      source: "Organizer",
+      target: "producer_organizer",
+      severity: "info",
+      title: "Cleanup Plan Ready",
+      detail: `${proposed} proposed cleanup step${proposed === 1 ? "" : "s"} available.`,
+      count: proposed
+    });
+  }
+
+  return makeHealthSection({
+    id: "organizer",
+    title: "Organizer",
+    target: "producer_organizer",
+    stateData: state.projectOrganizer,
+    score: healthNumericScore(summary.organization_score, report),
+    scoreLabel: summary.health_label,
+    findings,
+    metrics: [
+      { label: "Proposals", value: summary.proposed_changes ?? "--" },
+      { label: "Routing", value: summary.routing_cleanup ?? "--" }
+    ]
+  });
+}
+
+function buildMixHealthSection() {
+  const report = state.mixReview.report;
+  const summary = report?.summary || {};
+  const findings = healthNormalizeFindings(
+    "Mix Review",
+    "producer_mix_review",
+    Array.isArray(report?.findings) ? report.findings : []
+  );
+  const hotTracks = Number(summary.hot_tracks || 0);
+  if (hotTracks > 0) {
+    findings.push({
+      source: "Mix Review",
+      target: "producer_mix_review",
+      severity: "warning",
+      title: "Hot Tracks",
+      detail: `${hotTracks} track${hotTracks === 1 ? "" : "s"} need level review.`,
+      count: hotTracks
+    });
+  }
+  const masterPeak = Number(summary.master_peak_db);
+  if (Number.isFinite(masterPeak) && masterPeak >= 0) {
+    findings.push({
+      source: "Mix Review",
+      target: "producer_mix_review",
+      severity: "critical",
+      title: "Master Peak Over 0 dB",
+      detail: `Master peak reads ${formatDb(masterPeak)}.`,
+      count: 1
+    });
+  }
+  const headroom = Number(summary.master_headroom_db);
+  if (Number.isFinite(headroom) && headroom < 3) {
+    findings.push({
+      source: "Mix Review",
+      target: "producer_mix_review",
+      severity: "warning",
+      title: "Low Master Headroom",
+      detail: `Master headroom is ${formatDb(headroom)}.`,
+      count: 1
+    });
+  }
+
+  return makeHealthSection({
+    id: "mix",
+    title: "Mix Review",
+    target: "producer_mix_review",
+    stateData: state.mixReview,
+    score: healthNumericScore(summary.health_score, report),
+    scoreLabel: summary.health_label,
+    findings,
+    metrics: [
+      { label: "Hot Tracks", value: summary.hot_tracks ?? "--" },
+      { label: "Headroom", value: formatDb(summary.master_headroom_db) }
+    ]
+  });
+}
+
+function buildRoutingHealthSection() {
+  const report = state.routingAudit.report;
+  const summary = report?.summary || {};
+  const findings = healthNormalizeFindings(
+    "Routing",
+    "producer_routing",
+    Array.isArray(report?.findings) ? report.findings : []
+  );
+  const unrouted = Number(summary.unrouted_channels || 0);
+  if (unrouted > 0) {
+    findings.push({
+      source: "Routing",
+      target: "producer_routing",
+      severity: "critical",
+      title: "Unrouted Channels",
+      detail: `${unrouted} channel${unrouted === 1 ? "" : "s"} without a mixer target.`,
+      count: unrouted
+    });
+  }
+  const deadEnds = Number(summary.dead_end_tracks || 0);
+  if (deadEnds > 0) {
+    findings.push({
+      source: "Routing",
+      target: "producer_routing",
+      severity: "critical",
+      title: "Mixer Paths Without Output",
+      detail: `${deadEnds} mixer path${deadEnds === 1 ? "" : "s"} do not reach an output.`,
+      count: deadEnds
+    });
+  }
+  const direct = Number(summary.direct_to_master || 0);
+  if (direct > 0) {
+    findings.push({
+      source: "Routing",
+      target: "producer_routing",
+      severity: "warning",
+      title: "Direct Master Paths",
+      detail: `${direct} source${direct === 1 ? "" : "s"} route directly to Master.`,
+      count: direct
+    });
+  }
+
+  return makeHealthSection({
+    id: "routing",
+    title: "Routing",
+    target: "producer_routing",
+    stateData: state.routingAudit,
+    score: healthNumericScore(summary.health_score, report),
+    scoreLabel: summary.health_label,
+    findings,
+    metrics: [
+      { label: "Unrouted", value: summary.unrouted_channels ?? "--" },
+      { label: "Direct Master", value: summary.direct_to_master ?? "--" }
+    ]
+  });
+}
+
+function buildLowEndHealthSection() {
+  const report = state.lowEndAnalysis.report;
+  const tracks = lowEndTracks(report);
+  const lowFindings = lowEndFindings(report);
+  const findings = healthNormalizeFindings("Low-End", "producer_low_end", lowFindings);
+  const stereoRisks = tracks.filter(lowEndTrackStereoRisk).length;
+  if (stereoRisks > 0) {
+    findings.push({
+      source: "Low-End",
+      target: "producer_low_end",
+      severity: "warning",
+      title: "Wide Low-End Elements",
+      detail: `${stereoRisks} low-end track${stereoRisks === 1 ? "" : "s"} show stereo or pan risk.`,
+      count: stereoRisks
+    });
+  }
+  const manualChecks = Array.isArray(report?.details?.low_end?.manual_checks)
+    ? report.details.low_end.manual_checks
+    : [];
+  if (manualChecks.length > 0) {
+    findings.push({
+      source: "Low-End",
+      target: "producer_low_end",
+      severity: "info",
+      title: "Manual Low-End Checks",
+      detail: `${manualChecks.length} manual check${manualChecks.length === 1 ? "" : "s"} remain.`,
+      count: manualChecks.length
+    });
+  }
+
+  return makeHealthSection({
+    id: "low-end",
+    title: "Low-End",
+    target: "producer_low_end",
+    stateData: state.lowEndAnalysis,
+    score: lowEndScore(report, tracks, lowFindings),
+    scoreLabel: lowEndScoreLabel(lowEndScore(report, tracks, lowFindings), report?.ok),
+    findings,
+    metrics: [
+      { label: "Tracks", value: report ? tracks.length : "--" },
+      { label: "Stereo Risk", value: report ? stereoRisks : "--" }
+    ]
+  });
+}
+
+function makeHealthSection({ id, title, target, stateData, score, scoreLabel, findings, metrics }) {
+  const report = stateData.report;
+  const errorFinding = stateData.error ? [{
+    source: title,
+    target,
+    severity: "critical",
+    title: `${title} Unavailable`,
+    detail: stateData.error,
+    count: 1
+  }] : [];
+  const normalized = healthDedupeFindings([...errorFinding, ...(findings || [])])
+    .sort(healthWarningSort);
+  const effectiveScore = Number.isFinite(score)
+    ? Math.max(0, Math.min(100, Math.round(score)))
+    : (stateData.error ? 0 : null);
+  const status = healthSectionStatus(effectiveScore, Boolean(report), stateData.loading, stateData.error);
+
+  return {
+    id,
+    title,
+    target,
+    report,
+    hasReport: Boolean(report),
+    loading: stateData.loading,
+    error: stateData.error,
+    score: effectiveScore,
+    risk: effectiveScore == null ? null : Math.max(0, Math.min(100, 100 - effectiveScore)),
+    scoreLabel,
+    status,
+    findings: normalized,
+    findingsCount: normalized.reduce((sum, row) => sum + healthFindingCountValue(row.count), 0),
+    topFinding: normalized[0] || null,
+    metrics: metrics || []
+  };
+}
+
+function renderHealthFeedback(aggregate, isLoading) {
+  const feedback = document.getElementById("health-feedback");
+  if (!feedback) return;
+
+  feedback.className = "health-feedback";
+  if (isLoading) {
+    feedback.classList.add("is-loading");
+    feedback.textContent = "Health scan is reading Organizer, Mix Review, Routing, and Low-End reports...";
+    return;
+  }
+  if (state.projectHealth.error) {
+    feedback.classList.add("is-error");
+    feedback.textContent = state.projectHealth.error;
+    return;
+  }
+  if (aggregate.availableSections > 0) {
+    feedback.classList.add("is-live");
+    const timestamp = new Date(state.projectHealth.lastRun || Date.now()).toLocaleTimeString();
+    const coverage = `${aggregate.availableSections}/${aggregate.totalSections}`;
+    feedback.textContent = `Last overview: ${timestamp}. Coverage ${coverage}. No project changes were made.`;
+    return;
+  }
+  feedback.textContent = "Health overview has not run yet.";
+}
+
+function renderHealthSummary(aggregate, isLoading) {
+  const riskText = aggregate.risk == null ? "--" : `${Math.round(aggregate.risk)}%`;
+  const scoreText = aggregate.score == null ? "--" : `${Math.round(aggregate.score)}%`;
+  const label = isLoading ? "Reading" : healthRiskLabel(aggregate.risk, aggregate.availableSections);
+
+  text("health-risk-value", riskText);
+  text("health-risk-caption", label);
+  text("health-score-value", scoreText);
+  text("health-coverage-value", `${aggregate.availableSections}/${aggregate.totalSections}`);
+  text("health-finding-total", aggregate.availableSections ? aggregate.findingTotal : "--");
+  text("health-blocker-total", aggregate.availableSections ? aggregate.blockerTotal : "--");
+  text("health-section-count", `${aggregate.availableSections}/${aggregate.totalSections}`);
+  text("health-ready-total", `${aggregate.readySections} ready`);
+
+  const ring = document.getElementById("health-risk-ring");
+  if (ring) {
+    ring.style.setProperty("--risk", aggregate.risk == null ? 0 : Math.max(0, Math.min(100, aggregate.risk)));
+    ring.dataset.state = healthRiskState(aggregate.risk);
+  }
+
+  const statusLabel = document.getElementById("health-status-label");
+  if (statusLabel) {
+    statusLabel.textContent = label;
+    statusLabel.className = `badge ${healthRiskBadgeClass(aggregate.risk, aggregate.availableSections)}`;
+  }
+}
+
+function renderHealthSections(sections) {
+  const grid = document.getElementById("health-section-grid");
+  if (!grid) return;
+  grid.innerHTML = "";
+
+  for (const section of sections) {
+    const card = document.createElement("div");
+    card.className = `health-section-card ${healthSectionClass(section)}`;
+
+    const top = document.createElement("div");
+    top.className = "health-section-card-top";
+    const title = document.createElement("strong");
+    title.textContent = section.title;
+    const status = document.createElement("span");
+    status.className = `badge ${healthSectionBadgeClass(section)}`;
+    status.textContent = section.status;
+    top.append(title, status);
+
+    const score = document.createElement("div");
+    score.className = "health-section-score";
+    const value = document.createElement("strong");
+    value.textContent = section.risk == null ? "--" : `${Math.round(section.risk)}%`;
+    const label = document.createElement("span");
+    label.textContent = "Risk";
+    score.append(value, label);
+
+    const metrics = document.createElement("div");
+    metrics.className = "health-section-metrics";
+    for (const metric of section.metrics.slice(0, 2)) {
+      const metricEl = document.createElement("div");
+      const metricLabel = document.createElement("span");
+      metricLabel.textContent = metric.label;
+      const metricValue = document.createElement("strong");
+      metricValue.textContent = safeString(metric.value);
+      metricEl.append(metricLabel, metricValue);
+      metrics.appendChild(metricEl);
+    }
+
+    const finding = document.createElement("p");
+    finding.className = "health-section-finding";
+    finding.textContent = section.topFinding
+      ? `${section.topFinding.title}: ${section.topFinding.detail}`
+      : (section.hasReport ? "No active warnings." : "No report available.");
+
+    const action = document.createElement("button");
+    action.type = "button";
+    action.className = "ghost-button health-section-action";
+    action.textContent = "Open details";
+    action.addEventListener("click", () => selectPanel(section.target));
+
+    card.append(top, score, metrics, finding, action);
+    grid.appendChild(card);
+  }
+}
+
+function renderHealthWarnings(aggregate) {
+  const list = document.getElementById("health-warning-list");
+  if (!list) return;
+  list.innerHTML = "";
+  text("health-warning-count", aggregate.warningTotal);
+
+  const warnings = aggregate.warnings
+    .filter(row => healthSeverityRank(row.severity) >= 1)
+    .slice(0, 6);
+  if (!warnings.length) {
+    list.appendChild(healthPlaceholder(
+      aggregate.availableSections ? "No warnings in available reports." : "No health reports available."
+    ));
+    return;
+  }
+
+  for (const warning of warnings) {
+    const row = document.createElement("div");
+    row.className = `health-warning-row ${mixSeverityClass(warning.severity)}`;
+
+    const icon = document.createElement("span");
+    icon.className = "health-warning-icon";
+    icon.textContent = mixSeverityIcon(warning.severity);
+
+    const body = document.createElement("div");
+    const title = document.createElement("strong");
+    title.textContent = warning.title;
+    const detail = document.createElement("span");
+    detail.textContent = `${warning.source} · ${warning.detail}`;
+    body.append(title, detail);
+
+    const meta = document.createElement("div");
+    meta.className = "health-warning-meta";
+    const count = document.createElement("span");
+    count.textContent = safeString(warning.count ?? 1);
+    const action = document.createElement("button");
+    action.type = "button";
+    action.className = "ghost-button";
+    action.textContent = "Open";
+    action.addEventListener("click", () => selectPanel(warning.target));
+    meta.append(count, action);
+
+    row.append(icon, body, meta);
+    list.appendChild(row);
+  }
+}
+
+function renderHealthNavigation(sections) {
+  const list = document.getElementById("health-nav-list");
+  if (!list) return;
+  list.innerHTML = "";
+
+  for (const section of sections) {
+    const item = document.createElement("button");
+    item.type = "button";
+    item.className = `health-nav-item ${healthSectionClass(section)}`;
+    item.addEventListener("click", () => selectPanel(section.target));
+
+    const label = document.createElement("strong");
+    label.textContent = section.title;
+    const detail = document.createElement("span");
+    detail.textContent = section.score == null
+      ? section.status
+      : `${Math.round(section.score)}% score · ${section.status}`;
+
+    item.append(label, detail);
+    list.appendChild(item);
+  }
+}
+
+function renderHealthNotes(aggregate) {
+  const list = document.getElementById("health-note-list");
+  if (!list) return;
+  list.innerHTML = "";
+
+  const notes = [];
+  if (!aggregate.availableSections) {
+    notes.push("No health reports are available yet.");
+  } else if (aggregate.availableSections < aggregate.totalSections) {
+    notes.push(`${aggregate.totalSections - aggregate.availableSections} section report${aggregate.totalSections - aggregate.availableSections === 1 ? "" : "s"} missing from this overview.`);
+  }
+  if (aggregate.blockerTotal > 0) {
+    notes.push(`${aggregate.blockerTotal} blocker finding${aggregate.blockerTotal === 1 ? "" : "s"} need detailed review.`);
+  } else if (aggregate.availableSections) {
+    notes.push("Available reports show no blocker findings.");
+  }
+  if (aggregate.warningTotal > 0) {
+    notes.push(`${aggregate.warningTotal} warning finding${aggregate.warningTotal === 1 ? "" : "s"} found across available reports.`);
+  }
+  notes.push("Health summarizes read-only scan results. Project-changing cleanup remains proposal-first.");
+
+  text("health-note-count", notes.length);
+  for (const note of notes) {
+    const row = document.createElement("div");
+    row.className = "health-note-row";
+    row.textContent = note;
+    list.appendChild(row);
+  }
+}
+
+function healthNormalizeFindings(source, target, findings) {
+  return findings.map(finding => ({
+    source,
+    target,
+    severity: healthSeverity(finding.severity),
+    title: safeString(finding.title || finding.id || source),
+    detail: healthFindingDetail(finding),
+    count: finding.count ?? 1
+  }));
+}
+
+function healthFindingDetail(finding) {
+  const parts = [];
+  const track = finding.track_name ?? finding.track;
+  if (track != null && track !== "") {
+    parts.push(typeof track === "number" ? `Track ${track}` : safeString(track));
+  }
+  const detail = finding.detail || finding.evidence || finding.reason || finding.check;
+  if (detail) parts.push(safeString(detail));
+  return parts.join(" · ") || "Review the section details.";
+}
+
+function healthDedupeFindings(findings) {
+  const seen = new Set();
+  return findings.filter(finding => {
+    const key = [
+      finding.source,
+      finding.title,
+      finding.detail,
+      healthSeverity(finding.severity)
+    ].join("|");
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function healthWarningSort(a, b) {
+  const severityDelta = healthSeverityRank(b.severity) - healthSeverityRank(a.severity);
+  if (severityDelta !== 0) return severityDelta;
+  return healthFindingCountValue(b.count) - healthFindingCountValue(a.count);
+}
+
+function healthFindingCountValue(value) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : 1;
+}
+
+function healthNumericScore(value, report) {
+  if (report?.ok === false) return 0;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? Math.max(0, Math.min(100, numeric)) : null;
+}
+
+function healthSeverity(severity) {
+  const value = String(severity || "").toLowerCase();
+  if (["critical", "high", "blocker"].includes(value)) return "critical";
+  if (["warning", "medium"].includes(value)) return "warning";
+  if (value === "ok") return "ok";
+  return "info";
+}
+
+function healthSeverityRank(severity) {
+  const value = healthSeverity(severity);
+  if (value === "critical") return 3;
+  if (value === "warning") return 2;
+  if (value === "info") return 1;
+  return 0;
+}
+
+function healthSectionStatus(score, hasReport, loading, error) {
+  if (loading) return "Reading";
+  if (error) return "Unavailable";
+  if (!hasReport) return "Not run";
+  if (score == null) return "Limited";
+  if (score >= 90) return "Clear";
+  if (score >= 75) return "Needs review";
+  return "At risk";
+}
+
+function healthRiskLabel(risk, availableSections) {
+  if (!availableSections || risk == null) return "Idle";
+  if (risk <= 10) return "Low risk";
+  if (risk <= 25) return "Needs review";
+  return "High risk";
+}
+
+function healthRiskState(risk) {
+  if (risk == null) return "idle";
+  if (risk <= 10) return "ok";
+  if (risk <= 25) return "warning";
+  return "critical";
+}
+
+function healthRiskBadgeClass(risk, availableSections) {
+  if (!availableSections || risk == null) return "badge-neutral";
+  if (risk <= 10) return "badge-ok";
+  return "badge-warn";
+}
+
+function healthSectionClass(section) {
+  if (section.loading) return "is-info";
+  if (section.error || (section.score != null && section.score < 75)) return "is-critical";
+  if (section.score != null && section.score < 90) return "is-warning";
+  if (section.hasReport) return "is-ok";
+  return "is-info";
+}
+
+function healthSectionBadgeClass(section) {
+  if (section.hasReport && !section.error && section.score != null && section.score >= 90) return "badge-ok";
+  if (!section.hasReport && !section.loading) return "badge-neutral";
+  return "badge-warn";
+}
+
+function healthPlaceholder(message) {
+  const node = document.createElement("div");
+  node.className = "health-placeholder";
+  node.textContent = message;
+  return node;
+}
+
 // ─── Logs & History ───────────────────────────────────────────────────────────
 function renderLogsHistory() {
   const container = document.getElementById("logs-history-content");
@@ -2844,6 +3901,8 @@ function selectPanel(targetId) {
   if (targetId === "producer_mix_review") renderMixReview();
   if (targetId === "producer_low_end") renderLowEndAnalysis();
   if (targetId === "producer_routing") renderRoutingAudit();
+  if (targetId === "producer_organizer") renderProjectOrganizer();
+  if (targetId === "producer_health") renderProjectHealth();
   if (targetId === "logs_history") renderLogsHistory();
   if (targetId === "ports") renderPorts();
 }
@@ -2930,6 +3989,18 @@ function wireEvents() {
   const routingRefreshButton = document.getElementById("routing-refresh-status");
   if (routingRefreshButton) routingRefreshButton.addEventListener("click", refresh);
 
+  const runOrganizerButton = document.getElementById("run-project-organizer");
+  if (runOrganizerButton) runOrganizerButton.addEventListener("click", runProjectOrganizer);
+
+  const organizerRefreshButton = document.getElementById("organizer-refresh-status");
+  if (organizerRefreshButton) organizerRefreshButton.addEventListener("click", refresh);
+
+  const runHealthButton = document.getElementById("run-project-health");
+  if (runHealthButton) runHealthButton.addEventListener("click", runProjectHealth);
+
+  const healthRefreshButton = document.getElementById("health-refresh-status");
+  if (healthRefreshButton) healthRefreshButton.addEventListener("click", refresh);
+
   const setupButton = document.getElementById("disconnected-setup-button");
   if (setupButton) setupButton.addEventListener("click", () => selectPanel("setup"));
 
@@ -2965,10 +4036,14 @@ window.flsPilotControlCenter = {
   runMixReview,
   runLowEndAnalysis,
   runRoutingAudit,
+  runProjectOrganizer,
+  runProjectHealth,
   renderMixReview,
   renderLowEndAnalysis,
   renderProjectData,
   renderRoutingAudit,
+  renderProjectOrganizer,
+  renderProjectHealth,
   renderRuntime,
   renderOverview,
   renderConnectionCheck,
