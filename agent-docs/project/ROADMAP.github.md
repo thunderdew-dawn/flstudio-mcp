@@ -2,7 +2,7 @@
 
 <!-- GENERATED FILE. Source of truth: GitHub Issues/Milestones/Project #7. -->
 
-Generated: 2026-06-08T20:34:49+00:00
+Generated: 2026-06-15T23:44:59+00:00
 Repository: `thunderdew-dawn/fls-pilot`
 
 ## Open Roadmap
@@ -30,29 +30,11 @@ Repository: `thunderdew-dawn/fls-pilot`
 
 ### GitHub Roadmap Migration
 
-- [P0] #8 [P0: Safety and evidence discipline tracker](https://github.com/thunderdew-dawn/fls-pilot/issues/8) - write-safe-required
-- [P1] #10 [P1: Generate ROADMAP.github.md and CHANGELOG.github.md from GitHub](https://github.com/thunderdew-dawn/fls-pilot/issues/10)
-
-### M0 Naming & Governance Freeze
-
-- [P0] #59 [P0: Complete breaking project rename to fls-pilot](https://github.com/thunderdew-dawn/fls-pilot/issues/59)
-- [P0] #61 [P0: Enforce no-alias policy for fls-pilot rename](https://github.com/thunderdew-dawn/fls-pilot/issues/61)
-
-### M2 Stability Core: Rollback, Evidence, API Boundaries
-
-- [P0] #56 [P0: Default Safe UX — scan, propose, risk-rate, apply one reversible change, read back, stop](https://github.com/thunderdew-dawn/fls-pilot/issues/56) - write-safe-required
-- [P0] #63 [P0: Define write-safety contract for all persistent FL Studio changes](https://github.com/thunderdew-dawn/fls-pilot/issues/63) - write-safe-required
-- [P1] #4 [P1: Unified before/after report for planned and applied changes](https://github.com/thunderdew-dawn/fls-pilot/issues/4) - write-safe-required
-
-### M3 Setup Reliability & First-Run Experience
-
-- [P1] #58 [P1: Community adoption pack — demo video, GIFs, issue templates, known-good configs and compatibility matrix](https://github.com/thunderdew-dawn/fls-pilot/issues/58)
-- [P1] #64 [P1: Setup Doctor and safe first-run experience](https://github.com/thunderdew-dawn/fls-pilot/issues/64) - read-only
+- [Unprioritized] #8 [Tracker: Safety and evidence discipline](https://github.com/thunderdew-dawn/fls-pilot/issues/8) - write-safe-required
 
 ### M4 User Value Pack 1: Mix Review / Preflight / Organizer
 
 - [P1] #39 [P1: Markdown change report export for AI edits](https://github.com/thunderdew-dawn/fls-pilot/issues/39) - read-only
-- [P1] #65 [P1: User Value Pack 1 - Mix Review / Preflight / Organizer proposal mode](https://github.com/thunderdew-dawn/fls-pilot/issues/65) - read-only, write-safe-required
 
 ### M5 Release Readiness / 3.0
 
@@ -64,8 +46,8 @@ Repository: `thunderdew-dawn/fls-pilot`
 
 ### Product Workflows
 
-- [P1] #5 [P1: Workflow recipes and README demos for real producer tasks](https://github.com/thunderdew-dawn/fls-pilot/issues/5)
-- [P1] #6 [P1/P2: Explain My Mix read-only workflow](https://github.com/thunderdew-dawn/fls-pilot/issues/6) - read-only
+- [P2] #5 [P1: Workflow recipes and README demos for real producer tasks](https://github.com/thunderdew-dawn/fls-pilot/issues/5)
+- [P2] #6 [P1/P2: Explain My Mix read-only workflow](https://github.com/thunderdew-dawn/fls-pilot/issues/6) - read-only
 - [P2] #12 [P2+: Export and Stem Delivery assistant](https://github.com/thunderdew-dawn/fls-pilot/issues/12) - read-only
 - [P2] #14 [P2: Session Setup Templates workflow](https://github.com/thunderdew-dawn/fls-pilot/issues/14) - write-safe-required
 - [P2] #15 [P2: Plugin Chain Assistant 2.0](https://github.com/thunderdew-dawn/fls-pilot/issues/15) - write-safe-required
@@ -82,13 +64,15 @@ Repository: `thunderdew-dawn/fls-pilot`
 
 ### Setup Reliability & Reporting
 
-- [P2] #7 [P2: Read-only mini-dashboard over MCP resources](https://github.com/thunderdew-dawn/fls-pilot/issues/7) - read-only
 - [P2] #11 [P2: Evaluate optional fl_safety domain tool](https://github.com/thunderdew-dawn/fls-pilot/issues/11) - write-safe-required
 
 ## Closed / Not Planned
 
 - #3 [P0: FL Studio Pilot Doctor read-only setup diagnosis](https://github.com/thunderdew-dawn/fls-pilot/issues/3) - not_planned
+- #4 [P1: Unified before/after report for planned and applied changes](https://github.com/thunderdew-dawn/fls-pilot/issues/4) - completed
+- #7 [P2: Read-only mini-dashboard over MCP resources](https://github.com/thunderdew-dawn/fls-pilot/issues/7) - completed
 - #9 [P0: GitHub as roadmap source of truth migration](https://github.com/thunderdew-dawn/fls-pilot/issues/9) - completed
+- #10 [P1: Generate ROADMAP.md and CHANGELOG.md from GitHub](https://github.com/thunderdew-dawn/fls-pilot/issues/10) - completed
 - #42 [Rejected: full FLP project snapshot and restore automation](https://github.com/thunderdew-dawn/fls-pilot/issues/42) - not_planned
 - #43 [Rejected: playlist clip editing, splitting, merging, and overlap tools](https://github.com/thunderdew-dawn/fls-pilot/issues/43) - not_planned
 - #44 [Rejected: plugin loading, insertion, FL Cloud, and browser automation](https://github.com/thunderdew-dawn/fls-pilot/issues/44) - not_planned
@@ -96,5 +80,13 @@ Repository: `thunderdew-dawn/fls-pilot`
 - #46 [Rejected: destructive delete-empty pattern track clip channel cleanup](https://github.com/thunderdew-dawn/fls-pilot/issues/46) - not_planned
 - #47 [Rejected: mixer insert track automation semantics](https://github.com/thunderdew-dawn/fls-pilot/issues/47) - not_planned
 - #48 [Rejected: automatic Audio Clip Stretch Pro Normalize source-path and new-clip watcher](https://github.com/thunderdew-dawn/fls-pilot/issues/48) - not_planned
+- #56 [P0: Default Safe UX — scan, propose, risk-rate, apply one reversible change, read back, stop](https://github.com/thunderdew-dawn/fls-pilot/issues/56) - completed
+- #58 [P1: Community adoption pack — demo video, GIFs, branding assets, issue templates, known-good configs and compatibility matrix](https://github.com/thunderdew-dawn/fls-pilot/issues/58) - completed
+- #59 [P0: Complete breaking project rename to fls-pilot](https://github.com/thunderdew-dawn/fls-pilot/issues/59) - completed
 - #60 [P0: Rename impact inventory for fls-pilot](https://github.com/thunderdew-dawn/fls-pilot/issues/60) - completed
+- #61 [P0: Enforce no-alias policy for fls-pilot rename](https://github.com/thunderdew-dawn/fls-pilot/issues/61) - completed
 - #62 [P0: Enable security baseline and branch protection for main](https://github.com/thunderdew-dawn/fls-pilot/issues/62) - completed
+- #63 [P0: Define write-safety contract for all persistent FL Studio changes](https://github.com/thunderdew-dawn/fls-pilot/issues/63) - completed
+- #64 [P1: Setup Doctor and safe first-run experience](https://github.com/thunderdew-dawn/fls-pilot/issues/64) - completed
+- #65 [P1: User Value Pack 1 - Mix Review / Preflight / Organizer proposal mode](https://github.com/thunderdew-dawn/fls-pilot/issues/65) - completed
+- #110 [[FEATURE] P0: Add Production/Dev prompt exposure boundary before Release 3.0](https://github.com/thunderdew-dawn/fls-pilot/issues/110) - completed
