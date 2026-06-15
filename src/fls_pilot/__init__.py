@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-__version__ = "3.0.0b1"
+__version__ = "3.0.0b2"
 
 from .connection import (
     FLBridge,
