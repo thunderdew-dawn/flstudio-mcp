@@ -173,11 +173,11 @@ def _read_project_version() -> str:
     except Exception:
         pass
     from . import __version__
+
     return __version__
 
 
 PROJECT_VERSION = _read_project_version()
-
 
 
 @dataclass
@@ -593,7 +593,8 @@ def _sync_sse_probe_state(state: ControlCenterState, *, refresh: bool) -> None:
     probe_state = str(state.sse_probe.get("state") or "")
     should_probe = (
         state.sse_probe.get("url") != expected_url
-        or probe_state in {
+        or probe_state
+        in {
             "",
             "not_required",
             "stopped",
@@ -928,12 +929,8 @@ def _mix_review_unavailable_report(message: str) -> dict[str, Any]:
         },
         "details": {
             "tracks": [],
-            "notes": [
-                "Mix Review is read-only and does not modify FL Studio project state."
-            ],
-            "limits": [
-                "Level findings require playback or a recent Mix Review watch capture."
-            ],
+            "notes": ["Mix Review is read-only and does not modify FL Studio project state."],
+            "limits": ["Level findings require playback or a recent Mix Review watch capture."],
             "gather_errors": [],
             "low_end": {
                 "summary": {},
@@ -977,10 +974,7 @@ def _build_mix_review_report(snapshot: dict[str, Any]) -> dict[str, Any]:
         levels_valid=levels_valid,
         master_peak=master_peak,
     )
-    audible = [
-        row for row in used_tracks
-        if _as_int(row.get("index")) != 0 and not row.get("mute")
-    ]
+    audible = [row for row in used_tracks if _as_int(row.get("index")) != 0 and not row.get("mute")]
     eq_count = sum(1 for row in audible if _mix_has_plugin_keyword(row, ("eq",)))
     comp_count = sum(
         1
@@ -1006,9 +1000,7 @@ def _build_mix_review_report(snapshot: dict[str, Any]) -> dict[str, Any]:
     limits = []
     if not levels_valid:
         limits.append("Level findings require playback or a recent full-song watch capture.")
-    limits.append(
-        "Tone balance is a rough name-and-peak estimate, not an output spectrum."
-    )
+    limits.append("Tone balance is a rough name-and-peak estimate, not an output spectrum.")
     if low_end.get("analysis_limits"):
         limits.append(str(low_end["analysis_limits"]))
 
@@ -1053,9 +1045,7 @@ def _build_mix_review_report(snapshot: dict[str, Any]) -> dict[str, Any]:
             "limits": _unique_strings(limits),
             "gather_errors": list(snapshot.get("gather_errors") or []),
             "template_context": templates.compact_context(
-                diagnosis.get("template_context")
-                or snapshot.get("template_context")
-                or {}
+                diagnosis.get("template_context") or snapshot.get("template_context") or {}
             ),
             "low_end": {
                 "summary": low_end.get("summary") or {},
@@ -1532,8 +1522,7 @@ def _build_project_organizer_report(
         for idx in set(mixer_by_index) | set(routing_by_index)
     }
     routes_by_src = {
-        idx: _normalise_routes(row.get("routes_to") or [])
-        for idx, row in routing_by_index.items()
+        idx: _normalise_routes(row.get("routes_to") or []) for idx, row in routing_by_index.items()
     }
 
     unnamed_channels = [
@@ -1681,9 +1670,7 @@ def _merge_channel_snapshots(
     channel_rows: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     by_index = {
-        idx: dict(row)
-        for row in channel_rows
-        if (idx := _organizer_item_index(row)) is not None
+        idx: dict(row) for row in channel_rows if (idx := _organizer_item_index(row)) is not None
     }
     merged = []
     seen: set[int] = set()
@@ -2159,7 +2146,8 @@ def _organizer_color_standard_rules(
         color = "#55EF87" if "audio" in ctype else "#27D7FF"
         rules.append({"type": "channel", "index": idx, "hex": color})
     bus_tracks = [
-        row for row in mixer_tracks
+        row
+        for row in mixer_tracks
         if _looks_like_bus_name(row.get("name")) and _organizer_item_index(row) is not None
     ]
     for row in bus_tracks[:4]:
@@ -2476,8 +2464,7 @@ def _build_routing_audit_report(
         if (idx := _as_int(row.get("i", row.get("index")))) is not None
     }
     routes_by_src: dict[int, list[dict[str, Any]]] = {
-        idx: _normalise_routes(row.get("routes_to") or [])
-        for idx, row in track_by_index.items()
+        idx: _normalise_routes(row.get("routes_to") or []) for idx, row in track_by_index.items()
     }
     incoming_by_dst: dict[int, list[int]] = {}
     route_rows: list[dict[str, Any]] = []
@@ -2579,9 +2566,8 @@ def _build_routing_audit_report(
             {
                 "track": idx,
                 "name": _track_name(track_by_index, idx),
-                "role": templates.role_for(template_context, idx) or (
-                    "bus" if idx in bus_indices else ("master" if idx == 0 else "insert")
-                ),
+                "role": templates.role_for(template_context, idx)
+                or ("bus" if idx in bus_indices else ("master" if idx == 0 else "insert")),
                 "incoming_count": len(incoming_by_dst.get(idx, [])),
                 "targeted_channel_count": len(targeted_tracks.get(idx, [])),
                 "routes_to": routes_by_src.get(idx, []),
@@ -2821,8 +2807,7 @@ def _build_routing_graph(
 
     used_node_ids = {link["from"] for link in links} | {link["to"] for link in links}
     kept_nodes = [
-        node for node_id, node in nodes.items()
-        if node_id in used_node_ids or node_id == "master"
+        node for node_id, node in nodes.items() if node_id in used_node_ids or node_id == "master"
     ]
     return {
         "nodes": kept_nodes,
@@ -2859,8 +2844,7 @@ def _routing_findings(
                 "severity": "critical",
                 "title": "Unrouted Channels",
                 "detail": (
-                    "Channels without a usable mixer target may be silent or bypass "
-                    "bus processing."
+                    "Channels without a usable mixer target may be silent or bypass bus processing."
                 ),
                 "count": len(unrouted_channels),
                 "items": unrouted_channels[:8],
@@ -2884,8 +2868,7 @@ def _routing_findings(
                 "severity": "warning",
                 "title": "Unused Mixer Inserts",
                 "detail": (
-                    "Default mixer inserts with no channels, incoming routes, or "
-                    "plugin slots."
+                    "Default mixer inserts with no channels, incoming routes, or plugin slots."
                 ),
                 "count": len(unused_mixer_tracks),
                 "items": unused_mixer_tracks[:8],
@@ -2935,12 +2918,7 @@ def _routing_health_score(
     dead_end_count: int,
     unused_count: int,
 ) -> int:
-    penalty = (
-        direct_count * 7
-        + unrouted_count * 12
-        + dead_end_count * 14
-        + unused_count * 3
-    )
+    penalty = direct_count * 7 + unrouted_count * 12 + dead_end_count * 14 + unused_count * 3
     return max(0, min(100, 100 - penalty))
 
 
@@ -3741,11 +3719,7 @@ def _group_status(groups: dict[str, list[dict[str, Any]]], group: str) -> str:
     if failed:
         return "blocked" if failed.get("severity") == "blocker" else "action needed"
     manual = next(
-        (
-            item
-            for item in findings
-            if item.get("status") in {"manual_check", "probe_needed"}
-        ),
+        (item for item in findings if item.get("status") in {"manual_check", "probe_needed"}),
         None,
     )
     if manual:

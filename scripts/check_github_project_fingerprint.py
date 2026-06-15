@@ -94,11 +94,15 @@ def main() -> int:
 
     missing_from_project = sorted(source_numbers - set(by_number))
     if missing_from_project:
-        errors.append(f"github-source-of-truth issues missing from Project #{PROJECT}: {missing_from_project}")
+        errors.append(
+            f"github-source-of-truth issues missing from Project #{PROJECT}: {missing_from_project}"
+        )
 
     missing_release_items = sorted(REQUIRED_RELEASE_ITEMS - set(by_number))
     if missing_release_items:
-        errors.append(f"required 3.0 release-train issues missing from Project #{PROJECT}: {missing_release_items}")
+        errors.append(
+            f"required 3.0 release-train issues missing from Project #{PROJECT}: {missing_release_items}"
+        )
 
     for issue in source_issues:
         number = int(issue["number"])
@@ -113,14 +117,18 @@ def main() -> int:
 
         if issue.get("state") == "CLOSED":
             if item.get("status") != "Done" or item.get("roadmap Lane") != "Done":
-                errors.append(f"closed issue #{number} is not marked Done/Done in Project #{PROJECT}")
+                errors.append(
+                    f"closed issue #{number} is not marked Done/Done in Project #{PROJECT}"
+                )
 
         if issue.get("state") == "OPEN" and "release-blocker" in labels:
             milestone = issue.get("milestone") or {}
             if not milestone.get("title"):
                 errors.append(f"open release blocker #{number} has no milestone")
             if item.get("priority") != "P0":
-                errors.append(f"open release blocker #{number} is not marked P0 in Project #{PROJECT}")
+                errors.append(
+                    f"open release blocker #{number} is not marked P0 in Project #{PROJECT}"
+                )
 
     summary = {
         "project": PROJECT,

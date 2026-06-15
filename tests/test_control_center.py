@@ -786,8 +786,7 @@ def test_build_project_organizer_report_surfaces_cleanup_plan():
     assert report["summary"]["routing_cleanup"] == 1
     assert report["summary"]["proposed_changes"] >= 3
     assert any(
-        step["tool"] == "fl_apply_project_cleanup_step"
-        for step in report["cleanup_plan"]["steps"]
+        step["tool"] == "fl_apply_project_cleanup_step" for step in report["cleanup_plan"]["steps"]
     )
     assert report["guided"]["next_tool"] == "fl_apply_project_cleanup_step"
     assert report["safety"]["read_only"] is True

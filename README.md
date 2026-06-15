@@ -1,6 +1,6 @@
 # fls-pilot
 
-![version](https://img.shields.io/badge/version-3.0.0b1-blue)
+![version](https://img.shields.io/badge/version-3.0.0b2-blue)
 ![status](https://img.shields.io/badge/status-beta-yellow)
 [![CI](https://github.com/thunderdew-dawn/fls-pilot/actions/workflows/ci.yml/badge.svg)](https://github.com/thunderdew-dawn/fls-pilot/actions/workflows/ci.yml)
 ![license](https://img.shields.io/badge/license-MIT-green)
@@ -10,7 +10,7 @@
 ![macOS](https://img.shields.io/badge/macOS-12%2B-000000?logo=apple&logoColor=white)
 ![FL Studio](https://img.shields.io/badge/FL%20Studio-2025%2B-orange)
 
-[![Documentation Status](https://readthedocs.org/projects/fl-studio-pilot/badge/?version=v3-alpha)](https://fl-studio-pilot.readthedocs.io/en/v3-alpha/)
+[![Documentation Status](https://readthedocs.org/projects/fl-studio-pilot/badge/?version=beta)](https://fl-studio-pilot.readthedocs.io/en/beta/)
 
 ![fls-pilot](docs/assets/fls-pilot-logo-with-text.png)
 
@@ -39,33 +39,23 @@ export-readiness checks.
 
 ### Mix Review & Gain Staging
 
-<video controls muted playsinline preload="metadata" style="width: 100%; max-width: 960px;">
-  <source src="docs/assets/ai-apply-gain-staging-example.mp4" type="video/mp4">
-</video>
+[▶️ Video: Mix Review & Gain Staging](https://github.com/thunderdew-dawn/fls-pilot/raw/main/docs/assets/ai-apply-gain-staging-example.mp4)
 
 ### Routing Audit
 
-<video controls muted playsinline preload="metadata" style="width: 100%; max-width: 960px;">
-  <source src="docs/assets/ai-based-mixer-routing-example.mp4" type="video/mp4">
-</video>
+[▶️ Video: Routing Audit](https://github.com/thunderdew-dawn/fls-pilot/raw/main/docs/assets/ai-based-mixer-routing-example.mp4)
 
 ### Project Organizer
 
-<video controls muted playsinline preload="metadata" style="width: 100%; max-width: 960px;">
-  <source src="docs/assets/ai-color-my-tracks-example.mp4" type="video/mp4">
-</video>
+[▶️ Video: Project Organizer](https://github.com/thunderdew-dawn/fls-pilot/raw/main/docs/assets/ai-color-my-tracks-example.mp4)
 
 ### Plugin & EQ Workflows
 
-<video controls muted playsinline preload="metadata" style="width: 100%; max-width: 960px;">
-  <source src="docs/assets/ai-set-highpass-on-eq-batch-example.mp4" type="video/mp4">
-</video>
+[▶️ Video: Plugin & EQ Workflows](https://github.com/thunderdew-dawn/fls-pilot/raw/main/docs/assets/ai-set-highpass-on-eq-batch-example.mp4)
 
 ### Composition
 
-<video controls muted playsinline preload="metadata" style="width: 100%; max-width: 960px;">
-  <source src="docs/assets/ai-generate-bassline-example.mp4" type="video/mp4">
-</video>
+[▶️ Video: Composition](https://github.com/thunderdew-dawn/fls-pilot/raw/main/docs/assets/ai-generate-bassline-example.mp4)
 
 ## Requirements
 
@@ -154,7 +144,7 @@ part of the public ReadTheDocs site.
 
 Public documentation:
 
-<https://fl-studio-pilot.readthedocs.io/en/v3-alpha/>
+<https://fl-studio-pilot.readthedocs.io/en/beta/>
 
 Useful local pages:
 

@@ -30,6 +30,8 @@ class _State:
 class _Handler(socketserver.StreamRequestHandler):
     def handle(self) -> None:
         raw = self.rfile.readline()
+        if not raw:
+            return
         req = json.loads(raw.decode("utf-8"))
         op = req.get("op")
         if op == "health":
@@ -102,6 +104,5 @@ def test_bridge_mock(bridge):
 
     with pytest.raises(FLCommandFailed) as excinfo:
         bridge.call("not_a_command")
-    
-    assert excinfo.value.code == "client"
 
+    assert excinfo.value.code == "client"

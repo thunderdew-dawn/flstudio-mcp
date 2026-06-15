@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from . import __version__, connection, protocol, safety
+
 READ_COMMANDS = {
     protocol.CMD_GET_PROJECT_STATE,
     protocol.CMD_GET_PLAY_STATE,
@@ -20,7 +21,6 @@ READ_COMMANDS = {
     protocol.CMD_PATTERN_LIST,
     protocol.CMD_PLAYLIST_LIST_TRACKS,
 }
-
 
 
 def collect_status(
@@ -56,9 +56,11 @@ def collect_status(
 
         heartbeat_age = _safe_call(lambda: bridge.heartbeat_age())
         alive = bool(_safe_call(lambda: bridge.is_alive(), default=False))
-        heartbeat_age_ms = round(float(heartbeat_age) * 1000.0) if isinstance(
-            heartbeat_age, (int, float)
-        ) else None
+        heartbeat_age_ms = (
+            round(float(heartbeat_age) * 1000.0)
+            if isinstance(heartbeat_age, (int, float))
+            else None
+        )
         snapshot["bridge"].update(
             {
                 "state": "live" if alive else "unavailable",
@@ -90,7 +92,6 @@ def collect_status(
     return snapshot
 
 
-
 def format_human(snapshot: dict[str, Any]) -> str:
     """Return a compact CLI summary."""
     bridge = snapshot.get("bridge", {})
@@ -118,12 +119,10 @@ def format_human(snapshot: dict[str, Any]) -> str:
         )
 
     lines.append(
-        f"Evidence: {live_count} live, {limited_count} limited, "
-        f"{unavailable_count} unavailable"
+        f"Evidence: {live_count} live, {limited_count} limited, {unavailable_count} unavailable"
     )
     lines.append("No FL Studio project changes were made.")
     return "\n".join(lines)
-
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -185,8 +184,7 @@ def _base_snapshot(generated_at: str) -> dict[str, Any]:
             "rollback_available": bool(entries),
             "last_change": entries[-1] if entries else None,
             "note": (
-                "Status reads safety state only; rollback is executed through "
-                "MCP safety tools."
+                "Status reads safety state only; rollback is executed through MCP safety tools."
             ),
         },
         "analysis": {
@@ -360,8 +358,7 @@ def _organization_signals(resources: dict[str, Any]) -> dict[str, Any]:
             "value": "Limited",
             "state": "limited",
             "detail": (
-                "The compact channel list omits target mixer tracks; use detail "
-                "reads for this."
+                "The compact channel list omits target mixer tracks; use detail reads for this."
             ),
         }
     )
@@ -484,7 +481,6 @@ def _safe_bridge_call(bridge, command: str, params: dict[str, Any] | None = None
         }
     except Exception as exc:
         return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
-
 
 
 def _safe_call(fn, default=None):

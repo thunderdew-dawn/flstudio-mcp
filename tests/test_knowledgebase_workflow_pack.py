@@ -70,7 +70,14 @@ def test_kb_search_structured_has_required_keys():
     result = kb_search_structured("mixer")
     if result and "error" not in result[0] and "message" not in result[0]:
         item = result[0]
-        for key in ("path", "title", "snippet", "confidence", "machine_readable", "recommended_next_tool"):
+        for key in (
+            "path",
+            "title",
+            "snippet",
+            "confidence",
+            "machine_readable",
+            "recommended_next_tool",
+        ):
             assert key in item, f"Missing key {key!r} in structured result"
 
 
@@ -193,7 +200,10 @@ def test_kb_get_capability_unsupported_plugin_load():
     """'load plugin' intent must be identified as not supported."""
     result = kb_get_capability("load plugin")
     assert result.get("supported") is False
-    assert "workaround" in result.get("guidance", "").lower() or "not supported" in result.get("guidance", "").lower()
+    assert (
+        "workaround" in result.get("guidance", "").lower()
+        or "not supported" in result.get("guidance", "").lower()
+    )
 
 
 def test_kb_get_capability_unsupported_render():
@@ -263,7 +273,13 @@ def test_new_kb_tools_registered_in_server():
     server = build_server()
     tools = _run(server.list_tools())
     tool_names = {t.name for t in tools}
-    new_tools = {"kb_search_structured", "kb_get_many", "kb_get_workflow_pack", "kb_get_capability", "kb_explain_limit"}
+    new_tools = {
+        "kb_search_structured",
+        "kb_get_many",
+        "kb_get_workflow_pack",
+        "kb_get_capability",
+        "kb_explain_limit",
+    }
     missing = new_tools - tool_names
     assert not missing, f"New KB tools not registered: {missing}"
 
@@ -273,9 +289,11 @@ def test_original_kb_tools_still_registered():
     server = build_server()
     tools = _run(server.list_tools())
     tool_by_name = {t.name: t for t in tools}
+
     runtime = {"kb_search", "kb_get", "kb_get_parameter_spec", "kb_get_conversion"}
     missing = runtime - set(tool_by_name)
     assert not missing, f"Runtime KB tools missing: {missing}"
+
     for name in runtime:
         annotations = tool_by_name[name].annotations
         assert annotations.readOnlyHint is True
@@ -287,6 +305,11 @@ def test_dev_kb_tools_not_registered():
     server = build_server()
     tools = _run(server.list_tools())
     tool_names = {t.name for t in tools}
-    dev_only = {"kb_record_finding", "kb_record_verified_finding", "kb_list_open_questions"}
+
+    dev_only = {
+        "kb_record_finding",
+        "kb_record_verified_finding",
+        "kb_list_open_questions",
+    }
     unexpected = dev_only & tool_names
     assert not unexpected, f"Dev-only KB tools should not be public: {unexpected}"

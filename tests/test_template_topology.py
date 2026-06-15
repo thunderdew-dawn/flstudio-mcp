@@ -163,9 +163,10 @@ def test_profile_topologies_are_recognized(profile_path: Path) -> None:
 
     assert context["matched"] is True
     assert profile["template_name"] in context["candidate_templates"]
-    assert context["summary"]["reserved_placeholders"] >= profile["template_detection"][
-        "reserved_placeholder_min_count"
-    ]
+    assert (
+        context["summary"]["reserved_placeholders"]
+        >= profile["template_detection"]["reserved_placeholder_min_count"]
+    )
     assert context["candidate_slugs"]
     assert templates.compact_context(context)["template_name"] == context["template_name"]
 

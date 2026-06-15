@@ -1,8 +1,8 @@
-import os
-import sys
-import subprocess
 import json
+import subprocess
+import sys
 from pathlib import Path
+
 
 def parse_labels(filepath):
     """
@@ -12,9 +12,9 @@ def parse_labels(filepath):
         color: <color>
         description: <desc>
     """
-    with open(filepath, "r") as f:
+    with open(filepath) as f:
         content = f.read()
-    
+
     labels = []
     # match each block starting with `- name:`
     blocks = content.split("- name:")[1:]
@@ -28,14 +28,11 @@ def parse_labels(filepath):
                 color = line.strip()[6:].strip().strip("'\"")
             elif line.strip().startswith("description:"):
                 desc = line.strip()[12:].strip().strip("'\"")
-        
+
         if name and name != "*":
-            labels.append({
-                "name": name,
-                "color": color,
-                "description": desc
-            })
+            labels.append({"name": name, "color": color, "description": desc})
     return labels
+
 
 def get_existing_labels():
     """
@@ -46,7 +43,7 @@ def get_existing_labels():
             ["gh", "label", "list", "--json", "name,color,description", "--limit", "500"],
             capture_output=True,
             text=True,
-            check=True
+            check=True,
         )
         return json.loads(result.stdout)
     except subprocess.CalledProcessError as e:
@@ -55,6 +52,7 @@ def get_existing_labels():
     except FileNotFoundError:
         print("Error: GitHub CLI (gh) is not installed or not in PATH.")
         sys.exit(1)
+
 
 def main():
     root_dir = Path(__file__).parent.parent
@@ -66,7 +64,7 @@ def main():
 
     desired_labels = parse_labels(labels_file)
     existing_labels_list = get_existing_labels()
-    
+
     existing_labels_map = {lbl["name"]: lbl for lbl in existing_labels_list}
 
     print(f"Found {len(desired_labels)} desired labels in taxonomy.")
@@ -78,7 +76,7 @@ def main():
         name = desired["name"]
         color = desired.get("color", "ededed")
         desc = desired.get("description", "")
-        
+
         if name in existing_labels_map:
             existing = existing_labels_map[name]
             # Check if color or description needs update
@@ -88,7 +86,7 @@ def main():
                     subprocess.run(
                         ["gh", "label", "edit", name, "--color", color, "--description", desc],
                         check=True,
-                        capture_output=True
+                        capture_output=True,
                     )
                 except subprocess.CalledProcessError as e:
                     print(f"Failed to update label '{name}': {e}")
@@ -101,7 +99,7 @@ def main():
                 subprocess.run(
                     ["gh", "label", "create", name, "--color", color, "--description", desc],
                     check=True,
-                    capture_output=True
+                    capture_output=True,
                 )
             except subprocess.CalledProcessError as e:
                 print(f"Failed to create label '{name}': {e}")
@@ -112,6 +110,7 @@ def main():
         sys.exit(1)
 
     print("Label sync complete.")
+
 
 if __name__ == "__main__":
     main()

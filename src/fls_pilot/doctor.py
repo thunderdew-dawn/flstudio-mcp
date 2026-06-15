@@ -125,8 +125,7 @@ def resolve_mcp_server_config(
     transport_error = None
     if transport not in _VALID_MCP_TRANSPORTS:
         transport_error = (
-            f"Unsupported MCP server transport {raw_transport!r}; expected "
-            "'stdio' or 'sse'."
+            f"Unsupported MCP server transport {raw_transport!r}; expected 'stdio' or 'sse'."
         )
         transport = "stdio"
 
@@ -223,10 +222,7 @@ def check_python_environment() -> list[Finding]:
             component="Python Environment",
             severity="blocker",
             status="ok",
-            evidence=(
-                f"Python {py_ver}, platform: {platform.platform()}, "
-                f"fls-pilot {__version__}"
-            ),
+            evidence=(f"Python {py_ver}, platform: {platform.platform()}, fls-pilot {__version__}"),
             remediation="",
             config_source="system",
         )
@@ -326,13 +322,10 @@ def check_midi_ports(
     out_match = any(port_to_fl.lower() in p.lower() for p in ports["outputs"])
     in_match = any(port_from_fl.lower() in p.lower() for p in ports["inputs"])
 
-    remedy = (
-        "Create the configured FLStudioPilot ports in your OS virtual MIDI tool."
-    )
+    remedy = "Create the configured FLStudioPilot ports in your OS virtual MIDI tool."
     if sys.platform == "darwin":
         remedy = (
-            "Open Audio MIDI Setup -> IAC Driver and create ports matching the "
-            "configured names."
+            "Open Audio MIDI Setup -> IAC Driver and create ports matching the configured names."
         )
     elif sys.platform == "win32":
         remedy = "Open loopMIDI and create ports matching the configured names."
@@ -520,8 +513,7 @@ def check_fl_controller(
                         status="failed",
                         evidence="No heartbeat timestamp is available.",
                         remediation=(
-                            "Confirm the controller script is installed and "
-                            "loaded in FL Studio."
+                            "Confirm the controller script is installed and loaded in FL Studio."
                         ),
                         config_source="FL bridge heartbeat",
                     ),
@@ -537,10 +529,7 @@ def check_fl_controller(
                         component="FL Studio Controller Script",
                         severity="blocker",
                         status="manual_check",
-                        evidence=(
-                            f"Controller heartbeat exists but is stale "
-                            f"({age:.2f}s old)."
-                        ),
+                        evidence=(f"Controller heartbeat exists but is stale ({age:.2f}s old)."),
                         remediation="Reload FL MIDI scripts or restart the FL controller script.",
                         config_source="FL bridge heartbeat",
                     ),
@@ -553,8 +542,7 @@ def check_fl_controller(
                             f"{protocol.HEARTBEAT_STALE_SECONDS:.2f}s."
                         ),
                         remediation=(
-                            "Confirm FL Studio is responsive and the script "
-                            "is still running."
+                            "Confirm FL Studio is responsive and the script is still running."
                         ),
                         config_source="FL bridge heartbeat",
                     ),
@@ -1024,9 +1012,7 @@ def run_all_checks(
     stdio_severity = (
         "blocker" if config.transport == "stdio" or config.all_transports else "warning"
     )
-    sse_severity = (
-        "blocker" if config.transport == "sse" or config.all_transports else "warning"
-    )
+    sse_severity = "blocker" if config.transport == "sse" or config.all_transports else "warning"
 
     if run_stdio:
         if server_ok:

@@ -79,7 +79,6 @@ def _text(r) -> str:
     return str(r)
 
 
-
 def _server():
     return build_server()
 
