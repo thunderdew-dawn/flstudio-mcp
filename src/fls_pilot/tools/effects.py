@@ -13,6 +13,7 @@ from pydantic import Field
 
 from .. import protocol, safety
 from ..connection import FLTimeout, call_with_retry, get_bridge
+from .registration import RETIRED_LOW_LEVEL_TOOLS, hide_retired_tools
 from .targets import mixer_track_error
 
 
@@ -24,6 +25,7 @@ def _band_before(before: dict, band: int) -> dict:
 
 
 def register(mcp: FastMCP) -> None:
+    mcp = hide_retired_tools(mcp, RETIRED_LOW_LEVEL_TOOLS)
     _RO = {
         "readOnlyHint": True,
         "idempotentHint": True,

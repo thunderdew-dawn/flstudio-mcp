@@ -17,6 +17,7 @@ from .. import protocol, safety
 from ..connection import get_bridge
 from ..music.scales import parse_root_note
 from ..pyscript_gen import quantize_notes
+from .registration import RETIRED_LOW_LEVEL_TOOLS, hide_retired_tools
 
 
 class PianoRollNote(BaseModel):
@@ -401,6 +402,7 @@ def _run_piano_roll_action(action: str, params: dict | None) -> dict:
 
 
 def register(mcp: FastMCP) -> None:
+    mcp = hide_retired_tools(mcp, RETIRED_LOW_LEVEL_TOOLS)
     _RO = {
         "readOnlyHint": True,
         "idempotentHint": True,

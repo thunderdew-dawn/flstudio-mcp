@@ -19,15 +19,16 @@ from fastmcp import FastMCP  # noqa: E402
 
 from fls_pilot import __version__  # noqa: E402
 from fls_pilot import server as server_module  # noqa: E402
+from fls_pilot.tools.registration import RETIRED_LOW_LEVEL_TOOLS  # noqa: E402
 
-EXPECTED_REGISTERED_TOOL_COUNT = 94
+EXPECTED_REGISTERED_TOOL_COUNT = 91
 EXPECTED_STATIC_TOOL_COUNT = 167
 EXPECTED_REGISTERED_SAFETY_SUMMARY = {
     "external-write": 2,
-    "read-only": 41,
+    "read-only": 50,
     "server-state": 4,
     "transient": 1,
-    "unannotated": 13,
+    "unannotated": 1,
     "write-safe-required": 33,
 }
 EXPECTED_STATIC_SAFETY_SUMMARY = {
@@ -152,9 +153,7 @@ def main() -> int:
     static_summary = {"write-gap": 0, **count_by_status(static_audits)}
     registered_not_static = sorted(registered_name_set - static_names)
     static_not_registered = sorted(static_names - registered_name_set)
-    expected_static_not_registered = sorted(
-        getattr(server_module, "_LEGACY_LOW_LEVEL_TOOLS", set()) & static_names
-    )
+    expected_static_not_registered = sorted(RETIRED_LOW_LEVEL_TOOLS & static_names)
 
     print("Tool registration baseline")
     print(f"- registered_public_tools: {len(registered_tools)}")

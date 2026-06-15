@@ -15,13 +15,12 @@ import asyncio
 import sys
 from pathlib import Path
 
-import pytest
-
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+
+from fastmcp import FastMCP
 
 from fls_pilot import prompts as prompt_defs
 from fls_pilot.server import build_server
-from fastmcp import FastMCP
 
 # ---------------------------------------------------------------------------
 # Expected prompt names (from prompts.py _PROMPT_MAP)
@@ -35,6 +34,9 @@ EXPECTED_PROMPTS = {
     "plugin_chain_planner",
     "composition_scale_writer",
     "audio_to_midi_or_reference_analysis",
+}
+
+DEV_PROMPTS = {
     "api_probe",
     "bug_triage",
     "implementation_slice",
@@ -109,19 +111,21 @@ def test_prompts_register_on_fresh_mcp():
 
 
 def test_all_expected_prompts_registered():
-    """All 11 expected prompt names must appear in list_prompts()."""
+    """All runtime prompt names must appear in list_prompts()."""
     server = _build()
     prompts = _run(server.list_prompts())
     registered_names = {p.name for p in prompts}
     missing = EXPECTED_PROMPTS - registered_names
     assert not missing, f"Missing prompts: {missing}"
+    unexpected = DEV_PROMPTS & registered_names
+    assert not unexpected, f"Dev prompts should not be public MCP prompts: {unexpected}"
 
 
 def test_prompt_count():
-    """Server must register exactly 11 prompts."""
+    """Server must register exactly 7 runtime prompts."""
     server = _build()
     prompts = _run(server.list_prompts())
-    assert len(prompts) == 11
+    assert len(prompts) == 7
 
 
 def test_mix_review_prompt_renderable():
@@ -144,15 +148,6 @@ def test_plugin_chain_planner_prompt_renderable():
     assert len(text) > 100
     # Must mention the hard limit about plugin loading
     assert "plugin" in text.lower()
-
-
-def test_release_prepare_prompt_renderable():
-    """release_prepare prompt must render non-empty content."""
-    server = _build()
-    result = _run(server.render_prompt("release_prepare", {}))
-    assert result.messages
-    text = result.messages[0].content.text
-    assert len(text) > 50
 
 
 def test_project_preflight_prompt_renderable():

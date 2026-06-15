@@ -80,9 +80,55 @@ Repository = "https://github.com/thunderdew-dawn/fls-pilot"
 Issues = "https://github.com/thunderdew-dawn/fls-pilot/issues"
 Upstream = "https://github.com/rosasynthesiz/flstudio-mcp"
 
+[tool.hatch.build]
+include = [
+    "/src/fls_pilot/**/*.py",
+    "/src/fls_pilot/context/**/*.md",
+    "/src/fls_pilot/context/**/*.json",
+    "/src/fls_pilot/context/**/*.yaml",
+    "/src/fls_pilot/context/**/*.yml",
+    "/knowledgebase/**/*.md",
+    "/knowledgebase/**/*.json",
+    "/knowledgebase/**/*.yaml",
+    "/knowledgebase/**/*.yml",
+    "/docs/**/*.md",
+    "/README.md",
+    "/LICENSE",
+]
+exclude = [
+    "/.github/**",
+    "/.gitignore",
+    "/.pytest_cache/**",
+    "/.ruff_cache/**",
+    "/agent-docs/**",
+    "/dist/**",
+    "/docs/community/**",
+    "/docs/requirements.txt",
+    "/knowledgebase/agent_notes/**",
+    "/scratch/**",
+    "/scripts/calibration/**",
+    "/scripts/probes/**",
+    "/tests/**",
+    "/src/fls_pilot/context/prompts/api-probe.md",
+    "/src/fls_pilot/context/prompts/bug-triage.md",
+    "/src/fls_pilot/context/prompts/implementation-slice.md",
+    "/src/fls_pilot/context/prompts/release.md",
+    "**/__pycache__/**",
+]
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/fls_pilot"]
-artifacts = ["src/fls_pilot/context/**/*.md"]
+force-include = { "knowledgebase" = "knowledgebase" }
+
+[tool.hatch.build.targets.sdist]
+only-include = [
+    "src",
+    "knowledgebase",
+    "docs",
+    "README.md",
+    "LICENSE",
+    "pyproject.toml",
+]
 
 [tool.ruff]
 line-length = 100
