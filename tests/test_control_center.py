@@ -49,6 +49,31 @@ def test_status_groups_doctor_findings(monkeypatch):
     assert status["readiness"]["read_only_review_ready"] is True
 
 
+def test_ui_payload_surfaces_catalog_next_action_and_service_actions():
+    payload = control_center._ui_payload(
+        status_report={"bridge": {"state": "live"}},
+        readiness={"read_only_review_ready": True},
+        processes={
+            "daemon": {"state": "running", "running": True},
+            "sse": {"state": "external"},
+        },
+        ports={
+            "daemon": {"host": "127.0.0.1", "selected_port": 9787},
+            "sse": {"host": "127.0.0.1", "selected_port": 8080},
+        },
+    )
+
+    catalog = {item["id"]: item for item in payload["workflow_catalog"]}
+    assert catalog["mix_review"]["enabled"] is True
+    assert catalog["preflight"]["enabled"] is False
+    assert catalog["plugin_assistant"]["endpoint"] is None
+    assert payload["next_action"]["target_panel"] == "producer_health"
+    assert payload["next_action"]["action_label"] == "Open Health"
+    assert payload["service_actions"]["daemon"]["stop"]["enabled"] is True
+    assert payload["service_actions"]["sse"]["external"] is True
+    assert payload["service_actions"]["sse"]["stop"]["enabled"] is False
+
+
 def test_status_uses_selected_tcp_endpoint_for_doctor_and_status(monkeypatch):
     findings = [
         _finding("TCP Daemon / Bridge"),

@@ -47,6 +47,119 @@ MANUAL_CHECKPOINTS = {
     "ran_mcp_apply",
     "granted_macos_accessibility",
 }
+WORKFLOW_CATALOG = [
+    {
+        "id": "project_health",
+        "panel_id": "producer_health",
+        "title": "Health",
+        "group": "Project Review",
+        "maturity": "read_only",
+        "enabled": True,
+        "endpoint": None,
+        "client_action": "runProjectHealth",
+        "action_label": "Run Health Scan",
+        "safety_note": "Read-only overview across available workflow reports.",
+    },
+    {
+        "id": "mix_review",
+        "panel_id": "producer_mix_review",
+        "title": "Mix Review",
+        "group": "Project Review",
+        "maturity": "read_only",
+        "enabled": True,
+        "endpoint": "/api/workflows/mix-review",
+        "action_label": "Run Mix Review",
+        "safety_note": "Read-only mixer review. No project changes are made.",
+    },
+    {
+        "id": "routing_audit",
+        "panel_id": "producer_routing",
+        "title": "Routing Audit",
+        "group": "Project Review",
+        "maturity": "read_only",
+        "enabled": True,
+        "endpoint": "/api/workflows/routing-audit",
+        "action_label": "Run Routing Audit",
+        "safety_note": "Read-only routing audit. Cleanup remains proposal-first.",
+    },
+    {
+        "id": "low_end_analysis",
+        "panel_id": "producer_low_end",
+        "title": "Low-End Analysis",
+        "group": "Project Review",
+        "maturity": "read_only",
+        "enabled": True,
+        "endpoint": "/api/workflows/low-end-analysis",
+        "action_label": "Run Low-End Analysis",
+        "safety_note": "Read-only low-end and stereo safety review.",
+    },
+    {
+        "id": "project_organizer",
+        "panel_id": "producer_organizer",
+        "title": "Organizer",
+        "group": "Project Review",
+        "maturity": "read_only",
+        "enabled": True,
+        "endpoint": "/api/workflows/project-organizer",
+        "action_label": "Run Organizer",
+        "safety_note": "Read-only scan. Any cleanup requires an approved safe-write tool.",
+    },
+    {
+        "id": "preflight",
+        "panel_id": "producer_preflight",
+        "title": "Preflight",
+        "group": "Roadmap",
+        "maturity": "planned",
+        "enabled": False,
+        "endpoint": None,
+        "action_label": None,
+        "safety_note": "Planned. No Control Center action is available yet.",
+    },
+    {
+        "id": "jam_2_project",
+        "panel_id": "producer_jam_2_project",
+        "title": "Jam 2 Project",
+        "group": "Roadmap",
+        "maturity": "planned",
+        "enabled": False,
+        "endpoint": None,
+        "action_label": None,
+        "safety_note": "Planned. No Control Center action is available yet.",
+    },
+    {
+        "id": "sidechaining",
+        "panel_id": "producer_sidechaining",
+        "title": "Sidechaining",
+        "group": "Roadmap",
+        "maturity": "planned",
+        "enabled": False,
+        "endpoint": None,
+        "action_label": None,
+        "safety_note": "Planned. No Control Center action is available yet.",
+    },
+    {
+        "id": "plugin_assistant",
+        "panel_id": "producer_plugin_assistant",
+        "title": "Plugin Assistant",
+        "group": "Roadmap",
+        "maturity": "planned",
+        "enabled": False,
+        "endpoint": None,
+        "action_label": None,
+        "safety_note": "Planned. Plugin loading remains manual.",
+    },
+    {
+        "id": "preset_assistant",
+        "panel_id": "producer_preset_assistant",
+        "title": "Preset Assistant",
+        "group": "Roadmap",
+        "maturity": "planned",
+        "enabled": False,
+        "endpoint": None,
+        "action_label": None,
+        "safety_note": "Planned. No Control Center action is available yet.",
+    },
+]
 
 
 def _read_project_version() -> str:
@@ -148,6 +261,12 @@ def collect_status(state: ControlCenterState, *, refresh: bool = True) -> dict[s
             offline=False,
             bridge_factory=lambda: TCPBridge(daemon_host, daemon_port),
         )
+        ui = _ui_payload(
+            status_report=status_report_data,
+            readiness=readiness,
+            processes=process_state,
+            ports=ports,
+        )
         return {
             "version": PROJECT_VERSION,
             "generated_at": _now_iso(),
@@ -181,7 +300,155 @@ def collect_status(state: ControlCenterState, *, refresh: bool = True) -> dict[s
             ),
             "snippets": client_snippets(state),
             "status_report": status_report_data,
+            "ui": ui,
         }
+
+
+def _ui_payload(
+    *,
+    status_report: dict[str, Any],
+    readiness: dict[str, Any],
+    processes: dict[str, Any],
+    ports: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    return {
+        "workflow_catalog": [dict(item) for item in WORKFLOW_CATALOG],
+        "next_action": _ui_next_action(
+            status_report=status_report,
+            readiness=readiness,
+            processes=processes,
+        ),
+        "service_actions": _ui_service_actions(processes=processes, ports=ports),
+    }
+
+
+def _ui_next_action(
+    *,
+    status_report: dict[str, Any],
+    readiness: dict[str, Any],
+    processes: dict[str, Any],
+) -> dict[str, Any]:
+    bridge = status_report.get("bridge") or {}
+    daemon_process = processes.get("daemon") or {}
+    daemon_running = _process_running(daemon_process)
+    live = bridge.get("state") == "live"
+
+    if not daemon_running:
+        return {
+            "label": "Start FL Studio Bridge Service",
+            "detail": (
+                "The local bridge service is stopped. Start it before checking "
+                "FL Studio controller data."
+            ),
+            "target_panel": "overview",
+            "action_path": "/api/process/daemon/start",
+            "action_label": "Start Service",
+            "kind": "service",
+        }
+
+    if not live:
+        return {
+            "label": "Connect FL Studio Controller",
+            "detail": (
+                "The bridge service is running, but FL Studio is not sending "
+                "fresh controller data yet."
+            ),
+            "target_panel": "setup",
+            "action_path": "/api/refresh",
+            "action_label": "Re-check",
+            "kind": "setup",
+        }
+
+    if readiness.get("read_only_review_ready"):
+        return {
+            "label": "Run Health Scan",
+            "detail": (
+                "FL Studio is connected. Start with a read-only project overview "
+                "before opening detailed workflow panels."
+            ),
+            "target_panel": "producer_health",
+            "action_path": None,
+            "action_label": "Open Health",
+            "kind": "workflow",
+        }
+
+    return {
+        "label": "Review Setup Doctor",
+        "detail": "A setup check still needs attention before project review is ready.",
+        "target_panel": "setup",
+        "action_path": "/api/refresh",
+        "action_label": "Re-check",
+        "kind": "setup",
+    }
+
+
+def _ui_service_actions(
+    *,
+    processes: dict[str, Any],
+    ports: dict[str, dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    return {
+        "daemon": _ui_service_action(
+            "daemon",
+            "FL Studio Bridge Service",
+            processes.get("daemon") or {},
+            ports.get("daemon") or {},
+        ),
+        "sse": _ui_service_action(
+            "sse",
+            "AI Client Server",
+            processes.get("sse") or {},
+            ports.get("sse") or {},
+        ),
+    }
+
+
+def _ui_service_action(
+    key: str,
+    label: str,
+    process: dict[str, Any],
+    port: dict[str, Any],
+) -> dict[str, Any]:
+    state_value = str(process.get("state") or "stopped")
+    external = state_value == "external"
+    managed_running = bool(process.get("running")) or state_value == "running"
+    reachable = managed_running or external
+    selected_port = port.get("selected_port")
+    host = port.get("host") or "127.0.0.1"
+    return {
+        "label": label,
+        "state": state_value,
+        "managed": managed_running and not external,
+        "external": external,
+        "host": host,
+        "selected_port": selected_port,
+        "start": {
+            "enabled": not reachable,
+            "path": f"/api/process/{key}/start",
+            "label": "Start Service" if key == "daemon" else "Start AI Client Server",
+        },
+        "stop": {
+            "enabled": managed_running and not external,
+            "path": f"/api/process/{key}/stop",
+            "label": "Stop Service" if key == "daemon" else "Stop AI Client Server",
+        },
+        "detail": _ui_service_detail(label, state_value, host, selected_port, external),
+    }
+
+
+def _ui_service_detail(
+    label: str,
+    state_value: str,
+    host: str,
+    selected_port: Any,
+    external: bool,
+) -> str:
+    endpoint = f"{host}:{selected_port}" if selected_port is not None else host
+    if external:
+        return f"{label} is reachable at {endpoint}. Control Center did not start it."
+    if state_value == "running":
+        return f"{label} is running at {endpoint}."
+    return f"{label} is not running."
 
 
 def _run_doctor_checks(
@@ -2053,7 +2320,7 @@ def _organizer_route_detail(row: dict[str, Any]) -> str:
 
 def safe_debug_value(value: Any) -> str:
     if value in (None, ""):
-        return "N/A"
+        return "Unavailable"
     return str(value)
 
 

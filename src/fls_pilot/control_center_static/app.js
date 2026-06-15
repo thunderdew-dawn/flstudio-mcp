@@ -35,21 +35,34 @@ const state = {
 // ─── Terminology Constants ────────────────────────────────────────────────────
 const TERMINOLOGY = {
   stateLabels: {
-    blocked: "SETUP REQUIRED",
-    needs_manual_action: "ACTION NEEDED",
-    disconnected: "NOT CONNECTED",
-    partial: "PARTIAL",
-    connected: "CONNECTED",
-    live: "LIVE",
-    ready_for_review: "READY",
-    ready_for_write_tools: "READY",
-    stopped: "NOT RUNNING",
-    running: "RUNNING",
-    external: "RUNNING",
-    unavailable: "NOT CONNECTED",
-    checking: "CHECKING",
+    blocked: "Action needed",
+    needs_manual_action: "Action needed",
+    disconnected: "Not connected",
+    partial: "Partial",
+    connected: "Connected",
+    live: "Connected",
+    ready_for_review: "Ready",
+    ready_for_write_tools: "Ready",
+    stopped: "Not running",
+    running: "Running",
+    external: "Running",
+    unavailable: "Unavailable",
+    checking: "Checking",
   }
 };
+
+const DEFAULT_WORKFLOW_CATALOG = [
+  { id: "project_health", panel_id: "producer_health", title: "Health", group: "Project Review", maturity: "read_only", enabled: true, endpoint: null, client_action: "runProjectHealth", action_label: "Run Health Scan", safety_note: "Read-only overview across available workflow reports." },
+  { id: "mix_review", panel_id: "producer_mix_review", title: "Mix Review", group: "Project Review", maturity: "read_only", enabled: true, endpoint: "/api/workflows/mix-review", action_label: "Run Mix Review", safety_note: "Read-only mixer review. No project changes are made." },
+  { id: "routing_audit", panel_id: "producer_routing", title: "Routing Audit", group: "Project Review", maturity: "read_only", enabled: true, endpoint: "/api/workflows/routing-audit", action_label: "Run Routing Audit", safety_note: "Read-only routing audit. Cleanup remains proposal-first." },
+  { id: "low_end_analysis", panel_id: "producer_low_end", title: "Low-End Analysis", group: "Project Review", maturity: "read_only", enabled: true, endpoint: "/api/workflows/low-end-analysis", action_label: "Run Low-End Analysis", safety_note: "Read-only low-end and stereo safety review." },
+  { id: "project_organizer", panel_id: "producer_organizer", title: "Organizer", group: "Project Review", maturity: "read_only", enabled: true, endpoint: "/api/workflows/project-organizer", action_label: "Run Organizer", safety_note: "Read-only scan. Any cleanup requires an approved safe-write tool." },
+  { id: "preflight", panel_id: "producer_preflight", title: "Preflight", group: "Roadmap", maturity: "planned", enabled: false, endpoint: null, action_label: null, safety_note: "Planned. No Control Center action is available yet." },
+  { id: "jam_2_project", panel_id: "producer_jam_2_project", title: "Jam 2 Project", group: "Roadmap", maturity: "planned", enabled: false, endpoint: null, action_label: null, safety_note: "Planned. No Control Center action is available yet." },
+  { id: "sidechaining", panel_id: "producer_sidechaining", title: "Sidechaining", group: "Roadmap", maturity: "planned", enabled: false, endpoint: null, action_label: null, safety_note: "Planned. No Control Center action is available yet." },
+  { id: "plugin_assistant", panel_id: "producer_plugin_assistant", title: "Plugin Assistant", group: "Roadmap", maturity: "planned", enabled: false, endpoint: null, action_label: null, safety_note: "Planned. Plugin loading remains manual." },
+  { id: "preset_assistant", panel_id: "producer_preset_assistant", title: "Preset Assistant", group: "Roadmap", maturity: "planned", enabled: false, endpoint: null, action_label: null, safety_note: "Planned. No Control Center action is available yet." }
+];
 
 // ─── Setup Doctor Layers ──────────────────────────────────────────────────────
 const setupLayers = [
@@ -65,18 +78,47 @@ const setupLayers = [
 
 /** Safe value for normal UI – never shows [object Object] */
 function safeString(value) {
-  if (value == null || value === "") return "N/A";
+  if (value == null || value === "") return "Unavailable";
   if (typeof value === "object") return "Unavailable";
   return String(value);
 }
 
 /** Safe value for Advanced/Debug/Logs contexts – pretty-prints objects */
 function safeDebugString(value) {
-  if (value == null || value === "") return "N/A";
+  if (value == null || value === "") return "Unavailable";
   if (typeof value === "object") {
     try { return JSON.stringify(value, null, 2); } catch { return "Unavailable"; }
   }
   return String(value);
+}
+
+function workflowCatalog() {
+  const catalog = state.status?.ui?.workflow_catalog;
+  return Array.isArray(catalog) && catalog.length ? catalog : DEFAULT_WORKFLOW_CATALOG;
+}
+
+function workflowById(id) {
+  return workflowCatalog().find(item => item.id === id) || null;
+}
+
+function workflowByPanel(panelId) {
+  return workflowCatalog().find(item => item.panel_id === panelId) || null;
+}
+
+function maturityLabel(value) {
+  const labels = {
+    beta: "Read-only",
+    preview: "Read-only",
+    read_only: "Read-only",
+    planned: "Planned",
+  };
+  return labels[value] || safeString(value);
+}
+
+function maturityBadgeClass(value, enabled = true) {
+  if (!enabled || value === "planned") return "badge-planned";
+  if (value === "beta" || value === "preview" || value === "read_only") return "badge-ok";
+  return "badge-pro-preview";
 }
 
 async function api(path, options = {}) {
@@ -98,11 +140,11 @@ async function refresh() {
   if (loadingOverlay) {
     loadingOverlay.style.display = "flex";
     let isPerforming = true;
-    if (loadingText) loadingText.textContent = "performing tests ...";
+    if (loadingText) loadingText.textContent = "Checking status...";
     if (loadingInterval) clearInterval(loadingInterval);
     loadingInterval = setInterval(() => {
       isPerforming = !isPerforming;
-      if (loadingText) loadingText.textContent = isPerforming ? "performing tests ..." : "retrieving results ...";
+      if (loadingText) loadingText.textContent = isPerforming ? "Checking status..." : "Loading results...";
     }, 1500);
   }
 
@@ -171,14 +213,170 @@ function render() {
   renderLogsHistory();
   renderPorts();
   renderConnection();
+  renderWorkflowCatalogState();
+  renderPlannedWorkflows();
+  renderNextAction();
+  renderConnectionReadyBanner();
+}
 
-  if (hasLiveFlData() && !window.successOverlayShown) {
-    const overlay = document.getElementById("success-overlay");
-    if (overlay) {
-      overlay.style.display = "flex";
-      window.successOverlayShown = true;
+function renderWorkflowCatalogState() {
+  const catalog = workflowCatalog();
+  for (const item of catalog) {
+    const nav = document.querySelector(`[data-workflow-id="${item.id}"]`);
+    if (nav) {
+      nav.classList.toggle("nav-item-disabled", item.enabled === false);
+      nav.disabled = false;
+      nav.title = item.enabled === false ? item.safety_note || "Planned workflow." : "";
+      const badge = nav.querySelector(".nav-badge");
+      if (badge) {
+        badge.textContent = maturityLabel(item.maturity);
+        badge.className = `nav-badge ${maturityBadgeClass(item.maturity, item.enabled !== false)}`;
+      }
     }
   }
+}
+
+function renderPlannedWorkflows() {
+  const list = document.getElementById("planned-workflow-list");
+  if (!list) return;
+  list.innerHTML = "";
+  const planned = workflowCatalog().filter(item => item.enabled === false || item.maturity === "planned");
+  if (!planned.length) {
+    list.appendChild(placeholder("No planned workflows in the current catalog."));
+    return;
+  }
+  for (const item of planned) {
+    const card = document.createElement("article");
+    card.className = "panel roadmap-card";
+
+    const heading = document.createElement("div");
+    heading.className = "panel-heading";
+    const title = document.createElement("h2");
+    title.textContent = item.title;
+    const badge = document.createElement("span");
+    badge.className = `badge ${maturityBadgeClass(item.maturity, false)}`;
+    badge.textContent = maturityLabel(item.maturity);
+    heading.append(title, badge);
+
+    const body = document.createElement("div");
+    body.className = "roadmap-card-body";
+    const note = document.createElement("p");
+    note.textContent = item.safety_note || "Planned workflow. No Control Center action is available yet.";
+    const action = document.createElement("button");
+    action.type = "button";
+    action.className = "ghost-button";
+    action.textContent = "View details";
+    action.addEventListener("click", () => selectPanel(item.panel_id));
+    body.append(note, action);
+
+    card.append(heading, body);
+    list.appendChild(card);
+  }
+}
+
+function renderNextAction() {
+  const action = state.status?.ui?.next_action || fallbackNextAction();
+  text("next-action-title", action.label || "Check status");
+  text("next-action-detail", action.detail || "Run a check to see the current setup state.");
+  const button = document.getElementById("next-action-button");
+  if (!button) return;
+  button.textContent = action.action_label || action.label || "Run Check";
+  button.onclick = () => {
+    if (action.action_path && action.action_path !== "/api/refresh") {
+      processAction(action.action_path);
+      return;
+    }
+    if (action.action_path === "/api/refresh") {
+      refresh();
+      return;
+    }
+    if (action.target_panel) {
+      selectPanel(action.target_panel);
+      return;
+    }
+    refresh();
+  };
+}
+
+function fallbackNextAction() {
+  if (!state.status) {
+    return {
+      label: "Run Status Check",
+      detail: "Run a check to see the current setup state.",
+      action_path: "/api/refresh",
+      action_label: "Run Check"
+    };
+  }
+  const data = getStatusReport();
+  const bridge = data?.bridge || {};
+  const daemonProc = state.status?.processes?.daemon || {};
+  const live = bridge.state === "live";
+  const daemonRunning = isManagedProcessRunning(daemonProc) || daemonProc.state === "external";
+  if (!daemonRunning) {
+    return {
+      label: "Start FL Studio Bridge Service",
+      detail: "The local bridge service is stopped. Start it before checking FL Studio controller data.",
+      action_path: "/api/process/daemon/start",
+      action_label: "Start Service"
+    };
+  }
+  if (!live) {
+    return {
+      label: "Connect FL Studio Controller",
+      detail: "The bridge service is running, but FL Studio is not sending fresh controller data yet.",
+      target_panel: "setup",
+      action_path: "/api/refresh",
+      action_label: "Re-check"
+    };
+  }
+  return {
+    label: "Run Health Scan",
+    detail: "FL Studio is connected. Start with a read-only project overview.",
+    target_panel: "producer_health",
+    action_label: "Open Health"
+  };
+}
+
+function renderConnectionReadyBanner() {
+  const banner = document.getElementById("connection-ready-banner");
+  if (banner) banner.style.display = hasLiveFlData() ? "flex" : "none";
+}
+
+function placeholder(message) {
+  const node = document.createElement("div");
+  node.className = "placeholder-card";
+  node.textContent = message;
+  return node;
+}
+
+function setRunButton(id, isLoading, readyLabel) {
+  const button = document.getElementById(id);
+  if (!button) return;
+  button.disabled = isLoading;
+  button.textContent = isLoading ? "Running..." : readyLabel;
+}
+
+function setWorkflowFeedback({ id, baseClass, loading, error, report, loadingText, idleText, completeLabel }) {
+  const feedback = document.getElementById(id);
+  if (!feedback) return;
+  feedback.className = baseClass;
+  if (loading) {
+    feedback.classList.add("is-loading");
+    feedback.textContent = loadingText;
+    return;
+  }
+  if (error) {
+    feedback.classList.add("is-error");
+    feedback.textContent = error;
+    return;
+  }
+  if (report?.ok) {
+    feedback.classList.add("is-live");
+    const timestamp = new Date(report.generated_at || Date.now()).toLocaleTimeString();
+    feedback.textContent = `${completeLabel}: ${timestamp}. Read-only scan. No project changes are made.`;
+    return;
+  }
+  feedback.textContent = idleText;
 }
 
 // ─── Setup Overview ───────────────────────────────────────────────────────────
@@ -207,8 +405,9 @@ function renderOverviewCards(data) {
   // Card 1: FL Studio Connection
   const bridgeStatus = live ? "connected" : (bridge.state === "unavailable" || !bridge.state ? "not_connected" : bridge.state);
   const bridgeLabel = live ? "Connected" : "Not Connected";
+  const flVersion = safeString(bridge.fl_version || data?.project?.fl_version);
   const bridgeDesc = live
-    ? `FL Studio is responding. ${safeString(bridge.fl_version || data?.project?.fl_version) !== "N/A" ? "Version: " + safeString(bridge.fl_version || data?.project?.fl_version) : "Bridge heartbeat is live."}`
+    ? `FL Studio is responding. ${flVersion !== "Unavailable" ? "Version: " + flVersion : "Bridge heartbeat is live."}`
     : "FL Studio is not sending controller data yet. See the checklist below to diagnose.";
   cardsEl.appendChild(makeStatusCard({
     id: "card-fl-connection",
@@ -262,10 +461,10 @@ function renderOverviewCards(data) {
 
   // Card 4: Safety Mode
   const safetyStatus = readOnly ? "readonly" : "write_enabled";
-  const safetyLabel = readOnly ? "Read-only" : "Write Enabled";
+  const safetyLabel = readOnly ? "Read-only" : "Write enabled";
   const safetyDesc = readOnly
-    ? "Read-only mode is active. No FL Studio project changes will be made."
-    : "Write-capable mode is active. Safe Apply uses a proposal-first workflow.";
+    ? "Read-only mode is active. No FL Studio project changes are made."
+    : "Write-capable mode is active. Safe Apply remains proposal-first.";
   cardsEl.appendChild(makeStatusCard({
     id: "card-safety-mode",
     icon: "◆",
@@ -383,10 +582,10 @@ function renderConnectionCheck() {
     },
     {
       label: "Safety Mode",
-      status: readOnly ? "Read-only Active" : "Write Enabled",
+      status: readOnly ? "Read-only" : "Write enabled",
       ok: true,
       neutral: true,
-      detail: readOnly ? "No project changes will be made." : "Write mode — changes require Safe Apply.",
+      detail: readOnly ? "No project changes are made." : "Project changes require Safe Apply.",
     },
     {
       label: "Last Check",
@@ -456,9 +655,9 @@ function _recommendedNextStep() {
   const live = bridge.state === "live";
   const daemonRunning = isManagedProcessRunning(daemonProc) || daemonProc.state === "external";
 
-  if (!daemonRunning) return "Start the FL Studio Bridge Service from the Services screen.";
+  if (!daemonRunning) return "Start the FL Studio Bridge Service from Overview or Setup Doctor.";
   if (!live) return "FL Studio Bridge Service is running, but FL Studio is not sending controller data yet. Open FL Studio, load fls-pilot in the controller settings, and check the MIDI loopback ports.";
-  return "FL Studio is connected. You can now open AI Clients to configure your MCP client.";
+  return "FL Studio is connected. Run Health for a read-only project overview, or open AI Clients to configure your MCP client.";
 }
 
 // ─── Setup Doctor ─────────────────────────────────────────────────────────────
@@ -650,7 +849,7 @@ function mcpSseText(findings = []) {
   if (findings.length && !state.status?.processes?.sse?.running && (probe.state === "not_required" || probe.state === "stopped")) {
     return null;
   }
-  const parts = [safeString(probe.message) !== "N/A" ? probe.message : "AI Client Server status is unavailable."];
+  const parts = [safeString(probe.message) !== "Unavailable" ? probe.message : "AI Client Server status is unavailable."];
   if (probe.url) parts.push(`URL: ${safeString(probe.url)}`);
   if (probe.checked_at) parts.push(`Last test: ${new Date(probe.checked_at).toLocaleTimeString()}`);
   return parts.join("\n");
@@ -744,8 +943,8 @@ function renderRuntime() {
   const daemonSelectedPort = safeString(daemonPort.selected_port);
   const daemonPreferredPort = safeString(daemonPort.preferred_port);
 
-  let daemonText = `Local connection: ${daemonHost === "N/A" || daemonHost === "Unavailable" ? "127.0.0.1" : daemonHost}:${daemonSelectedPort}`;
-  if (daemonPreferredPort !== daemonSelectedPort && daemonSelectedPort !== "N/A") {
+  let daemonText = `Local connection: ${daemonHost === "Unavailable" ? "127.0.0.1" : daemonHost}:${daemonSelectedPort}`;
+  if (daemonPreferredPort !== daemonSelectedPort && daemonSelectedPort !== "Unavailable") {
     daemonText += ` (preferred: ${daemonPreferredPort})`;
   }
   if (daemonStatus === "external") {
@@ -781,8 +980,8 @@ function renderRuntime() {
   const sseSelectedPort = safeString(ssePort.selected_port);
   const ssePreferredPort = safeString(ssePort.preferred_port);
 
-  let sseText = `Local connection: ${sseHost === "N/A" || sseHost === "Unavailable" ? "127.0.0.1" : sseHost}:${sseSelectedPort}`;
-  if (ssePreferredPort !== sseSelectedPort && sseSelectedPort !== "N/A") {
+  let sseText = `Local connection: ${sseHost === "Unavailable" ? "127.0.0.1" : sseHost}:${sseSelectedPort}`;
+  if (ssePreferredPort !== sseSelectedPort && sseSelectedPort !== "Unavailable") {
     sseText += ` (preferred: ${ssePreferredPort})`;
   }
   const sseLogs = (sseProc.logs || []).slice(-6);
@@ -823,7 +1022,7 @@ function renderConnection() {
   if (dot) dot.classList.toggle("live", live);
 
   text("connected-version", live
-    ? (safeString(project.fl_version || bridge.fl_version) !== "N/A" ? safeString(project.fl_version || bridge.fl_version) : "Local connection")
+    ? (safeString(project.fl_version || bridge.fl_version) !== "Unavailable" ? safeString(project.fl_version || bridge.fl_version) : "Local connection")
     : "Not reachable");
   text("connected-target", live ? "FL Studio (Local)" : "Disconnected");
 }
@@ -843,15 +1042,15 @@ function renderClients() {
     title: "ChatGPT",
     badge: "SSE / HTTP",
     steps: [
-      "Start the AI Client Server from the Services screen.",
+      "Start the AI Client Server from Overview when your client uses SSE/HTTP.",
       "Open ChatGPT → Settings → Connected Apps → MCP.",
       "Paste the SSE URL below.",
       "Run a connection check."
     ],
     copyLabel: "Copy URL",
-    copyValue: chatgptUrl !== "N/A" ? chatgptUrl : snippets.chatgpt?.url,
+    copyValue: chatgptUrl !== "Unavailable" ? chatgptUrl : snippets.chatgpt?.url,
     fieldLabel: "SSE URL",
-    fieldValue: chatgptUrl !== "N/A" ? chatgptUrl : "Start the AI Client Server to get the URL.",
+    fieldValue: chatgptUrl !== "Unavailable" ? chatgptUrl : "Start the AI Client Server to get the URL.",
     advancedLabel: "Show advanced config",
     advancedContent: safeDebugString(snippets.chatgpt)
   }));
@@ -941,7 +1140,7 @@ function makeAiClientCard({ id, title, badge, steps, copyLabel, copyValue, field
   fieldLabelEl.textContent = fieldLabel;
   const fieldEl = document.createElement("pre");
   fieldEl.className = "copy-field";
-  fieldEl.textContent = safeString(fieldValue) !== "N/A" ? fieldValue : "N/A";
+  fieldEl.textContent = safeString(fieldValue) !== "Unavailable" ? fieldValue : "Unavailable";
 
   const btnRow = document.createElement("div");
   btnRow.className = "ai-client-btn-row";
@@ -1019,7 +1218,7 @@ function renderProjectData() {
   let recording = transport.recording;
   if (recording == null) recording = project.recording;
 
-  text("record-state", recording == null ? "N/A" : recording ? "ON" : "OFF");
+  text("record-state", recording == null ? "Unavailable" : recording ? "ON" : "OFF");
   text("song-position", formatPosition(transport.song_position));
 
   const statusOrb = document.getElementById("status-orb");
@@ -1041,7 +1240,7 @@ function renderProjectData() {
   // Rollback row: only show if not read-only / write context is relevant
   const rollbackRow = document.getElementById("rollback-row");
   if (rollbackRow) {
-    rollbackRow.style.display = readOnly ? "none" : "";
+    rollbackRow.hidden = readOnly;
   }
   if (!readOnly) {
     text("rollback-state", safety.rollback_available ? "Available" : "Not available");
@@ -1056,7 +1255,7 @@ function renderProjectData() {
       evidence = [{
         label: "Status data",
         state: "unavailable",
-        value: "N/A",
+        value: "Unavailable",
         source: "Generated data",
         detail: "Status data was not populated."
       }];
@@ -1082,7 +1281,7 @@ function renderProjectData() {
       stateSpan.textContent = stateLabel(entry.state || "unavailable");
 
       const label = document.createElement("strong");
-      label.textContent = entryLabel !== "N/A" ? entryLabel : "Evidence";
+      label.textContent = entryLabel !== "Unavailable" ? entryLabel : "Evidence";
 
       const value = document.createElement("span");
       value.textContent = entryValue;
@@ -1127,11 +1326,7 @@ function renderMixReview() {
   const isLoading = state.mixReview.loading;
   const error = state.mixReview.error;
 
-  const runButton = document.getElementById("run-mix-review");
-  if (runButton) {
-    runButton.disabled = isLoading;
-    runButton.textContent = isLoading ? "Running..." : "Run Mix Review";
-  }
+  setRunButton("run-mix-review", isLoading, "Run Mix Review");
 
   renderMixFeedback(report, error, isLoading);
   renderMixSummary(report, isLoading);
@@ -1145,27 +1340,16 @@ function renderMixReview() {
 }
 
 function renderMixFeedback(report, error, isLoading) {
-  const feedback = document.getElementById("mix-review-feedback");
-  if (!feedback) return;
-
-  feedback.className = "mix-review-feedback";
-  if (isLoading) {
-    feedback.classList.add("is-loading");
-    feedback.textContent = "Mix Review is reading FL Studio mixer data...";
-    return;
-  }
-  if (error) {
-    feedback.classList.add("is-error");
-    feedback.textContent = error;
-    return;
-  }
-  if (report?.ok) {
-    feedback.classList.add("is-live");
-    const timestamp = new Date(report.generated_at || Date.now()).toLocaleTimeString();
-    feedback.textContent = `Last review: ${timestamp}. No project changes were made.`;
-    return;
-  }
-  feedback.textContent = "Review has not run yet.";
+  setWorkflowFeedback({
+    id: "mix-review-feedback",
+    baseClass: "mix-review-feedback",
+    loading: isLoading,
+    error,
+    report,
+    loadingText: "Mix Review is reading FL Studio mixer data...",
+    idleText: "Review has not run yet.",
+    completeLabel: "Last review"
+  });
 }
 
 function renderMixSummary(report, isLoading) {
@@ -1475,11 +1659,7 @@ function renderLowEndAnalysis() {
   const isLoading = state.lowEndAnalysis.loading;
   const error = state.lowEndAnalysis.error;
 
-  const runButton = document.getElementById("run-low-end-analysis");
-  if (runButton) {
-    runButton.disabled = isLoading;
-    runButton.textContent = isLoading ? "Running..." : "Run Low-End Analysis";
-  }
+  setRunButton("run-low-end-analysis", isLoading, "Run Low-End Analysis");
 
   renderLowEndFeedback(report, error, isLoading);
   renderLowEndSummary(report, isLoading);
@@ -1492,27 +1672,16 @@ function renderLowEndAnalysis() {
 }
 
 function renderLowEndFeedback(report, error, isLoading) {
-  const feedback = document.getElementById("low-end-feedback");
-  if (!feedback) return;
-
-  feedback.className = "low-end-feedback";
-  if (isLoading) {
-    feedback.classList.add("is-loading");
-    feedback.textContent = "Low-End Analysis is reading FL Studio mixer data...";
-    return;
-  }
-  if (error) {
-    feedback.classList.add("is-error");
-    feedback.textContent = error;
-    return;
-  }
-  if (report?.ok) {
-    feedback.classList.add("is-live");
-    const timestamp = new Date(report.generated_at || Date.now()).toLocaleTimeString();
-    feedback.textContent = `Last analysis: ${timestamp}. No project changes were made.`;
-    return;
-  }
-  feedback.textContent = "Analysis has not run yet.";
+  setWorkflowFeedback({
+    id: "low-end-feedback",
+    baseClass: "low-end-feedback",
+    loading: isLoading,
+    error,
+    report,
+    loadingText: "Low-End Analysis is reading FL Studio mixer data...",
+    idleText: "Analysis has not run yet.",
+    completeLabel: "Last analysis"
+  });
 }
 
 function renderLowEndSummary(report, isLoading) {
@@ -1843,7 +2012,7 @@ function mixProposalValues(proposal) {
 
 function mixPluginList(plugins) {
   if (!Array.isArray(plugins) || !plugins.length) return "None";
-  const names = plugins.map(plugin => safeString(plugin.name)).filter(name => name !== "N/A");
+  const names = plugins.map(plugin => safeString(plugin.name)).filter(name => name !== "Unavailable");
   if (!names.length) return "None";
   const shown = names.slice(0, 3).join(", ");
   return names.length > 3 ? `${shown}, +${names.length - 3}` : shown;
@@ -2086,11 +2255,7 @@ function renderRoutingAudit() {
   const isLoading = state.routingAudit.loading;
   const error = state.routingAudit.error;
 
-  const runButton = document.getElementById("run-routing-audit");
-  if (runButton) {
-    runButton.disabled = isLoading;
-    runButton.textContent = isLoading ? "Running..." : "Run Routing Audit";
-  }
+  setRunButton("run-routing-audit", isLoading, "Run Routing Audit");
 
   renderRoutingFeedback(report, error, isLoading);
   renderRoutingSummary(report, isLoading);
@@ -2101,27 +2266,16 @@ function renderRoutingAudit() {
 }
 
 function renderRoutingFeedback(report, error, isLoading) {
-  const feedback = document.getElementById("routing-audit-feedback");
-  if (!feedback) return;
-
-  feedback.className = "routing-audit-feedback";
-  if (isLoading) {
-    feedback.classList.add("is-loading");
-    feedback.textContent = "Routing Audit is reading FL Studio routing data...";
-    return;
-  }
-  if (error) {
-    feedback.classList.add("is-error");
-    feedback.textContent = error;
-    return;
-  }
-  if (report?.ok) {
-    feedback.classList.add("is-live");
-    const timestamp = new Date(report.generated_at || Date.now()).toLocaleTimeString();
-    feedback.textContent = `Last audit: ${timestamp}. No project changes were made.`;
-    return;
-  }
-  feedback.textContent = "Audit has not run yet.";
+  setWorkflowFeedback({
+    id: "routing-audit-feedback",
+    baseClass: "routing-audit-feedback",
+    loading: isLoading,
+    error,
+    report,
+    loadingText: "Routing Audit is reading FL Studio routing data...",
+    idleText: "Audit has not run yet.",
+    completeLabel: "Last audit"
+  });
 }
 
 function renderRoutingSummary(report, isLoading) {
@@ -2466,7 +2620,7 @@ function routingTargetLabel(channel) {
   const target = channel.target_mixer_track;
   if (target == null || target === 0) return "None";
   const name = safeString(channel.target_name);
-  return name === "N/A" || name === "Unavailable" ? `Track ${target}` : `${name} (${target})`;
+  return name === "Unavailable" ? `Track ${target}` : `${name} (${target})`;
 }
 
 function routingRouteStateLabel(stateValue) {
@@ -2543,11 +2697,7 @@ function renderProjectOrganizer() {
   const isLoading = state.projectOrganizer.loading;
   const error = state.projectOrganizer.error;
 
-  const runButton = document.getElementById("run-project-organizer");
-  if (runButton) {
-    runButton.disabled = isLoading;
-    runButton.textContent = isLoading ? "Running..." : "Run Organizer";
-  }
+  setRunButton("run-project-organizer", isLoading, "Run Organizer");
 
   renderOrganizerFeedback(report, error, isLoading);
   renderOrganizerSummary(report, isLoading);
@@ -2562,27 +2712,16 @@ function renderProjectOrganizer() {
 }
 
 function renderOrganizerFeedback(report, error, isLoading) {
-  const feedback = document.getElementById("organizer-feedback");
-  if (!feedback) return;
-
-  feedback.className = "organizer-feedback";
-  if (isLoading) {
-    feedback.classList.add("is-loading");
-    feedback.textContent = "Project Organizer is reading channels, mixer tracks, patterns, and playlist tracks...";
-    return;
-  }
-  if (error) {
-    feedback.classList.add("is-error");
-    feedback.textContent = error;
-    return;
-  }
-  if (report?.ok) {
-    feedback.classList.add("is-live");
-    const timestamp = new Date(report.generated_at || Date.now()).toLocaleTimeString();
-    feedback.textContent = `Last scan: ${timestamp}. Control Center did not change the project.`;
-    return;
-  }
-  feedback.textContent = "Organizer has not run yet.";
+  setWorkflowFeedback({
+    id: "organizer-feedback",
+    baseClass: "organizer-feedback",
+    loading: isLoading,
+    error,
+    report,
+    loadingText: "Project Organizer is reading channels, mixer tracks, patterns, and playlist tracks...",
+    idleText: "Organizer has not run yet.",
+    completeLabel: "Last scan"
+  });
 }
 
 function renderOrganizerSummary(report, isLoading) {
@@ -2986,11 +3125,7 @@ function renderProjectHealth() {
   const isLoading = state.projectHealth.loading
     || aggregate.sections.some(section => section.loading);
 
-  const runButton = document.getElementById("run-project-health");
-  if (runButton) {
-    runButton.disabled = isLoading;
-    runButton.textContent = isLoading ? "Running..." : "Run Health Scan";
-  }
+  setRunButton("run-project-health", isLoading, "Run Health Scan");
 
   renderHealthFeedback(aggregate, isLoading);
   renderHealthSummary(aggregate, isLoading);
@@ -3267,28 +3402,20 @@ function makeHealthSection({ id, title, target, stateData, score, scoreLabel, fi
 }
 
 function renderHealthFeedback(aggregate, isLoading) {
-  const feedback = document.getElementById("health-feedback");
-  if (!feedback) return;
-
-  feedback.className = "health-feedback";
-  if (isLoading) {
-    feedback.classList.add("is-loading");
-    feedback.textContent = "Health scan is reading Organizer, Mix Review, Routing, and Low-End reports...";
-    return;
-  }
-  if (state.projectHealth.error) {
-    feedback.classList.add("is-error");
-    feedback.textContent = state.projectHealth.error;
-    return;
-  }
-  if (aggregate.availableSections > 0) {
-    feedback.classList.add("is-live");
-    const timestamp = new Date(state.projectHealth.lastRun || Date.now()).toLocaleTimeString();
-    const coverage = `${aggregate.availableSections}/${aggregate.totalSections}`;
-    feedback.textContent = `Last overview: ${timestamp}. Coverage ${coverage}. No project changes were made.`;
-    return;
-  }
-  feedback.textContent = "Health overview has not run yet.";
+  const report = aggregate.availableSections > 0
+    ? { ok: true, generated_at: state.projectHealth.lastRun || Date.now() }
+    : null;
+  const coverage = `${aggregate.availableSections}/${aggregate.totalSections}`;
+  setWorkflowFeedback({
+    id: "health-feedback",
+    baseClass: "health-feedback",
+    loading: isLoading,
+    error: state.projectHealth.error,
+    report,
+    loadingText: "Health scan is reading Organizer, Mix Review, Routing, and Low-End reports...",
+    idleText: "Health overview has not run yet.",
+    completeLabel: `Last overview. Coverage ${coverage}`
+  });
 }
 
 function renderHealthSummary(aggregate, isLoading) {
@@ -3706,9 +3833,9 @@ function renderPorts() {
     const preferred = safeString(data.preferred_port);
     const selected = safeString(data.selected_port);
     const fallback = data.fallback_port ? safeString(data.fallback_port) : "None";
-    const localAddr = (host !== "N/A" && host !== "Unavailable" && selected !== "N/A")
+    const localAddr = (host !== "Unavailable" && selected !== "Unavailable")
       ? `http://${host === "0.0.0.0" ? "127.0.0.1" : host}:${selected}/`
-      : "N/A";
+      : "Unavailable";
 
     for (const val of [name, host, preferred, selected, fallback, localAddr]) {
       const td = document.createElement("td");
@@ -3742,7 +3869,7 @@ function renderSupportSummary() {
     { label: "FL Studio Bridge", value: live ? "Connected" : "Not connected" },
     { label: "Background Service", value: daemonRunning ? "Running" : "Not running" },
     { label: "AI Client Server", value: sseRunning ? "Running" : "Not started" },
-    { label: "Safety Mode", value: readOnly ? "Read-only (no project changes)" : "Write-enabled" },
+    { label: "Safety Mode", value: readOnly ? "Read-only (no project changes)" : "Write enabled" },
     { label: "Recommended Next Step", value: _recommendedNextStep() },
   ];
 
@@ -3903,6 +4030,7 @@ function selectPanel(targetId) {
   if (targetId === "producer_routing") renderRoutingAudit();
   if (targetId === "producer_organizer") renderProjectOrganizer();
   if (targetId === "producer_health") renderProjectHealth();
+  if (targetId === "producer_roadmap") renderPlannedWorkflows();
   if (targetId === "logs_history") renderLogsHistory();
   if (targetId === "ports") renderPorts();
 }
@@ -3916,14 +4044,14 @@ function text(id, value) {
 }
 
 function numberValue(value, digits) {
-  if (value == null || value === "") return "N/A";
+  if (value == null || value === "") return "Unavailable";
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return safeString(value);
   return digits == null ? String(Math.round(numeric)) : numeric.toFixed(digits);
 }
 
 function bpm(value) {
-  if (value == null) return "N/A";
+  if (value == null) return "Unavailable";
   return numberValue(value, 1);
 }
 
@@ -3936,12 +4064,12 @@ function stateLabel(s) {
 }
 
 function count(resource) {
-  if (!resource || resource.state !== "live") return "N/A";
+  if (!resource || resource.state !== "live") return "Unavailable";
   return resource.total == null ? resource.shown || 0 : resource.total;
 }
 
 function formatPosition(value) {
-  if (value == null) return "N/A";
+  if (value == null) return "Unavailable";
   if (typeof value === "object") {
     if (value.song_position != null) return formatPosition(value.song_position);
     if (value.position != null) return formatPosition(value.position);
@@ -4004,6 +4132,26 @@ function wireEvents() {
   const setupButton = document.getElementById("disconnected-setup-button");
   if (setupButton) setupButton.addEventListener("click", () => selectPanel("setup"));
 
+  const successOverlay = document.getElementById("success-overlay");
+  const successOverview = document.getElementById("success-overview-button");
+  if (successOverview) {
+    successOverview.addEventListener("click", () => {
+      if (successOverlay) successOverlay.style.display = "none";
+      selectPanel("overview");
+    });
+  }
+  const successClients = document.getElementById("success-clients-button");
+  if (successClients) {
+    successClients.addEventListener("click", () => {
+      if (successOverlay) successOverlay.style.display = "none";
+      selectPanel("clients");
+    });
+  }
+  const successDismiss = document.getElementById("success-dismiss-button");
+  if (successDismiss && successOverlay) {
+    successDismiss.addEventListener("click", () => { successOverlay.style.display = "none"; });
+  }
+
   const copyReport = document.getElementById("copy-report");
   if (copyReport) {
     copyReport.addEventListener("click", async () => {
@@ -4047,6 +4195,10 @@ window.flsPilotControlCenter = {
   renderRuntime,
   renderOverview,
   renderConnectionCheck,
+  renderWorkflowCatalogState,
+  renderPlannedWorkflows,
+  renderNextAction,
+  renderConnectionReadyBanner,
   renderLogsHistory,
   renderPorts,
   selectPanel,

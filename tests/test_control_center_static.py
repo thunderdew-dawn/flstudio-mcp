@@ -342,6 +342,198 @@ function createHarness() {
     )
 
 
+def test_control_center_static_workflow_catalog_render() -> None:
+    _run_node_dom_check(
+        r"""
+const assert = require("assert");
+const fs = require("fs");
+const vm = require("vm");
+
+class ClassList {
+  constructor(element) {
+    this.element = element;
+    this.values = new Set();
+  }
+  setFromString(value) {
+    this.values = new Set(String(value || "").split(/\s+/).filter(Boolean));
+  }
+  sync() {
+    this.element._className = Array.from(this.values).join(" ");
+  }
+  add(name) { this.values.add(name); this.sync(); }
+  remove(name) { this.values.delete(name); this.sync(); }
+  contains(name) { return this.values.has(name); }
+  toggle(name, force) {
+    const enabled = force === undefined ? !this.values.has(name) : Boolean(force);
+    if (enabled) this.values.add(name); else this.values.delete(name);
+    this.sync();
+    return enabled;
+  }
+}
+
+class Element {
+  constructor(tagName = "div", id = "") {
+    this.tagName = tagName.toUpperCase();
+    this.id = id;
+    this.children = [];
+    this.dataset = {};
+    this.disabled = false;
+    this.listeners = {};
+    this.onclick = null;
+    this.parentElement = null;
+    this.style = {};
+    this.textContent = "";
+    this.title = "";
+    this._className = "";
+    this.classList = new ClassList(this);
+  }
+  set className(value) {
+    this._className = String(value || "");
+    this.classList.setFromString(this._className);
+  }
+  get className() { return this._className; }
+  append(...nodes) { for (const node of nodes) this.appendChild(node); }
+  appendChild(node) {
+    node.parentElement = this;
+    this.children.push(node);
+    return node;
+  }
+  addEventListener(name, handler) { this.listeners[name] = handler; }
+  querySelector(selector) {
+    if (selector === ".nav-badge") {
+      return collect(this, (node) => node.classList.contains("nav-badge"))[0] || null;
+    }
+    return null;
+  }
+}
+
+function collect(root, predicate) {
+  const out = [];
+  function walk(node) {
+    if (predicate(node)) out.push(node);
+    for (const child of node.children || []) walk(child);
+  }
+  walk(root);
+  return out;
+}
+
+function textTree(root) {
+  let out = root.textContent || "";
+  for (const child of root.children || []) out += "\n" + textTree(child);
+  return out;
+}
+
+const elements = new Map();
+const navItems = [];
+const panels = [];
+
+function register(id, tagName = "div", className = "") {
+  const element = new Element(tagName, id);
+  element.className = className;
+  elements.set(id, element);
+  return element;
+}
+
+function nav(id, target, workflowId) {
+  const item = new Element("button", id);
+  item.className = "nav-item";
+  item.dataset.target = target;
+  item.dataset.workflowId = workflowId;
+  const label = new Element("span");
+  label.textContent = workflowId;
+  const badge = new Element("span");
+  badge.className = "nav-badge badge-neutral";
+  item.append(label, badge);
+  navItems.push(item);
+  return item;
+}
+
+nav("nav-mix-review", "producer_mix_review", "mix_review");
+const preflightNav = nav("nav-preflight", "producer_preflight", "preflight");
+const healthPanel = register("producer_health", "main", "status-report");
+healthPanel.style.display = "none";
+panels.push(register("overview", "main", "status-report"));
+panels.push(healthPanel);
+register("planned-workflow-list");
+register("next-action-title");
+register("next-action-detail");
+register("next-action-button", "button");
+register("connection-ready-banner");
+
+const document = {
+  createElement: (tagName) => new Element(tagName),
+  getElementById: (id) => elements.get(id) || null,
+  querySelectorAll: (selector) => {
+    if (selector === ".nav-item") return navItems;
+    if (selector === ".status-report") return panels;
+    if (selector === ".dashboard") return [];
+    return [];
+  },
+  querySelector: (selector) => {
+    const match = selector.match(/^\[data-workflow-id="([^"]+)"\]$/);
+    if (match) return navItems.find((item) => item.dataset.workflowId === match[1]) || null;
+    return null;
+  }
+};
+
+const context = {
+  Blob,
+  URL,
+  clearInterval,
+  console,
+  document,
+  fetch: async () => { throw new Error("fetch not expected"); },
+  navigator: {},
+  setInterval,
+  setTimeout,
+  window: { __FLS_PILOT_TEST__: true }
+};
+context.window.document = document;
+
+vm.createContext(context);
+vm.runInContext(fs.readFileSync(process.argv[1], "utf8"), context);
+
+const controls = context.window.flsPilotControlCenter;
+controls.state.status = {
+  ui: {
+    workflow_catalog: [
+      { id: "mix_review", panel_id: "producer_mix_review", title: "Mix Review", maturity: "read_only", enabled: true, safety_note: "Read-only mixer review." },
+      { id: "preflight", panel_id: "producer_preflight", title: "Preflight", maturity: "planned", enabled: false, safety_note: "Planned. No action is available yet." }
+    ],
+    next_action: {
+      label: "Run Health Scan",
+      detail: "Start with a read-only overview.",
+      target_panel: "producer_health",
+      action_label: "Open Health"
+    }
+  },
+  status_report: {
+    bridge: { state: "live" },
+    project: { state: "live" }
+  }
+};
+
+controls.renderWorkflowCatalogState();
+assert(preflightNav.classList.contains("nav-item-disabled"));
+assert.strictEqual(preflightNav.querySelector(".nav-badge").textContent, "Planned");
+
+controls.renderPlannedWorkflows();
+const plannedText = textTree(elements.get("planned-workflow-list"));
+assert.match(plannedText, /Preflight/);
+assert.match(plannedText, /No action is available yet/);
+
+controls.renderNextAction();
+assert.strictEqual(elements.get("next-action-title").textContent, "Run Health Scan");
+assert.strictEqual(elements.get("next-action-button").textContent, "Open Health");
+elements.get("next-action-button").onclick();
+assert.strictEqual(healthPanel.style.display, "block");
+
+controls.renderConnectionReadyBanner();
+assert.strictEqual(elements.get("connection-ready-banner").style.display, "flex");
+"""
+    )
+
+
 def test_control_center_static_mix_review_render() -> None:
     _run_node_dom_check(
         r"""
@@ -1525,7 +1717,7 @@ assert.strictEqual(elements.get("health-risk-value").textContent, "22%");
 assert.strictEqual(elements.get("health-score-value").textContent, "78%");
 assert.strictEqual(elements.get("health-coverage-value").textContent, "4/4");
 assert.strictEqual(elements.get("health-ready-total").textContent, "4 ready");
-assert.match(textTree(elements.get("health-feedback")), /No project changes were made/);
+assert.match(textTree(elements.get("health-feedback")), /No project changes are made/);
 assert.match(textTree(elements.get("health-section-grid")), /Organizer/);
 assert.match(textTree(elements.get("health-section-grid")), /Mix Review/);
 assert.match(textTree(elements.get("health-warning-list")), /Master Peak Over 0 dB/);
