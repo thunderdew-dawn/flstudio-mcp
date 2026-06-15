@@ -35,14 +35,48 @@ export-readiness checks.
   available, changelog, and rollback paths.
 - States FL Studio API limits clearly when work must remain manual.
 
+## Example Workflows
+
+### Mix Review & Gain Staging
+
+<video controls muted playsinline preload="metadata" style="width: 100%; max-width: 960px;">
+  <source src="docs/assets/ai-apply-gain-staging-example.mp4" type="video/mp4">
+</video>
+
+### Routing Audit
+
+<video controls muted playsinline preload="metadata" style="width: 100%; max-width: 960px;">
+  <source src="docs/assets/ai-based-mixer-routing-example.mp4" type="video/mp4">
+</video>
+
+### Project Organizer
+
+<video controls muted playsinline preload="metadata" style="width: 100%; max-width: 960px;">
+  <source src="docs/assets/ai-color-my-tracks-example.mp4" type="video/mp4">
+</video>
+
+### Plugin & EQ Workflows
+
+<video controls muted playsinline preload="metadata" style="width: 100%; max-width: 960px;">
+  <source src="docs/assets/ai-set-highpass-on-eq-batch-example.mp4" type="video/mp4">
+</video>
+
+### Composition
+
+<video controls muted playsinline preload="metadata" style="width: 100%; max-width: 960px;">
+  <source src="docs/assets/ai-generate-bassline-example.mp4" type="video/mp4">
+</video>
+
 ## Requirements
 
 - Windows 10/11 or macOS 12+
+  - Optional for Windows: ffmpeg on PATH (for MP3 analysis)
 - FL Studio 20.7+ with the FLStudioPilot controller script configured
 - Python 3.10+
 - Two virtual MIDI ports named exactly:
   - `FLStudioPilot RX`
   - `FLStudioPilot TX`
+  - For Windows: loopMIDI — for the two virtual MIDI ports ([download](https://www.tobias-erichsen.de/software/loopmidi.html))
 - An MCP client such as Claude Desktop, ChatGPT Desktop, Cursor, or another MCP
   host
 

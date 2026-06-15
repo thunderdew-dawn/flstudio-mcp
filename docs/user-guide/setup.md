@@ -10,7 +10,7 @@ Create two virtual MIDI ports named exactly:
 - `FLStudioPilot RX`
 - `FLStudioPilot TX`
 
-On Windows, use loopMIDI. On macOS, use the built-in IAC Driver.
+On Windows, use loopMIDI — for the two virtual MIDI ports ([download](https://www.tobias-erichsen.de/software/loopmidi.html)). On macOS, use the built-in IAC Driver.
 
 ![macOS IAC Driver setup](../assets/setup-macos-midi-driver.png)
 
@@ -22,6 +22,9 @@ Default editable installation:
 git clone https://github.com/thunderdew-dawn/fls-pilot
 cd fls-pilot
 ```
+
+**Optional Requirements (Windows):**
+- ffmpeg on PATH (for MP3 analysis)
 
 Windows:
 
