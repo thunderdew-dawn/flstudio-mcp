@@ -17,6 +17,10 @@ Read:
 
 - `agent-docs/agents/runtime-usage.md`
 - `agent-docs/concepts/safety-contract.md`
+- `agent-docs/concepts/analysis-workflow-contract.md` when the task involves
+  Control Center reviews, Mix Review, Routing Review, Project Organizer,
+  Project Health, Preflight, Low-End Analysis, or other AI-guided workflow
+  reports.
 
 Optional, only when needed:
 
@@ -40,6 +44,7 @@ Read:
 
 - `agent-docs/agents/development.md`
 - `agent-docs/concepts/safety-contract.md`
+- `agent-docs/concepts/analysis-workflow-contract.md`
 - `agent-docs/agents/knowledgebase-protocol.md`
 - `agent-docs/engineering/standards.md`
 - `agent-docs/project/ROADMAP.github.md`
@@ -64,6 +69,9 @@ Use the focused prompt files in `src/fls_pilot/context/prompts/` when applicable
 ## Universal Hard Rules
 
 - Prefer high-level MCP tools over raw FL API calls.
+- Control Center reviews and AI-guided workflow reports must follow the shared
+  Analysis Workflow Contract; do not add private report shapes, private score
+  meanings, or hidden broad FL call sequences.
 - Check the Knowledgebase before FL state, mixer/plugin parameters, automation,
   REC events, or MIDI work.
 - Do not guess FL Studio API ranges, normalized values, dB/Hz mappings, REC

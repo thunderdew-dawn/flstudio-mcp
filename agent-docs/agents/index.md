@@ -14,6 +14,9 @@ Organizer, bridge/session checks, audio analysis, or MIDI export, read:
 
 - [Runtime Usage](runtime-usage.md)
 - [Safety Contract](../concepts/safety-contract.md)
+- [Analysis Workflow Contract](../concepts/analysis-workflow-contract.md) when
+  working with Control Center reviews, project health, mix/routing/organizer
+  reports, preflight, low-end analysis, or other AI-guided workflow reports.
 
 Use bundled prompt source files only for the active workflow:
 
@@ -28,6 +31,7 @@ Knowledgebase changes, read:
 
 - [Development Guide](development.md)
 - [Safety Contract](../concepts/safety-contract.md)
+- [Analysis Workflow Contract](../concepts/analysis-workflow-contract.md)
 - [Knowledgebase Protocol](knowledgebase-protocol.md)
 - `agent-docs/engineering/standards.md`
 - `agent-docs/project/ROADMAP.github.md`

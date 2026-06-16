@@ -199,6 +199,10 @@ export DYLD_LIBRARY_PATH="/usr/local/opt/expat/lib:${DYLD_LIBRARY_PATH:-}"
 - Prefer high-signal reports and guided fixes over large, flat tool surfaces.
 - Project Health, Routing Review, and organizer workflows must orchestrate safe
   primitives instead of creating a second write layer.
+- Control Center reviews and AI-guided workflow reports must follow
+  [Analysis Workflow Contract](../concepts/analysis-workflow-contract.md):
+  shared report structure, declared prerequisites, freshness, evidence mode,
+  canonical entities, and separate risk/health/coverage/confidence semantics.
 - Bulk cleanup should be previewable and grouped into named rollback units.
 - User-facing results should be explicit about what changed, what was skipped,
   and what is limited by FL API support.

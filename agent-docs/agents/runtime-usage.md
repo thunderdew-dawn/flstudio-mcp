@@ -14,10 +14,15 @@ checks.
    any repository file reads or large tool calls.
 4. Choose a current workflow/domain tool. Avoid raw FL API calls and removed
    one-off aliases.
-5. For write-capable workflows, scan/read-only first, propose exactly one
+5. For Control Center reviews and AI-guided analysis workflows, follow the
+   [Analysis Workflow Contract](../concepts/analysis-workflow-contract.md):
+   state evidence mode, prerequisites, freshness, coverage, risk, health,
+   confidence, assumptions, limitations, and next stronger evidence step when
+   applicable.
+6. For write-capable workflows, scan/read-only first, propose exactly one
    reversible next action with a risk level, and ask for explicit confirmation
    before mutation.
-6. After one approved write, read back where supported, report before/after plus
+7. After one approved write, read back where supported, report before/after plus
    rollback or `change_id`, then stop and wait for user direction.
 
 ## Tool-Choice Matrix
@@ -54,6 +59,9 @@ checks.
 ## Runtime Definition Of Done
 
 - The selected tool path is current and Knowledgebase-informed.
+- Control Center and AI-guided workflow reports keep risk, health, coverage,
+  and confidence separate; stale, partial, unavailable, or heuristic evidence
+  is stated instead of hidden.
 - Writes, if any, are rollback-backed and verified by readback where supported.
 - Write-capable workflows presented a risk level, asked for explicit
   confirmation, applied only one reversible change per confirmation, and stopped

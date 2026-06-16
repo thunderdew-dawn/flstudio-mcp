@@ -10,6 +10,7 @@ Before changing code, tests, docs, scripts, controller files, skill files, evals
 - `agent-docs/engineering/standards.md`
 - `agent-docs/concepts/safety-contract.md`
 - `agent-docs/concepts/api-capability-audit.md`
+- `agent-docs/concepts/analysis-workflow-contract.md`
 - `agent-docs/agents/knowledgebase-protocol.md`
 - `agent-docs/project/ROADMAP.github.md`
 
@@ -34,6 +35,11 @@ For GitHub planning, issue/PR work, roadmap execution, releases, dependency upda
 - Before building anything new, check whether the functionality already exists
   under a different name or can be composed from existing safe primitives.
 - Prefer existing project patterns over new abstractions.
+- For Control Center reviews, Mix Review, Routing Review, Project Organizer,
+  Project Health, Preflight, Low-End Analysis, Export Readiness, and other
+  AI-guided workflow reports, follow the Analysis Workflow Contract. Do not add
+  private report shapes, private scoring meanings, or hidden broad FL call
+  sequences; add compatibility adapters during migration instead.
 - Use established patterns: protocol constants, controller handlers,
   `safety.safe_write`, `safety.safe_write_group`, Piano Roll safety helpers,
   focused tests/scripts, and FastMCP registration style.
@@ -67,6 +73,9 @@ blast radius justifies it:
   when tool annotations or docstrings change.
 - Focused script tests for changed areas.
 - FastMCP registration/tool-count checks when tool registration changes.
+- Analysis workflow contract tests or adapter coverage when Control Center
+  workflows, workflow reports, prerequisites, freshness, scoring, or health
+  aggregation change.
 - Rollback-safe live smoke tests when FL Studio is available and the change
   touches live behavior.
 
