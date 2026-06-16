@@ -42,6 +42,8 @@ from .analysis import (
     routing_analysis_report_from_legacy_payload,
     routing_health_score,
 )
+from .analysis.health_aggregator import aggregate_project_health
+from .analysis.store import ReportStore
 from .connection import DEFAULT_TCP_HOST, DEFAULT_TCP_PORT, TCPBridge, fetch_all_pages
 from .music import mix_doctor as mix_review
 from .runtime_config import (
@@ -234,6 +236,7 @@ class ControlCenterState:
         self.daemon_host = daemon_host
         self.daemon_port = daemon_port
         self.daemon_fallback_port: int | None = None
+        self.report_store = ReportStore()
         self.checkpoints: dict[str, dict[str, Any]] = {}
         self.processes: dict[str, ManagedProcess] = {}
         self.last_findings: list[doctor.Finding] = []
@@ -877,7 +880,9 @@ def _run_mix_review(state: ControlCenterState) -> dict[str, Any]:
             bridge,
             peaks_override=watch_peaks or None,
         )
-        return _build_mix_review_report(snapshot)
+        report_payload = _build_mix_review_report(snapshot)
+        state.report_store.add_report(_generic_analysis_report_from_legacy(report_payload, "mix_review", "Mix Review"))
+        return report_payload
     except Exception as exc:
         return _mix_review_unavailable_report(f"{type(exc).__name__}: {exc}")
     finally:
@@ -888,12 +893,13 @@ def _run_mix_review(state: ControlCenterState) -> dict[str, Any]:
 
 def _run_low_end_analysis(state: ControlCenterState) -> dict[str, Any]:
     """Run the read-only Low-End Analysis workflow for the Control Center UI."""
-    return _build_low_end_analysis_legacy_report(_run_mix_review(state))
+    return _build_low_end_analysis_legacy_report(state, _run_mix_review(state))
 
 
-def _build_low_end_analysis_legacy_report(mix_report: dict[str, Any]) -> dict[str, Any]:
+def _build_low_end_analysis_legacy_report(state: ControlCenterState, mix_report: dict[str, Any]) -> dict[str, Any]:
     legacy_report = _low_end_legacy_report_from_mix_report(mix_report)
     analysis_report = _build_low_end_analysis_report(legacy_report)
+    state.report_store.add_report(analysis_report)
     return analysis_report_to_control_center_legacy(analysis_report, legacy_report)
 
 
@@ -1651,19 +1657,23 @@ def _run_project_organizer(state: ControlCenterState) -> dict[str, Any]:
             protocol.CMD_MIXER_GET_ROUTING_ALL,
             "routing",
         ).get("routing", [])
-        channels = _merge_channel_snapshots(
-            routing_rows=_dict_rows(channel_routing),
-            channel_rows=_dict_rows(channel_list),
-        )
-        template_context = templates.classify_topology(mixer_tracks, routing, channels)
-        return _build_project_organizer_report(
-            channels=channels,
+        
+        report_payload = _build_project_organizer_report(
+            channels=_merge_channel_snapshots(
+                routing_rows=_dict_rows(channel_routing),
+                channel_rows=_dict_rows(channel_list),
+            ),
             mixer_tracks=_dict_rows(mixer_tracks),
             patterns=_dict_rows(patterns),
             playlist_tracks=_dict_rows(playlist_tracks),
             routing=_dict_rows(routing),
-            template_context=template_context,
+            template_context=templates.classify_topology(_dict_rows(mixer_tracks), _dict_rows(routing), _merge_channel_snapshots(
+                routing_rows=_dict_rows(channel_routing),
+                channel_rows=_dict_rows(channel_list),
+            )),
         )
+        state.report_store.add_report(_generic_analysis_report_from_legacy(report_payload, "project_organizer", "Organizer"))
+        return report_payload
     except Exception as exc:
         return _project_organizer_unavailable_report(f"{type(exc).__name__}: {exc}")
     finally:
@@ -2592,14 +2602,16 @@ def _run_routing_audit(state: ControlCenterState) -> dict[str, Any]:
             channels=channels,
             template_context=template_context,
         )
-        return _build_routing_audit_report(
+        analysis_report, legacy_report = _build_routing_audit_report(
             channels=channels,
             routing=routing,
             template_context=template_context,
             unused_mixer_tracks=unused_probe["tracks"],
             unused_mixer_track_truncated=unused_probe["truncated"],
-            unused_mixer_track_probe_failed=unused_probe["probe_failed"],
+            unused_mixer_track_probe_failed=unused_probe["failed"],
         )
+        state.report_store.add_report(analysis_report)
+        return legacy_report
     except Exception as exc:
         return _routing_unavailable_report(f"{type(exc).__name__}: {exc}")
     finally:
@@ -2648,13 +2660,16 @@ def _routing_unavailable_report(message: str) -> dict[str, Any]:
         },
         "safety": {"read_only": True, "project_changes": False},
     }
-    return analysis_report_to_control_center_legacy(
-        routing_analysis_report_from_legacy_payload(
-            report,
-            workflow="routing_audit",
-            title="Routing Audit",
-            created_at=report["generated_at"],
-        ),
+    
+    analysis_report = routing_analysis_report_from_legacy_payload(
+        report,
+        workflow="routing_audit",
+        title="Routing Audit",
+        created_at=report["generated_at"],
+    )
+    
+    return analysis_report, analysis_report_to_control_center_legacy(
+        analysis_report,
         report,
     )
 
@@ -2667,7 +2682,7 @@ def _build_routing_audit_report(
     unused_mixer_tracks: list[dict[str, Any]] | None = None,
     unused_mixer_track_truncated: bool = False,
     unused_mixer_track_probe_failed: bool = False,
-) -> dict[str, Any]:
+) -> tuple[AnalysisReport, dict[str, Any]]:
     unrouted_automation_clips = 0
     filtered_channels = []
     for c in channels:
@@ -3366,6 +3381,8 @@ def _handler_factory(state: ControlCenterState):
                 self._json(_run_project_organizer(state))
             elif self.path == "/api/workflows/routing-audit":
                 self._json(_run_routing_audit(state))
+            elif self.path == "/api/workflows/project-health":
+                self._json(aggregate_project_health(state.report_store))
             else:
                 self._json({"ok": False, "error": "not found"}, status=HTTPStatus.NOT_FOUND)
 

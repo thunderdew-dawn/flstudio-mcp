@@ -3141,30 +3141,43 @@ async function runProjectHealth() {
   state.projectHealth.lastRun = null;
   renderProjectHealth();
 
-  const steps = [
-    { title: "Project Organizer", run: runProjectOrganizer },
-    { title: "Mix Review", run: runMixReview },
-    { title: "Routing Audit", run: runRoutingAudit },
-    { title: "Low-End Analysis", run: runLowEndAnalysis }
-  ];
-  const failures = [];
-
-  for (const step of steps) {
-    try {
-      await step.run();
-    } catch (error) {
-      failures.push(`${step.title}: ${error.message}`);
+  try {
+    const payload = await api("/api/workflows/project-health", { method: "POST", body: "{}" });
+    if (!payload || !Array.isArray(payload.sections)) {
+      throw new Error("Invalid backend Project Health payload shape");
     }
-    renderProjectHealth();
+    state.projectHealth.backendData = payload;
+  } catch (error) {
+    state.projectHealth.backendData = null;
+    console.warn("Backend project health aggregate failed, running fallback steps:", error);
+    
+    // COMPATIBILITY FALLBACK FOR OLD PROJECT HEALTH PAYLOADS
+    const steps = [
+      { title: "Project Organizer", run: runProjectOrganizer },
+      { title: "Mix Review", run: runMixReview },
+      { title: "Routing Audit", run: runRoutingAudit },
+      { title: "Low-End Analysis", run: runLowEndAnalysis }
+    ];
+    const failures = [];
+
+    for (const step of steps) {
+      try {
+        await step.run();
+      } catch (err) {
+        failures.push(`${step.title}: ${err.message}`);
+      }
+      renderProjectHealth();
+    }
+    
+    const aggregate = buildHealthOverview();
+    const unavailable = aggregate.sections.filter(section => section.error);
+    if (failures.length || unavailable.length === aggregate.sections.length) {
+      state.projectHealth.error = failures.join(" · ") || "Health scan could not read any section.";
+    }
   }
 
   state.projectHealth.loading = false;
   state.projectHealth.lastRun = new Date().toISOString();
-  const aggregate = buildHealthOverview();
-  const unavailable = aggregate.sections.filter(section => section.error);
-  state.projectHealth.error = failures.length || unavailable.length === aggregate.sections.length
-    ? (failures.join(" · ") || "Health scan could not read any section.")
-    : null;
   renderProjectHealth();
 }
 
@@ -3187,6 +3200,42 @@ function renderProjectHealth() {
 }
 
 function buildHealthOverview() {
+  const backend = state.projectHealth.backendData;
+  if (backend) {
+    const sections = backend.sections.map(sec => {
+      const panelId = workflowById(sec.workflow)?.panel_id || "producer_health";
+      return {
+        id: sec.workflow,
+        title: sec.title,
+        target: panelId,
+        score: sec.health_score,
+        risk: sec.risk_score,
+        coverage: sec.coverage,
+        confidence: sec.confidence_score,
+        hasReport: sec.report_id != null,
+        error: sec.freshness === "missing" || sec.freshness === "unavailable" ? sec.reason : null,
+        findingsCount: 0,
+        findings: []
+      };
+    });
+    
+    return {
+      sections,
+      score: backend.overall_health_score,
+      risk: backend.overall_risk_score,
+      coverage_pct: backend.overall_coverage_pct,
+      confidence: backend.overall_confidence_score,
+      warnings: [],
+      availableSections: backend.sections.filter(s => s.report_id != null).length,
+      readySections: backend.sections.filter(s => s.freshness === "fresh" || s.freshness === "partial").length,
+      findingTotal: 0,
+      blockerTotal: 0,
+      warningTotal: 0,
+      totalSections: backend.sections.length
+    };
+  }
+
+  // COMPATIBILITY FALLBACK FOR OLD PROJECT HEALTH PAYLOADS
   const sections = [
     buildOrganizerHealthSection(),
     buildMixHealthSection(),

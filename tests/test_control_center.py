@@ -904,7 +904,8 @@ def test_low_end_analysis_legacy_report_keeps_ui_shape_and_adds_contract():
         }
     )
 
-    report = control_center._build_low_end_analysis_legacy_report(mix_report)
+    state = control_center.ControlCenterState(host="127.0.0.1", port=1234, sse_host="127.0.0.1", sse_port=1235)
+    report = control_center._build_low_end_analysis_legacy_report(state, mix_report)
 
     assert report["workflow"] == "low_end_analysis"
     assert report["title"] == "Low-End Analysis"
