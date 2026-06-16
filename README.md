@@ -10,18 +10,15 @@
 ![macOS](https://img.shields.io/badge/macOS-12%2B-000000?logo=apple&logoColor=white)
 ![FL Studio](https://img.shields.io/badge/FL%20Studio-2025%2B-orange)
 
-[![Documentation Status](https://readthedocs.org/projects/fl-studio-pilot/badge/?version=beta)](https://fl-studio-pilot.readthedocs.io/en/beta/)
+[![Documentation Status](https://readthedocs.org/projects/fl-studio-pilot/badge/?version=v3-alpha)](https://fl-studio-pilot.readthedocs.io/en/v3-alpha/)
 
 ![fls-pilot](docs/assets/fls-pilot-logo-with-text.png)
 
-fls-pilot connects FL Studio to MCP-compatible AI clients such as Claude
-Desktop, ChatGPT Desktop, Cursor, and other MCP hosts. It provides real project
-context, production workflow tools, and rollback-first write paths for
-supported FL Studio actions.
+**Create more. Check less.**
 
-Use it for mix review, routing checks, project organization, Piano Roll
-composition, plugin-chain planning, audio analysis, MIDI export, and
-export-readiness checks.
+fls-pilot is a local Control Center and workflow assistant for FL Studio. It helps producers stay in the creative flow while reviewing mix, routing, project structure, setup, export readiness, and genre-aware production details.
+
+Built around a safety-first model: scan before changing, explain findings in plain language, ask for explicit approval before persistent project edits, and keep supported writes small, verified, logged, and rollback-capable.
 
 ## What It Does
 

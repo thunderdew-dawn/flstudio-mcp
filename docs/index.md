@@ -2,6 +2,8 @@
 
 ![fls-pilot logo](assets/fls-pilot-logo-with-text.png)
 
+**Create more. Check less.**
+
 fls-pilot connects FL Studio to MCP-compatible AI clients. It gives assistants
 readable project context, production workflow tools, and rollback-first write
 paths for supported FL Studio actions.

@@ -1,5 +1,7 @@
 # Agents
 
+**Create more. Check less.**
+
 This section gives agents the smallest useful context for the task at hand.
 Do not load every agent document by default. Choose the role first.
 

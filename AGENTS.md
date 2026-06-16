@@ -1,5 +1,7 @@
 # AGENTS.md
 
+**Create more. Check less.**
+
 This is the repository entry point for AI-assisted work in `thunderdew-dawn/fls-pilot`.
 Choose the smallest role-specific context path before reading more files.
 
