@@ -56,11 +56,26 @@ def aggregate_project_health(store: ReportStore) -> dict[str, Any]:
                 section["reason"] = f"Report is {report.freshness.status}"
                 if report.freshness.details:
                     section["reason"] += f": {report.freshness.details}"
-                section["recommended_next_action"] = {
-                    "type": "run_workflow",
-                    "workflow": wf["id"],
-                    "label": f"Run {wf['title']}",
-                }
+                    
+                evidence = getattr(report, "evidence_mode", "static_snapshot_only")
+                if evidence in ("no_level_evidence", "static_snapshot_only"):
+                    section["recommended_next_action"] = {
+                        "type": "run_workflow",
+                        "workflow": wf["id"],
+                        "label": f"Play project and run {wf['title']}",
+                    }
+                elif evidence == "short_live_snapshot":
+                    section["recommended_next_action"] = {
+                        "type": "run_workflow",
+                        "workflow": wf["id"],
+                        "label": f"Capture longer live window for {wf['title']}",
+                    }
+                else:
+                    section["recommended_next_action"] = {
+                        "type": "run_workflow",
+                        "workflow": wf["id"],
+                        "label": f"Run {wf['title']}",
+                    }
             elif report.next_actions:
                 section["recommended_next_action"] = report.next_actions[0]
             else:

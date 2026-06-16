@@ -55,6 +55,7 @@ def analysis_report_to_control_center_legacy(
         "report_id": data["report_id"],
         "workflow": data["workflow"],
         "analysis_mode": data["analysis_mode"],
+        "evidence_mode": data.get("evidence_mode", "static_snapshot_only"),
         "freshness": data["freshness"],
         "coverage": data["coverage"],
         "prerequisites": data["prerequisites"],

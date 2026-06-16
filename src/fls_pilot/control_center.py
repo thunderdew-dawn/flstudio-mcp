@@ -875,14 +875,25 @@ def _run_mix_review(state: ControlCenterState) -> dict[str, Any]:
                 "the connection."
             )
 
-        watch_peaks = mix_review.get_watcher().last_max()
+        watcher_provider = mix_review.get_watcher()
+        watch_peaks = watcher_provider.last_max()
+        
+        from .analysis.live import LiveMeterPolicy
+        live_window = state.report_store.broker.get_live_meter_window(
+            bridge,
+            policy=LiveMeterPolicy(require_playing=False),
+            watcher_provider=watcher_provider,
+        )
+        
         snapshot = mix_review.gather_snapshot(
             bridge,
             peaks_override=watch_peaks or None,
+            live_window=live_window,
         )
         report_payload = _build_mix_review_report(snapshot)
-        state.report_store.add_report(_generic_analysis_report_from_legacy(report_payload, "mix_review", "Mix Review"))
-        return report_payload
+        analysis_report = _generic_analysis_report_from_legacy(report_payload, "mix_review", "Mix Review")
+        state.report_store.add_report(analysis_report)
+        return analysis_report_to_control_center_legacy(analysis_report, report_payload)
     except Exception as exc:
         return _mix_review_unavailable_report(f"{type(exc).__name__}: {exc}")
     finally:
@@ -1267,6 +1278,7 @@ def _build_mix_review_report(snapshot: dict[str, Any]) -> dict[str, Any]:
         "state": "live",
         "workflow": "mix_review",
         "title": "Mix Review",
+        "evidence_mode": diagnosis.get("evidence_mode", "static_snapshot_only"),
         "generated_at": _now_iso(),
         "summary": {
             "health_score": health_score,
@@ -1672,8 +1684,9 @@ def _run_project_organizer(state: ControlCenterState) -> dict[str, Any]:
                 channel_rows=_dict_rows(channel_list),
             )),
         )
-        state.report_store.add_report(_generic_analysis_report_from_legacy(report_payload, "project_organizer", "Organizer"))
-        return report_payload
+        analysis_report = _generic_analysis_report_from_legacy(report_payload, "project_organizer", "Organizer")
+        state.report_store.add_report(analysis_report)
+        return analysis_report_to_control_center_legacy(analysis_report, report_payload)
     except Exception as exc:
         return _project_organizer_unavailable_report(f"{type(exc).__name__}: {exc}")
     finally:
@@ -1681,6 +1694,68 @@ def _run_project_organizer(state: ControlCenterState) -> dict[str, Any]:
             with contextlib.suppress(Exception):
                 bridge.close()
 
+
+def _generic_analysis_report_from_legacy(report: dict[str, Any], workflow: str, title: str) -> AnalysisReport:
+    summary = dict(report.get("summary") or {})
+    levels_valid = bool(summary.get("levels_valid"))
+    ok = bool(report.get("ok"))
+    
+    available = 0
+    missing: list[str] = []
+    prereqs = []
+    
+    if ok:
+        available += 1
+        prereqs.append(Prerequisite("fl_session_alive", "ok"))
+    else:
+        missing.append("fl_session_alive")
+        prereqs.append(Prerequisite("fl_session_alive", "missing"))
+        
+    if workflow == "mix_review":
+        if levels_valid:
+            available += 1
+            prereqs.append(Prerequisite("requires_playback", "ok"))
+        else:
+            missing.append("requires_playback")
+            prereqs.append(Prerequisite("requires_playback", "missing"))
+        required = 2
+    else:
+        required = 1
+        
+    coverage = Coverage(
+        required=required,
+        available=available,
+        missing=tuple(missing),
+    )
+    
+    risk = risk_from_severities(
+        tuple(row.get("severity", "info") for row in report.get("findings") or [])
+    )
+    confidence = confidence_from_coverage(
+        required=required,
+        available=available,
+        evidence_mode="live_runtime" if levels_valid else "static_snapshot",
+    )
+    freshness_status = "fresh" if ok and not missing else "partial" if ok else "unavailable"
+    
+    limitations = list(report.get("details", {}).get("limits", []))
+    for m in missing:
+        limitations.append(f"Missing prerequisite: {m}")
+        
+    return AnalysisReport(
+        workflow=workflow,
+        title=title,
+        analysis_mode="live_runtime" if levels_valid else "static_snapshot",
+        evidence_mode="live_runtime" if levels_valid else "static_snapshot_only",
+        freshness=Freshness(status=freshness_status),
+        coverage=coverage,
+        prerequisites=tuple(prereqs),
+        risk_score=risk,
+        health_score=summary.get("health_score"),
+        confidence_score=confidence,
+        limitations=tuple(limitations),
+        safety=report.get("safety") or {"read_only": True},
+    )
 
 def _project_organizer_unavailable_report(message: str) -> dict[str, Any]:
     return {

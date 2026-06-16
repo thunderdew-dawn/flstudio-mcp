@@ -133,9 +133,9 @@ def gather_snapshot(
     with_params=True,
     max_tracks=64,
     param_cap=120,
-    peak_samples=15,
     peak_interval_ms=80,
     peaks_override=None,
+    live_window=None,
 ):
     """Build a normalised whole-mix snapshot via cheap bridge reads.
 
@@ -276,6 +276,7 @@ def gather_snapshot(
         "tracks": tracks,
         "template_context": template_context,
         "gather_errors": errors,
+        "live_window": live_window.to_dict() if live_window else None,
     }
 
 
@@ -729,7 +730,31 @@ def diagnose(snapshot):
     playing = snapshot.get("playing")
     levels_valid = snapshot.get("levels_valid", playing)  # watch capture also counts
     findings, notes = [], []
-
+    
+    live_window = snapshot.get("live_window")
+    
+    # Determine explicit evidence mode
+    if live_window:
+        fw = live_window.get("freshness")
+        limitations = live_window.get("limitations") or []
+        if fw == "unavailable":
+            evidence_mode = "no_level_evidence"
+            levels_valid = False
+        elif fw == "fresh" and "short capture window" not in limitations:
+            evidence_mode = "sufficient_watch_window"
+            levels_valid = True
+        elif fw == "fresh":
+            evidence_mode = "recent_live_meter_window"
+            levels_valid = True
+        elif fw == "partial":
+            evidence_mode = "short_live_snapshot"
+            levels_valid = False
+        else:
+            evidence_mode = "no_level_evidence"
+            levels_valid = False
+    else:
+        evidence_mode = "static_snapshot_only" if not levels_valid else "recent_live_meter_window"
+        
     if levels_valid:
         findings += rule_clipping(tracks)
         findings += rule_headroom(tracks)
@@ -755,6 +780,7 @@ def diagnose(snapshot):
         "playing": playing,
         "track_count": len(tracks),
         "template_context": template_context,
+        "evidence_mode": evidence_mode,
         "findings": findings,
         "notes": notes,
         "summary": summary,

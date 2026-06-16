@@ -232,6 +232,7 @@ class AnalysisReport:
     workflow: str
     title: str
     analysis_mode: str
+    evidence_mode: str = "static_snapshot_only"
     report_id: str = field(default_factory=report_id)
     created_at: str = field(default_factory=utc_now_iso)
     project_fingerprint: str | None = None
@@ -260,6 +261,7 @@ class AnalysisReport:
             "analysis_mode",
             _validate(self.analysis_mode, ANALYSIS_MODES, "analysis mode"),
         )
+        object.__setattr__(self, "evidence_mode", str(self.evidence_mode))
         object.__setattr__(self, "risk_score", clamp_score(self.risk_score))
         health = (
             health_from_risk(self.risk_score)
@@ -298,6 +300,7 @@ class AnalysisReport:
             "title": self.title,
             "created_at": self.created_at,
             "analysis_mode": self.analysis_mode,
+            "evidence_mode": self.evidence_mode,
             "project_fingerprint": self.project_fingerprint or "unknown",
             "freshness": self.freshness.to_dict(),
             "coverage": self.coverage.to_dict(),

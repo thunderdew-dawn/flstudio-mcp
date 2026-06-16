@@ -19,6 +19,10 @@ COMMON_OBSERVATIONS = {
     "live_meter_window",
     "rendered_audio_features",
     "knowledgebase_policy_refs",
+    "requires_fl_connected",
+    "requires_playback",
+    "requires_meter_window",
+    "requires_recent_watch",
 }
 
 
