@@ -34,9 +34,13 @@ from .analysis import (
     Prerequisite,
     analysis_report_to_control_center_legacy,
     confidence_from_coverage,
+    low_end_health_score,
+    mix_health_score,
     mixer_entity_id,
+    organizer_score,
     risk_from_severities,
     routing_analysis_report_from_legacy_payload,
+    routing_health_score,
 )
 from .connection import DEFAULT_TCP_HOST, DEFAULT_TCP_PORT, TCPBridge, fetch_all_pages
 from .music import mix_doctor as mix_review
@@ -975,6 +979,20 @@ def _build_low_end_analysis_report(report: dict[str, Any]) -> AnalysisReport:
             ),
         ]
     )
+    stereo_risks = 0
+    for track in low_end_tracks:
+        pan = _as_float(track.get("pan"))
+        stereo_sep = _as_float(track.get("stereo_sep"))
+        if (pan is not None and abs(pan) >= 0.2) or (stereo_sep is not None and abs(stereo_sep) >= 0.25):
+            stereo_risks += 1
+            
+    health_score = low_end_health_score(
+        high=sum(1 for row in low_end_findings if str(row.get("severity", "")).lower() in ("high", "critical")),
+        medium=sum(1 for row in low_end_findings if str(row.get("severity", "")).lower() in ("medium", "warning")),
+        low=sum(1 for row in low_end_findings if str(row.get("severity", "")).lower() == "low"),
+        stereo_risks=stereo_risks,
+        levels_valid=levels_valid,
+    )
     return AnalysisReport(
         workflow="low_end_analysis",
         title="Low-End Analysis",
@@ -995,6 +1013,7 @@ def _build_low_end_analysis_report(report: dict[str, Any]) -> AnalysisReport:
             Prerequisite("live_meter_window", "ok" if levels_valid else "missing"),
         ),
         risk_score=risk,
+        health_score=health_score,
         confidence_score=confidence,
         findings=findings,
         assumptions=tuple(assumptions),
@@ -1200,7 +1219,7 @@ def _build_mix_review_report(snapshot: dict[str, Any]) -> dict[str, Any]:
     low = sum(1 for row in findings if row["severity"] == "low")
     levels_valid = bool(snapshot.get("levels_valid"))
     master_peak = _as_float(master.get("peak_db")) if master else None
-    health_score = _mix_health_score(
+    health_score = mix_health_score(
         high=high,
         medium=medium,
         low=low,
@@ -1477,26 +1496,6 @@ def _mix_level_state(peak: float | None, row: dict[str, Any]) -> str:
         return "quiet"
     return "ok"
 
-
-def _mix_health_score(
-    *,
-    high: int,
-    medium: int,
-    low: int,
-    levels_valid: bool,
-    master_peak: float | None,
-) -> int:
-    penalty = high * 18 + medium * 9 + low * 3
-    if not levels_valid:
-        penalty += 12
-    if master_peak is not None:
-        if master_peak >= 0:
-            penalty += 24
-        elif master_peak > -1:
-            penalty += 16
-        elif master_peak > -3:
-            penalty += 7
-    return max(0, min(100, 100 - penalty))
 
 
 def _mix_health_label(score: int) -> str:
@@ -1815,7 +1814,7 @@ def _build_project_organizer_report(
         if step.get("kind") in {"channel_naming", "mixer_naming", "pattern_naming"}
     ]
     color_rules = _organizer_color_standard_rules(channels, mixer_tracks)
-    score = _organizer_score(
+    score = organizer_score(
         unnamed_channels=len(unnamed_channels),
         routing_cleanup=len(routing_cleanup),
         unnamed_patterns=len(unnamed_patterns),
@@ -2545,26 +2544,7 @@ def safe_debug_value(value: Any) -> str:
     return str(value)
 
 
-def _organizer_score(
-    *,
-    unnamed_channels: int,
-    routing_cleanup: int,
-    unnamed_patterns: int,
-    unnamed_playlist_tracks: int,
-    duplicate_mixer: int,
-    duplicate_patterns: int,
-    grouping_candidates: int,
-) -> int:
-    penalty = (
-        routing_cleanup * 12
-        + unnamed_channels * 5
-        + unnamed_patterns * 4
-        + unnamed_playlist_tracks * 2
-        + duplicate_mixer * 5
-        + duplicate_patterns * 4
-        + grouping_candidates * 3
-    )
-    return max(0, min(100, 100 - penalty))
+
 
 
 def _organizer_health_label(score: int) -> str:
@@ -2786,7 +2766,7 @@ def _build_routing_audit_report(
         routes_by_src=routes_by_src,
         bus_indices=bus_indices,
     )
-    health_score = _routing_health_score(
+    health_score = routing_health_score(
         direct_count=len(direct_to_master),
         unrouted_count=len(unrouted_channels),
         dead_end_count=len(dead_end_tracks),
@@ -3162,15 +3142,7 @@ def _routing_findings(
     return findings
 
 
-def _routing_health_score(
-    *,
-    direct_count: int,
-    unrouted_count: int,
-    dead_end_count: int,
-    unused_count: int,
-) -> int:
-    penalty = direct_count * 7 + unrouted_count * 12 + dead_end_count * 14 + unused_count * 3
-    return max(0, min(100, 100 - penalty))
+
 
 
 def _routing_health_label(score: int) -> str:

@@ -84,3 +84,73 @@ def confidence_from_coverage(
         "manual_check": -10,
     }.get(str(evidence_mode), 0)
     return clamp_score(base + mode_bonus)
+
+
+def mix_health_score(
+    *,
+    high: int,
+    medium: int,
+    low: int,
+    levels_valid: bool,
+    master_peak: float | None,
+) -> int:
+    """Calculate health score for Mix Review workflow."""
+    penalty = high * 18 + medium * 9 + low * 3
+    if not levels_valid:
+        penalty += 12
+    if master_peak is not None:
+        if master_peak >= 0:
+            penalty += 24
+        elif master_peak > -1:
+            penalty += 16
+        elif master_peak > -3:
+            penalty += 7
+    return clamp_score(100 - penalty)
+
+
+def organizer_score(
+    *,
+    unnamed_channels: int,
+    routing_cleanup: int,
+    unnamed_patterns: int,
+    unnamed_playlist_tracks: int,
+    duplicate_mixer: int,
+    duplicate_patterns: int,
+    grouping_candidates: int,
+) -> int:
+    """Calculate health score for Project Organizer workflow."""
+    penalty = (
+        routing_cleanup * 12
+        + unnamed_channels * 5
+        + unnamed_patterns * 4
+        + unnamed_playlist_tracks * 2
+        + duplicate_mixer * 5
+        + duplicate_patterns * 4
+        + grouping_candidates * 3
+    )
+    return clamp_score(100 - penalty)
+
+
+def routing_health_score(
+    *,
+    direct_count: int,
+    unrouted_count: int,
+    dead_end_count: int,
+    unused_count: int,
+) -> int:
+    """Calculate health score for Routing Audit workflow."""
+    penalty = direct_count * 7 + unrouted_count * 12 + dead_end_count * 14 + unused_count * 3
+    return clamp_score(100 - penalty)
+
+
+def low_end_health_score(
+    *,
+    high: int,
+    medium: int,
+    low: int,
+    stereo_risks: int,
+    levels_valid: bool,
+) -> int:
+    """Calculate health score for Low-End Analysis workflow."""
+    penalty = high * 24 + medium * 12 + low * 4 + stereo_risks * 5 + (0 if levels_valid else 8)
+    return clamp_score(100 - penalty)

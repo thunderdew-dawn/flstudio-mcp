@@ -1395,6 +1395,8 @@ function renderMixSummary(report, isLoading) {
         : "Idle";
     levelState.className = `badge ${report?.ok && hasLevels ? "badge-ok" : "badge-neutral"}`;
   }
+
+  renderExplicitLabels(".mix-score-stats", report);
 }
 
 function renderMixLevels(report) {
@@ -1718,6 +1720,8 @@ function renderLowEndSummary(report, isLoading) {
     mapState.textContent = isLoading ? "Reading" : (report?.ok ? "Live" : "Idle");
     mapState.className = `badge ${report?.ok ? "badge-ok" : "badge-neutral"}`;
   }
+
+  renderExplicitLabels(".low-end-score-stats", report);
 }
 
 function renderLowEndFocus(report) {
@@ -2168,6 +2172,10 @@ function lowEndTrackStereoRisk(track) {
 }
 
 function lowEndScore(report, tracks, findings) {
+  if (report?.summary?.health_score != null) {
+    return report.summary.health_score;
+  }
+  // COMPATIBILITY FALLBACK FOR OLD PAYLOADS
   if (!report) return null;
   if (report.ok === false) return 0;
   const rows = Array.isArray(findings) ? findings : [];
@@ -2185,6 +2193,47 @@ function lowEndScoreLabel(score, ok) {
   if (score >= 90) return "Solid";
   if (score >= 75) return "Needs Review";
   return "At Risk";
+}
+
+function renderExplicitLabels(containerSelector, report) {
+  const container = document.querySelector(containerSelector);
+  if (!container || !report) return;
+  
+  let explicitDiv = container.querySelector('.explicit-labels-group');
+  if (!explicitDiv) {
+    explicitDiv = document.createElement('div');
+    explicitDiv.className = 'explicit-labels-group';
+    explicitDiv.style.gridColumn = '1 / -1';
+    explicitDiv.style.display = 'grid';
+    explicitDiv.style.gridTemplateColumns = 'repeat(2, 1fr)';
+    explicitDiv.style.gap = 'var(--space-3)';
+    container.insertBefore(explicitDiv, container.firstChild);
+  }
+  
+  explicitDiv.innerHTML = '';
+  
+  const addStat = (label, value) => {
+    const div = document.createElement('div');
+    const dt = document.createElement('dt');
+    dt.textContent = label;
+    const dd = document.createElement('dd');
+    dd.textContent = value;
+    div.append(dt, dd);
+    explicitDiv.append(div);
+  };
+  
+  const h = report.health_score ?? report.summary?.health_score;
+  const r = report.risk_score ?? report.summary?.risk_score;
+  const c = report.coverage;
+  const conf = report.confidence_score;
+  
+  if (h != null) addStat('Health', `${Math.round(h)} / 100`);
+  if (r != null) addStat('Risk', `${Math.round(r)} / 100`);
+  if (c != null && c.required) addStat('Coverage', `${c.available} / ${c.required}`);
+  if (conf != null) {
+     const band = conf >= 90 ? "High" : conf >= 50 ? "Medium" : "Low";
+     addStat('Confidence', band);
+  }
 }
 
 function lowEndManualCheckText(check) {
@@ -2762,6 +2811,8 @@ function renderOrganizerSummary(report, isLoading) {
     mapState.textContent = isLoading ? "Reading" : (report?.ok ? "Live" : "Idle");
     mapState.className = `badge ${report?.ok ? "badge-ok" : "badge-neutral"}`;
   }
+
+  renderExplicitLabels(".organizer-score-stats", report);
 }
 
 function renderOrganizerMap(report) {

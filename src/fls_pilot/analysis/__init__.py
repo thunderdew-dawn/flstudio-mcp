@@ -37,8 +37,12 @@ from .scoring import (
     confidence_from_coverage,
     coverage_score,
     health_from_risk,
+    low_end_health_score,
+    mix_health_score,
+    organizer_score,
     risk_band,
     risk_from_severities,
+    routing_health_score,
 )
 
 __all__ = [
@@ -67,8 +71,11 @@ __all__ = [
     "confidence_from_coverage",
     "coverage_score",
     "health_from_risk",
+    "low_end_health_score",
+    "mix_health_score",
     "mixer_count_policy",
     "mixer_entity_id",
+    "organizer_score",
     "pattern_count_policy",
     "pattern_entity_id",
     "playlist_count_policy",
@@ -79,4 +86,5 @@ __all__ = [
     "risk_band",
     "risk_from_severities",
     "routing_analysis_report_from_legacy_payload",
+    "routing_health_score",
 ]
