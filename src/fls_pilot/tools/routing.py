@@ -20,6 +20,10 @@ from pydantic import Field
 
 from .. import kb_policy, operations, protocol, safety, workflow_report
 from .. import project_templates as templates
+from ..analysis import (
+    analysis_report_to_workflow_report,
+    routing_analysis_report_from_legacy_payload,
+)
 from ..connection import fetch_all_pages, get_bridge
 from .registration import RETIRED_LOW_LEVEL_TOOLS, hide_retired_tools
 from .targets import mixer_track_error
@@ -76,6 +80,48 @@ def _is_default_mixer_name(i, name) -> bool:
     if i == 0:
         return name in ("", "Master")
     return name in ("", f"Insert {i}")
+
+
+def _routing_review_findings(
+    *,
+    unrouted_channels: list[dict],
+    direct_to_master: list[dict],
+) -> list[dict]:
+    findings = []
+    if unrouted_channels:
+        findings.append(
+            {
+                "id": "unrouted_channels",
+                "severity": "critical",
+                "title": "Unrouted Channels",
+                "detail": "Channels without a usable mixer target may bypass routing review.",
+                "count": len(unrouted_channels),
+                "items": unrouted_channels[:8],
+            }
+        )
+    if direct_to_master:
+        findings.append(
+            {
+                "id": "generators_direct_to_master",
+                "severity": "warning",
+                "title": "Generators Direct to Master",
+                "detail": "Generator channels route through inserts that feed Master directly.",
+                "count": len(direct_to_master),
+                "items": direct_to_master[:8],
+            }
+        )
+    if not findings:
+        findings.append(
+            {
+                "id": "routing_clear",
+                "severity": "ok",
+                "title": "No Routing Blockers Detected",
+                "detail": "The static routing review did not find direct blockers.",
+                "count": 0,
+                "items": [],
+            }
+        )
+    return findings
 
 
 def detect_cleanup(bridge, *, max_plugin_checks: int = 60) -> dict:
@@ -358,8 +404,9 @@ def register(mcp: FastMCP) -> None:
         bridge = get_bridge()
         chans = fetch_all_pages(bridge, protocol.CMD_CHANNEL_ROUTING_SUMMARY, "channels")
         routing = fetch_all_pages(bridge, protocol.CMD_MIXER_GET_ROUTING_ALL, "routing")
+        channels = chans.get("channels", [])
         tracks = routing.get("routing", [])
-        template_context = templates.classify_topology(tracks, tracks, chans.get("channels", []))
+        template_context = templates.classify_topology(tracks, tracks, channels)
 
         unrouted = []
         direct_to_master = []
@@ -370,7 +417,7 @@ def register(mcp: FastMCP) -> None:
             routes = t.get("routes_to", [])
             track_to_master[t.get("i")] = any(r.get("dst") == 0 for r in routes)
 
-        for c in chans.get("channels", []):
+        for c in channels:
             tgt = c.get("target_mixer_track")
             ctype = c.get("type", {}).get("label")
 
@@ -397,11 +444,49 @@ def register(mcp: FastMCP) -> None:
                         }
                     )
 
-        return {
+        legacy_payload = {
+            "ok": True,
+            "workflow": "routing_review",
+            "title": "Routing Review",
+            "summary": {
+                "channels": len(channels),
+                "mixer_tracks": len(tracks),
+                "unrouted_channels": len(unrouted),
+                "generators_direct_to_master": len(direct_to_master),
+            },
+            "findings": _routing_review_findings(
+                unrouted_channels=unrouted,
+                direct_to_master=direct_to_master,
+            ),
             "unrouted_channels": unrouted,
             "generators_direct_to_master": direct_to_master,
             "template_context": templates.compact_context(template_context),
             "note": "Use this data to plan bus structures or correct routing.",
+            "details": {
+                "channels": [
+                    {
+                        "channel": c.get("channel"),
+                        "name": c.get("name"),
+                        "type": c.get("type"),
+                        "target_mixer_track": c.get("target_mixer_track"),
+                        "target_name": c.get("target_name"),
+                    }
+                    for c in channels
+                ],
+                "routes": tracks,
+                "template_context": templates.compact_context(template_context),
+                "policy_notes": [
+                    "Preserve recognizable existing routing structure before proposing cleanup.",
+                    (
+                        "Infer Channel Rack to Mixer relationships from channel "
+                        "target tracks, not playlist indices."
+                    ),
+                    (
+                        "Treat plugin insertion, external inputs, and UI drag-and-drop "
+                        "routing as manual guidance."
+                    ),
+                ],
+            },
             "policy_notes": [
                 "Preserve recognizable existing routing structure before proposing cleanup.",
                 (
@@ -420,7 +505,29 @@ def register(mcp: FastMCP) -> None:
                     "routing_ui_guidance_vs_mcp_write",
                 ]
             ),
+            "safety": {"read_only": True, "project_changes": False},
         }
+        report = analysis_report_to_workflow_report(
+            routing_analysis_report_from_legacy_payload(
+                legacy_payload,
+                workflow="routing_review",
+                title="Routing Review",
+            ),
+            status="Routing review generated",
+        )
+        report["unrouted_channels"] = unrouted
+        report["generators_direct_to_master"] = direct_to_master
+        report["template_context"] = legacy_payload["template_context"]
+        report["note"] = legacy_payload["note"]
+        report["policy_notes"] = legacy_payload["policy_notes"]
+        report["kb_policy_refs"] = legacy_payload["kb_policy_refs"]
+        report["metadata"]["legacy_routing_review"] = {
+            "unrouted_channels": unrouted,
+            "generators_direct_to_master": direct_to_master,
+            "template_context": legacy_payload["template_context"],
+        }
+        report["json_report"]["metadata"] = report["metadata"]
+        return report
 
     @mcp.tool(annotations={"title": "Plan routing cleanup", **_RO})
     def fl_plan_routing_cleanup(

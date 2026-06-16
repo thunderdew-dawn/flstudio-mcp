@@ -50,3 +50,37 @@ def confidence_band(score: float | int | None) -> str:
     if value < 75:
         return "medium"
     return "high"
+
+
+def risk_from_severities(severities: list[str] | tuple[str, ...]) -> int:
+    """Estimate aggregate risk from finding severities."""
+    weights = {
+        "critical": 45,
+        "high": 32,
+        "error": 32,
+        "medium": 16,
+        "warning": 12,
+        "low": 6,
+        "info": 2,
+        "ok": 0,
+    }
+    return clamp_score(sum(weights.get(str(item).lower(), 0) for item in severities))
+
+
+def confidence_from_coverage(
+    *,
+    required: int,
+    available: int,
+    evidence_mode: str,
+) -> int:
+    """Estimate confidence from required evidence coverage and evidence mode."""
+    base = coverage_score(required, available)
+    mode_bonus = {
+        "rendered_audio": 15,
+        "hybrid": 10,
+        "watch_window": 8,
+        "live_runtime": 4,
+        "static_snapshot": 0,
+        "manual_check": -10,
+    }.get(str(evidence_mode), 0)
+    return clamp_score(base + mode_bonus)

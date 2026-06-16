@@ -41,6 +41,63 @@ class MixFixBridge:
         return {"ok": True}
 
 
+class RoutingReviewBridge:
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, dict]] = []
+
+    def call(self, command: str, params: dict | None = None) -> dict:
+        self.calls.append((command, dict(params or {})))
+        if command == protocol.CMD_CHANNEL_ROUTING_SUMMARY:
+            return {
+                "total": 2,
+                "next_start": None,
+                "channels": [
+                    {
+                        "channel": 1,
+                        "name": "Lead",
+                        "type": {"label": "genplug"},
+                        "target_mixer_track": 1,
+                    },
+                    {
+                        "channel": 2,
+                        "name": "FX",
+                        "type": {"label": "audio"},
+                        "target_mixer_track": 0,
+                    },
+                ],
+            }
+        if command == protocol.CMD_MIXER_GET_ROUTING_ALL:
+            return {
+                "total": 2,
+                "next_start": None,
+                "routing": [
+                    {"i": 0, "name": "Master", "routes_to": []},
+                    {"i": 1, "name": "Lead", "routes_to": [{"dst": 0}]},
+                ],
+            }
+        raise AssertionError(f"unexpected command: {command}")
+
+
+def test_fl_review_routing_returns_workflow_report_and_legacy_lists(monkeypatch):
+    mcp = MockMCP()
+    routing.register(mcp)
+
+    bridge = RoutingReviewBridge()
+    monkeypatch.setattr(routing, "get_bridge", lambda: bridge)
+
+    result = mcp.tools["fl_review_routing"]()
+
+    assert result["contract_version"] == "fls-pilot.workflow-report.v1"
+    assert result["workflow"] == "routing_review"
+    assert result["mode"] == "static_snapshot"
+    assert result["unrouted_channels"] == [{"channel": 2, "name": "FX", "type": "audio"}]
+    assert result["generators_direct_to_master"][0]["channel"] == 1
+    assert result["metadata"]["analysis_report"]["workflow"] == "routing_review"
+    assert result["metadata"]["analysis_report"]["coverage"]["status"] == "fresh"
+    assert result["metadata"]["legacy_routing_review"]["unrouted_channels"]
+    assert result["diagnostics"][0]["target"]["canonical_id"] == "channel:2"
+
+
 def test_fl_plan_routing_cleanup_returns_workflow_report():
     mcp = MockMCP()
     routing.register(mcp)

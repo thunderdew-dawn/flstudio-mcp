@@ -740,6 +740,8 @@ def test_http_mix_review_and_low_end_endpoints(monkeypatch):
         assert payload["workflow"] == expected["workflow"]
         if expected["title"]:
             assert payload["title"] == expected["title"]
+            assert payload["analysis"]["workflow"] == expected["workflow"]
+            assert payload["details"]["analysis_report"]["workflow"] == expected["workflow"]
 
 
 def test_build_project_organizer_report_surfaces_cleanup_plan():
@@ -867,6 +869,56 @@ def test_build_mix_review_report_summarizes_levels_findings_and_visuals():
     assert any(track["plugins"] for track in report["details"]["tracks"])
 
 
+def test_low_end_analysis_legacy_report_keeps_ui_shape_and_adds_contract():
+    mix_report = control_center._build_mix_review_report(
+        {
+            "playing": True,
+            "levels_valid": True,
+            "peak_window": {"source": "sustained_1200ms"},
+            "tracks": [
+                {
+                    "index": 0,
+                    "name": "Master",
+                    "vol_db": 0.0,
+                    "peak_db": -2.0,
+                    "peak_max": 0.8,
+                    "pan": 0.0,
+                    "stereo_sep": 0.0,
+                    "plugins": [],
+                    "routes_to": [],
+                },
+                {
+                    "index": 2,
+                    "name": "Sub Bass",
+                    "vol_db": -3.0,
+                    "peak_db": -4.0,
+                    "peak_max": 0.63,
+                    "pan": 0.42,
+                    "stereo_sep": 0.5,
+                    "plugins": [],
+                    "routes_to": [{"dst": 0, "dst_name": "Master"}],
+                },
+            ],
+            "template_context": {},
+            "gather_errors": [],
+        }
+    )
+
+    report = control_center._build_low_end_analysis_legacy_report(mix_report)
+
+    assert report["workflow"] == "low_end_analysis"
+    assert report["title"] == "Low-End Analysis"
+    assert report["details"]["low_end"]["findings"]
+    assert report["details"]["low_end"]["tracks"][0]["name"] == "Sub Bass"
+    assert report["summary"]["low_end_findings"] >= 2
+    assert report["analysis"]["contract_version"] == "fls-pilot.analysis-report.v1"
+    assert report["analysis"]["workflow"] == "low_end_analysis"
+    assert report["analysis"]["analysis_mode"] == "live_runtime"
+    assert report["analysis"]["coverage"]["status"] == "fresh"
+    assert report["analysis"]["confidence_score"] > 0
+    assert report["details"]["analysis_report"]["findings"][0]["rule_id"].startswith("low_end.")
+
+
 def test_build_routing_audit_report_summarizes_graph_and_findings():
     channels = [
         {
@@ -932,6 +984,18 @@ def test_build_routing_audit_report_summarizes_graph_and_findings():
     assert ("track:10", "master", "audio") in links
     assert ("channel:3", "unrouted", "unrouted") in links
     assert ("channel:4", "dead_end", "dead_end") in links
+    assert report["analysis"]["contract_version"] == "fls-pilot.analysis-report.v1"
+    assert report["analysis"]["workflow"] == "routing_audit"
+    assert report["analysis"]["coverage"]["status"] == "fresh"
+    assert report["details"]["analysis_report"]["findings"][0]["rule_id"].startswith(
+        "routing."
+    )
+    canonical_ids = {
+        entity["canonical_id"]
+        for finding in report["details"]["analysis_report"]["findings"]
+        for entity in finding["entities"]
+    }
+    assert {"channel:1", "mixer:1", "channel:3", "mixer:2", "mixer:9"} <= canonical_ids
 
 
 def test_main_rejects_non_loopback_host():

@@ -25,6 +25,19 @@ from typing import Any
 
 from . import doctor, kb_policy, protocol
 from . import project_templates as templates
+from .analysis import (
+    AnalysisReport,
+    Coverage,
+    EntityRef,
+    Finding,
+    Freshness,
+    Prerequisite,
+    analysis_report_to_control_center_legacy,
+    confidence_from_coverage,
+    mixer_entity_id,
+    risk_from_severities,
+    routing_analysis_report_from_legacy_payload,
+)
 from .connection import DEFAULT_TCP_HOST, DEFAULT_TCP_PORT, TCPBridge, fetch_all_pages
 from .music import mix_doctor as mix_review
 from .runtime_config import (
@@ -871,10 +884,230 @@ def _run_mix_review(state: ControlCenterState) -> dict[str, Any]:
 
 def _run_low_end_analysis(state: ControlCenterState) -> dict[str, Any]:
     """Run the read-only Low-End Analysis workflow for the Control Center UI."""
-    report = dict(_run_mix_review(state))
+    return _build_low_end_analysis_legacy_report(_run_mix_review(state))
+
+
+def _build_low_end_analysis_legacy_report(mix_report: dict[str, Any]) -> dict[str, Any]:
+    legacy_report = _low_end_legacy_report_from_mix_report(mix_report)
+    analysis_report = _build_low_end_analysis_report(legacy_report)
+    return analysis_report_to_control_center_legacy(analysis_report, legacy_report)
+
+
+def _low_end_legacy_report_from_mix_report(mix_report: dict[str, Any]) -> dict[str, Any]:
+    report = dict(mix_report or {})
     report["workflow"] = "low_end_analysis"
     report["title"] = "Low-End Analysis"
+    details = dict(report.get("details") or {})
+    details.setdefault("low_end", {})
+    report["details"] = details
+    report.setdefault("summary", {})
+    report.setdefault("findings", [])
+    report.setdefault("proposals", [])
+    report.setdefault("visuals", {})
+    report.setdefault("safety", {"read_only": True, "project_changes": False})
     return report
+
+
+def _build_low_end_analysis_report(report: dict[str, Any]) -> AnalysisReport:
+    summary = dict(report.get("summary") or {})
+    details = dict(report.get("details") or {})
+    low_end = dict(details.get("low_end") or {})
+    low_end_findings = [
+        dict(row) for row in low_end.get("findings") or [] if isinstance(row, dict)
+    ]
+    low_end_tracks = [
+        dict(row) for row in low_end.get("tracks") or [] if isinstance(row, dict)
+    ]
+    levels_valid = bool(summary.get("levels_valid"))
+    ok = bool(report.get("ok"))
+    analysis_mode = _low_end_analysis_mode(summary)
+    required = 3
+    available = 0
+    missing: list[str] = []
+    if ok:
+        available += 1
+    else:
+        missing.append("fl_session_alive")
+    if low_end or low_end_tracks:
+        available += 1
+    else:
+        missing.append("low_end_metadata")
+    if levels_valid:
+        available += 1
+    else:
+        missing.append("live_meter_window")
+
+    coverage = Coverage(required=required, available=available, missing=tuple(missing))
+    confidence = confidence_from_coverage(
+        required=required,
+        available=available,
+        evidence_mode=analysis_mode,
+    )
+    risk = risk_from_severities(tuple(row.get("severity", "info") for row in low_end_findings))
+    freshness_status = "fresh" if ok and not missing else "partial" if ok else "unavailable"
+    track_index_by_name = _low_end_track_index_by_name(details, low_end_tracks)
+    findings = tuple(
+        _low_end_analysis_finding(
+            row,
+            index=index,
+            analysis_mode=analysis_mode,
+            confidence_score=confidence,
+            track_index_by_name=track_index_by_name,
+        )
+        for index, row in enumerate(low_end_findings, start=1)
+    )
+    limits = _unique_strings(
+        [
+            *list(details.get("limits") or []),
+            low_end.get("analysis_limits"),
+            (
+                "Low-end detection is based on names plus mixer pan, stereo separation, "
+                "and peak metadata; it is not true phase-correlation analysis."
+            ),
+        ]
+    )
+    assumptions = _unique_strings(
+        [
+            "Low-end roles are inferred from names such as kick, sub, bass, 808, or boom.",
+            (
+                "Mixer metadata is treated as static evidence unless a watch or live "
+                "window is present."
+            ),
+        ]
+    )
+    return AnalysisReport(
+        workflow="low_end_analysis",
+        title="Low-End Analysis",
+        analysis_mode=analysis_mode,
+        created_at=str(report.get("generated_at") or _now_iso()),
+        freshness=Freshness(
+            status=freshness_status,
+            details="Control Center legacy payload adapted into the shared analysis contract.",
+        ),
+        coverage=coverage,
+        prerequisites=(
+            Prerequisite(
+                "fl_session_alive",
+                "ok" if ok else "unavailable",
+                None if ok else str(report.get("error") or "Mix data unavailable."),
+            ),
+            Prerequisite("static_project_snapshot", "ok" if ok else "unavailable"),
+            Prerequisite("live_meter_window", "ok" if levels_valid else "missing"),
+        ),
+        risk_score=risk,
+        confidence_score=confidence,
+        findings=findings,
+        assumptions=tuple(assumptions),
+        limitations=tuple(limits),
+        manual_checks=tuple(
+            dict(row)
+            for row in low_end.get("manual_checks") or []
+            if isinstance(row, dict)
+        ),
+        next_actions=(
+            {
+                "type": "evidence_upgrade",
+                "id": "rendered_audio_features",
+                "label": "Analyze a manually bounced audio file for stronger low-end evidence.",
+            },
+        ),
+        safety={"read_only": True, "project_changes": False},
+        metadata={
+            "legacy_workflow": report.get("workflow"),
+            "peak_source": summary.get("peak_source"),
+            "low_end_summary": low_end.get("summary") or {},
+            "low_end_track_count": len(low_end_tracks),
+        },
+    )
+
+
+def _low_end_analysis_mode(summary: dict[str, Any]) -> str:
+    peak_source = str(summary.get("peak_source") or "").lower()
+    if peak_source == "watch":
+        return "watch_window"
+    if bool(summary.get("levels_valid")):
+        return "live_runtime"
+    return "static_snapshot"
+
+
+def _low_end_analysis_finding(
+    row: dict[str, Any],
+    *,
+    index: int,
+    analysis_mode: str,
+    confidence_score: int,
+    track_index_by_name: dict[str, int],
+) -> Finding:
+    rule = str(row.get("rule") or row.get("id") or "low_end_finding")
+    severity = str(row.get("severity") or "info")
+    track_index = _low_end_finding_track_index(row, track_index_by_name)
+    entities = ()
+    if track_index is not None:
+        entities = (
+            EntityRef(
+                "mixer_track",
+                mixer_entity_id(track_index),
+                str(row.get("track") or _display_track_name(track_index, None)),
+            ),
+        )
+    return Finding(
+        id=str(row.get("id") or f"{rule}_{index}"),
+        rule_id=f"low_end.{rule}",
+        title=str(row.get("title") or _mix_rule_title(rule)),
+        severity=severity,
+        risk_score=risk_from_severities((severity,)),
+        confidence_score=confidence_score,
+        evidence_mode=analysis_mode,
+        entities=entities,
+        evidence=(
+            {
+                "detail": row.get("detail"),
+                "track": row.get("track"),
+                "evidence": row.get("evidence"),
+                "proposed_fix": row.get("proposed_fix") or {},
+            },
+        ),
+        limitations=(
+            "Mixer pan/stereo metadata cannot prove true low-band phase behavior.",
+        ),
+        metadata={"legacy_finding": row},
+    )
+
+
+def _low_end_track_index_by_name(
+    details: dict[str, Any],
+    low_end_tracks: list[dict[str, Any]],
+) -> dict[str, int]:
+    rows = [
+        *low_end_tracks,
+        *[
+            dict(row)
+            for row in details.get("tracks") or []
+            if isinstance(row, dict)
+        ],
+    ]
+    out: dict[str, int] = {}
+    for row in rows:
+        idx = _as_int(row.get("track"))
+        name = str(row.get("name") or "").strip().lower()
+        if idx is not None and name:
+            out[name] = idx
+    return out
+
+
+def _low_end_finding_track_index(
+    row: dict[str, Any],
+    track_index_by_name: dict[str, int],
+) -> int | None:
+    fix = row.get("proposed_fix") if isinstance(row.get("proposed_fix"), dict) else {}
+    args = fix.get("args") if isinstance(fix.get("args"), dict) else {}
+    idx = _as_int(args.get("track"))
+    if idx is not None:
+        return idx
+    track = row.get("track")
+    if str(track).strip().lower() == "master":
+        return 0
+    return track_index_by_name.get(str(track or "").strip().lower())
 
 
 def _mix_review_unavailable_report(message: str) -> dict[str, Any]:
@@ -2396,7 +2629,7 @@ def _run_routing_audit(state: ControlCenterState) -> dict[str, Any]:
 
 
 def _routing_unavailable_report(message: str) -> dict[str, Any]:
-    return {
+    report = {
         "ok": False,
         "state": "unavailable",
         "workflow": "routing_audit",
@@ -2435,6 +2668,15 @@ def _routing_unavailable_report(message: str) -> dict[str, Any]:
         },
         "safety": {"read_only": True, "project_changes": False},
     }
+    return analysis_report_to_control_center_legacy(
+        routing_analysis_report_from_legacy_payload(
+            report,
+            workflow="routing_audit",
+            title="Routing Audit",
+            created_at=report["generated_at"],
+        ),
+        report,
+    )
 
 
 def _build_routing_audit_report(
@@ -2574,7 +2816,7 @@ def _build_routing_audit_report(
             }
         )
 
-    return {
+    report = {
         "ok": True,
         "state": "live",
         "workflow": "routing_audit",
@@ -2619,6 +2861,15 @@ def _build_routing_audit_report(
         },
         "safety": {"read_only": True, "project_changes": False},
     }
+    return analysis_report_to_control_center_legacy(
+        routing_analysis_report_from_legacy_payload(
+            report,
+            workflow="routing_audit",
+            title="Routing Audit",
+            created_at=report["generated_at"],
+        ),
+        report,
+    )
 
 
 def _payload_rows(payload: Any, key: str) -> list[dict[str, Any]]:

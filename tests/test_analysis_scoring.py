@@ -3,9 +3,11 @@ from __future__ import annotations
 from fls_pilot.analysis import (
     clamp_score,
     confidence_band,
+    confidence_from_coverage,
     coverage_score,
     health_from_risk,
     risk_band,
+    risk_from_severities,
 )
 
 
@@ -31,3 +33,18 @@ def test_confidence_band_is_not_risk_band() -> None:
     assert confidence_band(10) == "low"
     assert confidence_band(55) == "medium"
     assert confidence_band(90) == "high"
+
+
+def test_risk_and_confidence_can_be_estimated_from_shared_inputs() -> None:
+    assert risk_from_severities(("medium", "low", "info")) == 24
+    assert risk_from_severities(("critical", "critical", "high")) == 100
+    assert confidence_from_coverage(
+        required=3,
+        available=2,
+        evidence_mode="static_snapshot",
+    ) == 67
+    assert confidence_from_coverage(
+        required=3,
+        available=3,
+        evidence_mode="rendered_audio",
+    ) == 100

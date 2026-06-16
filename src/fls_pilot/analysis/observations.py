@@ -206,6 +206,9 @@ class ObservationStore:
         self._observations.clear()
         self._by_kind.clear()
 
+    def now(self) -> float:
+        return self._clock()
+
     def _matching_ids(
         self,
         *,
