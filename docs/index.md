@@ -9,25 +9,15 @@ paths for supported FL Studio actions.
 
 ## Example Workflows
 
-### Mix Review & Gain Staging
+[![Mix Review & Gain Staging](assets/ai-apply-gain-staging-example.gif)](assets/ai-apply-gain-staging-example.gif)
 
-[▶️ Video: Mix Review & Gain Staging](assets/ai-apply-gain-staging-example.gif)
+[![Routing Audit](assets/ai-based-mixer-routing-example.gif)](assets/ai-based-mixer-routing-example.gif)
 
-### Routing Audit
+[![Project Organizer](assets/ai-color-my-tracks-example.gif)](assets/ai-color-my-tracks-example.gif)
 
-[▶️ Video: Routing Audit](assets/ai-based-mixer-routing-example.gif)
+[![Plugin & EQ Workflows](assets/ai-set-highpass-on-eq-batch-example.gif)](assets/ai-set-highpass-on-eq-batch-example.gif)
 
-### Project Organizer
-
-[▶️ Video: Project Organizer](assets/ai-color-my-tracks-example.gif)
-
-### Plugin & EQ Workflows
-
-[▶️ Video: Plugin & EQ Workflows](assets/ai-set-highpass-on-eq-batch-example.gif)
-
-### Composition
-
-[▶️ Video: Composition](assets/ai-generate-bassline-example.gif)
+[![Composition](assets/ai-generate-bassline-example.gif)](assets/ai-generate-bassline-example.gif)
 
 
 Use it for mix review, routing checks, project organization, Piano Roll
