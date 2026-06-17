@@ -1,6 +1,6 @@
 # fls-pilot
 
-![version](https://img.shields.io/badge/version-3.0.0b2-blue)
+![version](https://img.shields.io/badge/version-3.0.0b3-blue)
 ![status](https://img.shields.io/badge/status-beta-yellow)
 [![CI](https://github.com/thunderdew-dawn/fls-pilot/actions/workflows/ci.yml/badge.svg)](https://github.com/thunderdew-dawn/fls-pilot/actions/workflows/ci.yml)
 ![license](https://img.shields.io/badge/license-MIT-green)

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "fls-pilot"
-version = "3.0.0b2"
+version = "3.0.0b3"
 description = "Control FL Studio with any MCP-compatible LLM: mixing, composition, and mix diagnosis through natural language."
 readme = "README.md"
 license = { text = "MIT" }

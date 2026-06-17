@@ -6,12 +6,12 @@
     "url": "https://github.com/thunderdew-dawn/fls-pilot",
     "source": "github"
   },
-  "version": "3.0.0a1",
+  "version": "3.0.0b3",
   "packages": [
     {
       "registryType": "pypi",
       "identifier": "fls-pilot",
-      "version": "3.0.0a1",
+      "version": "3.0.0b3",
       "transport": {
         "type": "stdio"
       }
