@@ -1,10 +1,10 @@
 site_name: fls-pilot
-site_description: Create more. Check less. Local FL Studio Control Center and MCP workflow assistant.
-site_url: https://fl-studio-pilot.readthedocs.io/en/v3-beta/
+site_description: Create more. Check less. Local FL Studio Control Center and MCP workflow assistant .
+site_url: https://fl-studio-pilot.readthedocs.io/en/latest/
 
 repo_name: thunderdew-dawn/fls-pilot
 repo_url: https://github.com/thunderdew-dawn/fls-pilot
-edit_uri: edit/main/docs/
+edit_uri: edit/v3/alpha/docs/
 
 docs_dir: docs
 site_dir: site
