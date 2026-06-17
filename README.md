@@ -12,7 +12,7 @@
 
 [![Documentation Status](https://readthedocs.org/projects/fl-studio-pilot/badge/?version=v3-beta)](https://fl-studio-pilot.readthedocs.io/en/v3-beta/)
 
-![fls-pilot](docs/assets/fls-pilot-logo-with-text.png)
+![fls-pilot](docs/assets/fls-pilot-logo-with-text.svg)
 
 **Create more. Check less.**
 
@@ -36,23 +36,23 @@ Built around a safety-first model: scan before changing, explain findings in pla
 
 ### Mix Review & Gain Staging
 
-[▶️ Video: Mix Review & Gain Staging](docs/assets/ai-apply-gain-staging-example.gif)
+[![Mix Review & Gain Staging](docs/assets/ai-apply-gain-staging-example.gif)](docs/assets/ai-apply-gain-staging-example.gif)
 
 ### Routing Audit
 
-[▶️ Video: Routing Audit](docs/assets/ai-based-mixer-routing-example.gif)
+[![Routing Audit](docs/assets/ai-based-mixer-routing-example.gif)](docs/assets/ai-based-mixer-routing-example.gif)
 
 ### Project Organizer
 
-[▶️ Video: Project Organizer](docs/assets/ai-color-my-tracks-example.gif)
+[![Project Organizer](docs/assets/ai-color-my-tracks-example.gif)](docs/assets/ai-color-my-tracks-example.gif)
 
 ### Plugin & EQ Workflows
 
-[▶️ Video: Plugin & EQ Workflows](docs/assets/ai-set-highpass-on-eq-batch-example.gif)
+[![Plugin & EQ Workflows](docs/assets/ai-set-highpass-on-eq-batch-example.gif)](docs/assets/ai-set-highpass-on-eq-batch-example.gif)
 
 ### Composition
 
-[▶️ Video: Composition](docs/assets/ai-generate-bassline-example.gif)
+[![Composition](docs/assets/ai-generate-bassline-example.gif)](docs/assets/ai-generate-bassline-example.gif)
 
 ## Requirements
 
