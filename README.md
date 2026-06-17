@@ -12,7 +12,7 @@
 
 [![Documentation Status](https://readthedocs.org/projects/fl-studio-pilot/badge/?version=v3-beta)](https://fl-studio-pilot.readthedocs.io/en/v3-beta/)
 
-![fls-pilot](docs/assets/fls-pilot-logo-with-text.svg)
+![fls-pilot](docs/assets/fls-pilot-logo-with-title-and-slogan.svg)
 
 **Create more. Check less.**
 
