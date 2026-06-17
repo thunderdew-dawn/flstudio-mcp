@@ -114,6 +114,13 @@ include = [
 "/docs/**/*.md",
 "/README.md",
 "/LICENSE",
+"/src/fls_pilot/control_center_static/**/*.html",
+"/src/fls_pilot/control_center_static/**/*.css",
+"/src/fls_pilot/control_center_static/**/*.js",
+"/src/fls_pilot/control_center_static/**/*.svg",
+"/src/fls_pilot/control_center_static/**/*.png",
+"/src/fls_pilot/control_center_static/**/*.ico",
+"/src/fls_pilot/control_center_static/**/*.webp",
 ]
 exclude = [
 "/.github/**",
