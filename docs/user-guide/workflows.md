@@ -1,3 +1,4 @@
+![fls-pilot logo](../assets/fls-pilot-logo.svg)
 # Workflows
 
 fls-pilot is designed around producer workflows rather than one-off API calls.

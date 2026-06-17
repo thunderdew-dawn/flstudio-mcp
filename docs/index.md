@@ -1,6 +1,5 @@
+![fls-pilot logo](assets/fls-pilot-logo-with-title-and-slogan.svg)
 # fls-pilot
-
-![fls-pilot logo](assets/fls-pilot-logo-with-text.png)
 
 **Create more. Check less.**
 
@@ -8,9 +7,34 @@ fls-pilot connects FL Studio to MCP-compatible AI clients. It gives assistants
 readable project context, production workflow tools, and rollback-first write
 paths for supported FL Studio actions.
 
+## Example Workflows
+
+### Mix Review & Gain Staging
+
+[▶️ Video: Mix Review & Gain Staging](assets/ai-apply-gain-staging-example.gif)
+
+### Routing Audit
+
+[▶️ Video: Routing Audit](assets/ai-based-mixer-routing-example.gif)
+
+### Project Organizer
+
+[▶️ Video: Project Organizer](assets/ai-color-my-tracks-example.gif)
+
+### Plugin & EQ Workflows
+
+[▶️ Video: Plugin & EQ Workflows](assets/ai-set-highpass-on-eq-batch-example.gif)
+
+### Composition
+
+[▶️ Video: Composition](assets/ai-generate-bassline-example.gif)
+
+
 Use it for mix review, routing checks, project organization, Piano Roll
 composition, plugin-chain planning, audio analysis, MIDI export, and
 export-readiness checks.
+
+![Project health status](assets/control-center-flstudio-project-health-status.png)
 
 ## Why It Exists
 

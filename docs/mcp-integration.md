@@ -1,3 +1,4 @@
+![fls-pilot logo](assets/fls-pilot-logo.svg)
 # MCP Integration
 
 fls-pilot is built for MCP-compatible clients such as Claude Desktop, ChatGPT

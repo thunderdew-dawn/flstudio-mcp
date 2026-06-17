@@ -1,3 +1,4 @@
+![fls-pilot logo](../assets/fls-pilot-logo.svg)
 # Setup
 
 This guide covers the normal setup path for FL Studio, the controller script,

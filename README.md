@@ -10,7 +10,7 @@
 ![macOS](https://img.shields.io/badge/macOS-12%2B-000000?logo=apple&logoColor=white)
 ![FL Studio](https://img.shields.io/badge/FL%20Studio-2025%2B-orange)
 
-[![Documentation Status](https://readthedocs.org/projects/fl-studio-pilot/badge/?version=v3-alpha)](https://fl-studio-pilot.readthedocs.io/en/v3-alpha/)
+[![Documentation Status](https://readthedocs.org/projects/fl-studio-pilot/badge/?version=v3-beta)](https://fl-studio-pilot.readthedocs.io/en/v3-beta/)
 
 ![fls-pilot](docs/assets/fls-pilot-logo-with-text.png)
 
@@ -36,23 +36,23 @@ Built around a safety-first model: scan before changing, explain findings in pla
 
 ### Mix Review & Gain Staging
 
-[▶️ Video: Mix Review & Gain Staging](https://github.com/thunderdew-dawn/fls-pilot/raw/main/docs/assets/ai-apply-gain-staging-example.mp4)
+[▶️ Video: Mix Review & Gain Staging](docs/assets/ai-apply-gain-staging-example.gif)
 
 ### Routing Audit
 
-[▶️ Video: Routing Audit](https://github.com/thunderdew-dawn/fls-pilot/raw/main/docs/assets/ai-based-mixer-routing-example.mp4)
+[▶️ Video: Routing Audit](docs/assets/ai-based-mixer-routing-example.gif)
 
 ### Project Organizer
 
-[▶️ Video: Project Organizer](https://github.com/thunderdew-dawn/fls-pilot/raw/main/docs/assets/ai-color-my-tracks-example.mp4)
+[▶️ Video: Project Organizer](docs/assets/ai-color-my-tracks-example.gif)
 
 ### Plugin & EQ Workflows
 
-[▶️ Video: Plugin & EQ Workflows](https://github.com/thunderdew-dawn/fls-pilot/raw/main/docs/assets/ai-set-highpass-on-eq-batch-example.mp4)
+[▶️ Video: Plugin & EQ Workflows](docs/assets/ai-set-highpass-on-eq-batch-example.gif)
 
 ### Composition
 
-[▶️ Video: Composition](https://github.com/thunderdew-dawn/fls-pilot/raw/main/docs/assets/ai-generate-bassline-example.mp4)
+[▶️ Video: Composition](docs/assets/ai-generate-bassline-example.gif)
 
 ## Requirements
 
@@ -141,7 +141,7 @@ part of the public ReadTheDocs site.
 
 Public documentation:
 
-<https://fl-studio-pilot.readthedocs.io/en/beta/>
+<https://fl-studio-pilot.readthedocs.io/en/v3-beta/>
 
 Useful local pages:
 

@@ -1,3 +1,4 @@
+![fls-pilot logo](assets/fls-pilot-logo-with-title-and-slogan.svg)
 # Safety & Limits
 
 fls-pilot is rollback-first. Read-only checks can run freely, but persistent

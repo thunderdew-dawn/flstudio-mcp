@@ -1,3 +1,4 @@
+![fls-pilot logo](../assets/fls-pilot-logo.svg)
 # Prompt Examples
 
 You do not need to know MCP tool names to use fls-pilot. Start with intent and
