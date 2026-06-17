@@ -3358,6 +3358,8 @@ def _handler_factory(state: ControlCenterState):
                 self._serve_static("styles.css", "text/css; charset=utf-8")
             elif self.path.startswith("/assets/") and self.path.endswith(".png"):
                 self._serve_static(self.path.lstrip("/"), "image/png")
+            elif self.path.startswith("/assets/") and self.path.endswith(".svg"):
+                self._serve_static(self.path.lstrip("/"), "image/svg+xml")
             elif self.path == "/api/status":
                 self._json(collect_status(state))
             elif self.path == "/api/client-snippets":
