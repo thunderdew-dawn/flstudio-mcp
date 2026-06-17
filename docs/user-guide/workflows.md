@@ -79,7 +79,7 @@ balance, routing, and low-end risks.
 
 ![Mix Review results](../assets/control-center-mix-review-2.png)
 
-[▶️ Video: Mix Review](https://github.com/thunderdew-dawn/fls-pilot/raw/main/docs/assets/ai-apply-gain-staging-example.mp4)
+[![Mix Review workflow](../assets/ai-apply-gain-staging-example.gif)](../assets/ai-apply-gain-staging-example.gif)
 
 Use prompts like:
 
@@ -101,7 +101,7 @@ and fragile send/return layouts. Cleanup remains proposal-first.
 
 ![Routing Audit overview](../assets/control-center-routing-audit.png)
 
-[▶️ Video: Routing Audit](https://github.com/thunderdew-dawn/fls-pilot/raw/main/docs/assets/ai-based-mixer-routing-example.mp4)
+[![Routing Audit workflow](../assets/ai-based-mixer-routing-example.gif)](../assets/ai-based-mixer-routing-example.gif)
 
 ## Project Organizer
 
@@ -110,14 +110,14 @@ candidates. It can propose one reversible cleanup step at a time.
 
 ![Project Organizer scan](../assets/control-center-project-organizer.png)
 
-[▶️ Video: Project Organizer](https://github.com/thunderdew-dawn/fls-pilot/raw/main/docs/assets/ai-color-my-tracks-example.mp4)
+[![Project Organizer workflow](../assets/ai-color-my-tracks-example.gif)](../assets/ai-color-my-tracks-example.gif)
 
 ## Plugin and EQ Workflows
 
 fls-pilot can inspect already-loaded plugins and configure supported parameters
 when parameter ranges are known. It cannot load or insert plugins.
 
-[▶️ Video: Plugin and EQ Workflows](https://github.com/thunderdew-dawn/fls-pilot/raw/main/docs/assets/ai-set-highpass-on-eq-batch-example.mp4)
+[![Plugin and EQ workflow](../assets/ai-set-highpass-on-eq-batch-example.gif)](../assets/ai-set-highpass-on-eq-batch-example.gif)
 
 ## Composition
 
@@ -125,7 +125,7 @@ Composition tools can generate scale-aware melodies, chords, and patterns. The
 assistant should preview notes first and wait for approval before writing to
 the Piano Roll.
 
-[▶️ Video: Composition](https://github.com/thunderdew-dawn/fls-pilot/raw/main/docs/assets/ai-generate-bassline-example.mp4)
+[![Composition workflow](../assets/ai-generate-bassline-example.gif)](../assets/ai-generate-bassline-example.gif)
 
 ## Project Health and Preflight
 

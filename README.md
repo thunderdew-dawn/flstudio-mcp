@@ -1,6 +1,6 @@
 # fls-pilot
 
-![version](https://img.shields.io/static/v1?label=version&message=v3.0.0-beta.3&color=blue)
+![version](https://img.shields.io/static/v1?label=version&message=v3-beta&color=blue)
 ![release](https://img.shields.io/badge/release-prerelease-orange)
 ![branch](https://img.shields.io/badge/branch-v3%2Falpha-blue)
 ![status](https://img.shields.io/badge/status-beta-yellow)
@@ -12,7 +12,7 @@
 ![macOS](https://img.shields.io/badge/macOS-12%2B-000000?logo=apple&logoColor=white)
 ![FL Studio](https://img.shields.io/badge/FL%20Studio-2025%2B-orange)
 
-[![Documentation Status](https://readthedocs.org/projects/fl-studio-pilot/badge/?version=v3.0.0-beta.3)](https://fl-studio-pilot.readthedocs.io/en/v3.0.0-beta.3/)
+[![Documentation Status](https://readthedocs.org/projects/fl-studio-pilot/badge/?version=v3-beta)](https://fl-studio-pilot.readthedocs.io/en/v3-beta/)
 
 ![fls-pilot](docs/assets/fls-pilot-logo-with-title-and-slogan.svg)
 
