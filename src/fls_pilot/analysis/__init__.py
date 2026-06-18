@@ -1,5 +1,11 @@
 """Read-only analysis contracts for workflow reports and observations."""
 
+from .audio_schema import (
+    AUDIO_ARTIFACT_CONTRACT_VERSION,
+    AUDIO_FEATURES_CONTRACT_VERSION,
+    AudioArtifactManifest,
+    validate_audio_features,
+)
 from .broker import AnalysisBroker, StaticProjectSnapshot, StaticSnapshotPolicy
 from .canonical import (
     CanonicalEntity,
@@ -57,8 +63,11 @@ from .scoring import (
 __all__ = [
     "ANALYSIS_REPORT_CONTRACT_VERSION",
     "ACCEPTED_ANALYSIS_REPORT_VERSIONS",
+    "AUDIO_ARTIFACT_CONTRACT_VERSION",
+    "AUDIO_FEATURES_CONTRACT_VERSION",
     "COMMON_OBSERVATIONS",
     "AnalysisBroker",
+    "AudioArtifactManifest",
     "AnalysisReport",
     "CanonicalEntity",
     "Coverage",
@@ -101,4 +110,5 @@ __all__ = [
     "routing_analysis_report_from_legacy_payload",
     "routing_health_score",
     "require_analysis_report_version",
+    "validate_audio_features",
 ]

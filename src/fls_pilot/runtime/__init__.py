@@ -1,5 +1,6 @@
 """Canonical Runtime service contracts and clients."""
 
+from .artifacts import ArtifactRetentionPolicy, AudioArtifactStore
 from .contracts import (
     RUNTIME_JOB_CONTRACT_VERSION,
     ProjectContext,
@@ -11,6 +12,8 @@ from .contracts import (
 from .jobs import JobCancelled, JobContext, RuntimeJobQueue
 
 __all__ = [
+    "ArtifactRetentionPolicy",
+    "AudioArtifactStore",
     "JobCancelled",
     "JobContext",
     "ProjectContext",
