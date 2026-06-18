@@ -14,6 +14,8 @@ required by the change.
 | Existing persistent-write implementation or safety behavior | `agent-docs/concepts/safety-contract.md` |
 | Safety classes, write contracts, approval/rollback guarantees, or public persistent-write surface | `agent-docs/concepts/safety-contract.md` and `agent-docs/contracts/architecture-governance.md` |
 | Analysis workflows, reports, scoring, freshness, or Control Center panels | `agent-docs/concepts/analysis-workflow-contract.md` |
+| Analysis report versioning or compatibility | `agent-docs/contracts/report-versioning.md` |
+| Runtime jobs, recovery, audio artifacts, or audio evidence | `agent-docs/contracts/runtime-job-model.md`, `agent-docs/contracts/audio-evidence.md`, and `agent-docs/contracts/degraded-mode.md` |
 | Architecture, MCP surface, resources/prompts, registry, protocol, controller, entrypoints, capabilities, or trust boundaries | `agent-docs/contracts/architecture-governance.md` |
 | FL API values, ranges, mappings, MIDI, automation, or reusable findings | `agent-docs/agents/knowledgebase-protocol.md` |
 | Issues, PRs, roadmap, releases, CI, security, hotfixes, or backports | `agent-docs/agents/github-playbook.md` and `agent-docs/project/ROADMAP.github.md` |

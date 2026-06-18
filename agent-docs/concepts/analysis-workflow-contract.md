@@ -15,17 +15,17 @@ producer workflow may introduce a private report shape, private score meaning,
 or hidden FL Studio call sequence when the shared analysis/report structure can
 represent it.
 
-Compatibility adapters are acceptable while legacy UI fields remain; new
-divergent contracts are not.
+For v3.0.0-rc1, `fls-pilot.analysis-report.v1` is exclusive. Compatibility
+adapters and legacy report envelopes are not accepted. See
+[Analysis Report Versioning Contract](../contracts/report-versioning.md).
 
 ## Runtime Ownership
 
 The Runtime service owns canonical session/project context, observations,
-workflow declarations, reports, freshness, and invalidation. It is
-daemon-hosted for Control Center/TCP operation and has an in-process
-compatibility path for direct transport. MCP workflows and Control Center
-panels must consume that shared state through the Runtime or an explicit
-compatibility adapter.
+workflow declarations, reports, freshness, invalidation, durable jobs, and
+audio artifact references. It is daemon-hosted for Control Center/TCP
+operation and has an in-process path for direct transport. MCP workflows and
+Control Center panels consume canonical Runtime responses directly.
 
 Control Center panels must not create private workflow state, silently replace
 Runtime reports, or infer current FL Studio state from static source files.
@@ -91,8 +91,7 @@ Examples of required observations:
 
 ## Required Report Fields
 
-Every analysis report must expose, directly or through an adapter during
-migration:
+Every analysis report must expose:
 
 - `contract_version`
 - `report_id`
@@ -164,7 +163,10 @@ Default policies to preserve in implementation plans:
 - raw audio artifacts are not automatically exposed through MCP.
 
 When freshness is unclear, reports must mark the result as `stale`, `partial`,
-`unavailable`, or `unknown` instead of silently using it as fresh.
+`unavailable`, or `unknown` instead of silently using it as fresh. Rendered
+audio evidence additionally follows
+[Audio Evidence Contract](../contracts/audio-evidence.md) and
+[Analysis Degraded-Mode Contract](../contracts/degraded-mode.md).
 
 ## Canonical FL Model
 

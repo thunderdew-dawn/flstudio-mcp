@@ -25,7 +25,7 @@ AI Client
 ```
 
 The Control Center uses the daemon-hosted Runtime. Direct MCP transport can use
-the in-process Runtime compatibility path. Both paths preserve the same
+the in-process Runtime path. Both paths preserve the same
 ownership model for project context, observations, reports, freshness, and
 invalidation.
 
@@ -75,20 +75,22 @@ safety or approval.
 `src/fls_pilot/daemon.py` owns MIDI I/O when the MCP client process cannot.
 It also hosts `RuntimeCore`, whose strict RPC operations are declared in
 `src/fls_pilot/runtime/protocol.py`. Raw command/code/script fields are
-forbidden on the Runtime RPC surface.
+forbidden on the Runtime RPC surface. The daemon also owns durable Runtime jobs
+and the offline Audio Analysis Worker. Those jobs do not access the FL bridge.
 
 ### Control Center
 
 `src/fls_pilot/control_center.py` serves the local Control Center and calls the
 daemon Runtime through `RuntimeClient`. Workflow panels consume declared
-Runtime reports and compatibility adapters; they must not invent independent
+Runtime reports and job state directly; they must not invent independent
 workflow state.
 
 ### Analysis Runtime
 
 `src/fls_pilot/runtime/` owns canonical session/project context and report
 storage. `src/fls_pilot/analysis/` owns observation collection, canonical
-entities, evidence modes, scoring, freshness, and report schemas.
+entities, evidence modes, scoring, freshness, report schemas, audio features,
+and project-scoped evidence links.
 
 ### Knowledgebase
 
@@ -150,6 +152,14 @@ human-approval STOP rule.
 - Runtime ownership: `src/fls_pilot/runtime/`
 - Workflow declarations: `src/fls_pilot/workflows/registry.py`
 - Analysis contract: `agent-docs/concepts/analysis-workflow-contract.md`
+- Analysis report versioning:
+  `agent-docs/contracts/report-versioning.md`
+- Runtime job model:
+  `agent-docs/contracts/runtime-job-model.md`
+- Audio evidence:
+  `agent-docs/contracts/audio-evidence.md`
+- Degraded analysis behavior:
+  `agent-docs/contracts/degraded-mode.md`
 - Architecture governance:
   `agent-docs/contracts/architecture-governance.md`
 - Governed machine snapshot:
