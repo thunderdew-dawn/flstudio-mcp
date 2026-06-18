@@ -1,0 +1,5434 @@
+{
+  "schema": "fls-pilot.architecture.static-analysis.v1",
+  "generated_at": "2026-06-18",
+  "analysis_scope": {
+    "source_archive": "/mnt/data/fls-pilot.zip",
+    "root": "fls-pilot",
+    "mode": "static source analysis; no live FL Studio runtime; no full pytest suite",
+    "validation_performed": [
+      "safe ZIP extraction",
+      "AST parse of Python files",
+      "python compileall on src/fl_controller/scripts/tests",
+      "repository safety audit script",
+      "anti-vibe audit script"
+    ],
+    "validation_limitations": [
+      "FastMCP/mido/FL Studio runtime dependencies were not exercised end-to-end",
+      "FL Studio controller API behavior not live-verified",
+      "runtime health/ports not probed"
+    ]
+  },
+  "project": {
+    "name": "fls-pilot",
+    "version_pyproject": "3.0.0b4",
+    "description": "Create more. Check less. Local FL Studio Control Center and MCP workflow assistant for safe mix reviews, routing audits, project cleanup, low-end checks, export readiness, and rollback-first assisted edits.",
+    "requires_python": ">=3.10,<3.13",
+    "license": "MIT",
+    "scripts": {
+      "fls-pilot": "fls_pilot.server:main",
+      "fls-pilot-control-center": "fls_pilot.control_center:main",
+      "fls-pilot-daemon": "fls_pilot.daemon:main",
+      "fls-pilot-status": "fls_pilot.status:main",
+      "fls-pilot-doctor": "fls_pilot.doctor:main"
+    },
+    "dependencies": [
+      "fastmcp>=2.0.0",
+      "pydantic>=2.7.0",
+      "mido>=1.3.2",
+      "python-rtmidi>=1.5.8",
+      "pyautogui>=0.9.54",
+      "pygetwindow>=0.0.9; sys_platform == 'win32'"
+    ],
+    "optional_dependencies": {
+      "dev": [
+        "pytest>=8.0",
+        "pytest-asyncio>=0.23",
+        "ruff>=0.5"
+      ],
+      "docs": [
+        "mkdocs>=1.6",
+        "mkdocs-material",
+        "pymdown-extensions"
+      ],
+      "audio": [
+        "numpy>=1.26",
+        "scipy>=1.11",
+        "soundfile>=0.13",
+        "pyloudnorm>=0.1.1",
+        "soxr>=0.5"
+      ],
+      "audio-mir": [
+        "librosa>=0.11"
+      ],
+      "audio-accurate": [
+        "torch>=2.0",
+        "torchcrepe>=0.0.23"
+      ]
+    }
+  },
+  "repository_stats": {
+    "files_total": 427,
+    "python_files": 223,
+    "markdown_files": 125,
+    "json_files": 56,
+    "tests": 88,
+    "python_loc_non_comment": 48955,
+    "syntax_errors": [],
+    "package_map": [
+      {
+        "area": "fl_controller",
+        "python_files": 1,
+        "loc": 1827
+      },
+      {
+        "area": "scripts",
+        "python_files": 39,
+        "loc": 5921
+      },
+      {
+        "area": "src/fls_pilot/__init__.py",
+        "python_files": 1,
+        "loc": 36
+      },
+      {
+        "area": "src/fls_pilot/analysis",
+        "python_files": 14,
+        "loc": 2574
+      },
+      {
+        "area": "src/fls_pilot/connection.py",
+        "python_files": 1,
+        "loc": 477
+      },
+      {
+        "area": "src/fls_pilot/context",
+        "python_files": 3,
+        "loc": 3
+      },
+      {
+        "area": "src/fls_pilot/control_center.py",
+        "python_files": 1,
+        "loc": 4083
+      },
+      {
+        "area": "src/fls_pilot/control_center_static",
+        "python_files": 1,
+        "loc": 1
+      },
+      {
+        "area": "src/fls_pilot/daemon.py",
+        "python_files": 1,
+        "loc": 340
+      },
+      {
+        "area": "src/fls_pilot/doctor.py",
+        "python_files": 1,
+        "loc": 1053
+      },
+      {
+        "area": "src/fls_pilot/kb_policy.py",
+        "python_files": 1,
+        "loc": 83
+      },
+      {
+        "area": "src/fls_pilot/music",
+        "python_files": 12,
+        "loc": 2539
+      },
+      {
+        "area": "src/fls_pilot/operations.py",
+        "python_files": 1,
+        "loc": 1357
+      },
+      {
+        "area": "src/fls_pilot/pianoroll.py",
+        "python_files": 1,
+        "loc": 124
+      },
+      {
+        "area": "src/fls_pilot/project_templates.py",
+        "python_files": 1,
+        "loc": 574
+      },
+      {
+        "area": "src/fls_pilot/prompts.py",
+        "python_files": 1,
+        "loc": 138
+      },
+      {
+        "area": "src/fls_pilot/protocol.py",
+        "python_files": 1,
+        "loc": 179
+      },
+      {
+        "area": "src/fls_pilot/pyscript_gen.py",
+        "python_files": 1,
+        "loc": 351
+      },
+      {
+        "area": "src/fls_pilot/pyscript_trigger.py",
+        "python_files": 1,
+        "loc": 94
+      },
+      {
+        "area": "src/fls_pilot/runtime",
+        "python_files": 10,
+        "loc": 1452
+      },
+      {
+        "area": "src/fls_pilot/runtime_config.py",
+        "python_files": 1,
+        "loc": 37
+      },
+      {
+        "area": "src/fls_pilot/safety.py",
+        "python_files": 1,
+        "loc": 633
+      },
+      {
+        "area": "src/fls_pilot/server.py",
+        "python_files": 1,
+        "loc": 173
+      },
+      {
+        "area": "src/fls_pilot/status.py",
+        "python_files": 1,
+        "loc": 482
+      },
+      {
+        "area": "src/fls_pilot/tools",
+        "python_files": 34,
+        "loc": 10515
+      },
+      {
+        "area": "src/fls_pilot/utils",
+        "python_files": 1,
+        "loc": 2
+      },
+      {
+        "area": "src/fls_pilot/workflow_report.py",
+        "python_files": 1,
+        "loc": 266
+      },
+      {
+        "area": "src/fls_pilot/workflows",
+        "python_files": 2,
+        "loc": 436
+      },
+      {
+        "area": "tests",
+        "python_files": 88,
+        "loc": 13205
+      }
+    ],
+    "top_python_modules_by_loc": [
+      {
+        "path": "src/fls_pilot/control_center.py",
+        "module": "fls_pilot.control_center",
+        "loc": 4083,
+        "functions": 161,
+        "classes": [
+          "ManagedProcess",
+          "ControlCenterState",
+          "ControlCenterHandler"
+        ],
+        "imports": [
+          "__future__",
+          "anyio",
+          "argparse",
+          "collections",
+          "contextlib",
+          "dataclasses",
+          "datetime",
+          "fls_pilot",
+          "fls_pilot.analysis",
+          "fls_pilot.analysis.live",
+          "fls_pilot.connection",
+          "fls_pilot.music",
+          "fls_pilot.runtime.client",
+          "fls_pilot.runtime_config",
+          "fls_pilot.status",
+          "fls_pilot.workflows.registry",
+          "http",
+          "http.server",
+          "importlib",
+          "ipaddress",
+          "json",
+          "os",
+          "pathlib",
+          "platform",
+          "socket",
+          "subprocess",
+          "sys",
+          "threading",
+          "time",
+          "typing",
+          "webbrowser"
+        ]
+      },
+      {
+        "path": "fl_controller/FLStudioPilot/device_FLStudioPilot.py",
+        "module": null,
+        "loc": 1827,
+        "functions": 134,
+        "classes": [
+          "_ClientError"
+        ],
+        "imports": [
+          "arrangement",
+          "base64",
+          "channels",
+          "contextlib",
+          "device",
+          "general",
+          "json",
+          "math",
+          "midi",
+          "mixer",
+          "patterns",
+          "playlist",
+          "plugins",
+          "time",
+          "transport",
+          "ui",
+          "utils"
+        ]
+      },
+      {
+        "path": "tests/test_control_center_static.py",
+        "module": null,
+        "loc": 1643,
+        "functions": 8,
+        "classes": [],
+        "imports": [
+          "__future__",
+          "pathlib",
+          "pytest",
+          "shutil",
+          "subprocess"
+        ]
+      },
+      {
+        "path": "src/fls_pilot/operations.py",
+        "module": "fls_pilot.operations",
+        "loc": 1357,
+        "functions": 124,
+        "classes": [
+          "OperationValidationError",
+          "OperationCommand",
+          "PreparedOperation",
+          "OperationSpec",
+          "OperationRegistry"
+        ],
+        "imports": [
+          "__future__",
+          "collections.abc",
+          "dataclasses",
+          "fls_pilot",
+          "math",
+          "typing"
+        ]
+      },
+      {
+        "path": "src/fls_pilot/music/mix_doctor.py",
+        "module": "fls_pilot.music.mix_doctor",
+        "loc": 1299,
+        "functions": 42,
+        "classes": [
+          "PeakWatcher"
+        ],
+        "imports": [
+          "__future__",
+          "fls_pilot",
+          "fls_pilot.analysis.fl_reads",
+          "fls_pilot.connection",
+          "fls_pilot.music.levels",
+          "math",
+          "re",
+          "threading",
+          "time"
+        ]
+      },
+      {
+        "path": "src/fls_pilot/doctor.py",
+        "module": "fls_pilot.doctor",
+        "loc": 1053,
+        "functions": 31,
+        "classes": [
+          "Finding",
+          "MCPServerConfig",
+          "TCPDaemonConfig"
+        ],
+        "imports": [
+          "__future__",
+          "anyio",
+          "argparse",
+          "collections.abc",
+          "contextlib",
+          "dataclasses",
+          "datetime",
+          "fls_pilot",
+          "fls_pilot.runtime_config",
+          "fls_pilot.server",
+          "importlib.util",
+          "json",
+          "mcp",
+          "mcp.client.sse",
+          "mcp.client.stdio",
+          "os",
+          "platform",
+          "socket",
+          "subprocess",
+          "sys",
+          "time",
+          "typing"
+        ]
+      },
+      {
+        "path": "tests/test_control_center.py",
+        "module": null,
+        "loc": 969,
+        "functions": 58,
+        "classes": [
+          "FakeTCPBridge",
+          "FakeRuntimeClient",
+          "OneShotHandler",
+          "OneShotHandler",
+          "OneShotHandler",
+          "OneShotHandler"
+        ],
+        "imports": [
+          "__future__",
+          "fls_pilot",
+          "io",
+          "json",
+          "pytest",
+          "subprocess",
+          "unittest"
+        ]
+      },
+      {
+        "path": "src/fls_pilot/tools/pianoroll.py",
+        "module": "fls_pilot.tools.pianoroll",
+        "loc": 878,
+        "functions": 27,
+        "classes": [
+          "PianoRollNote"
+        ],
+        "imports": [
+          "__future__",
+          "fastmcp",
+          "fls_pilot",
+          "fls_pilot.connection",
+          "fls_pilot.music.scales",
+          "fls_pilot.pyscript_gen",
+          "fls_pilot.tools.registration",
+          "pydantic",
+          "typing"
+        ]
+      },
+      {
+        "path": "src/fls_pilot/tools/mix_doctor.py",
+        "module": "fls_pilot.tools.mix_doctor",
+        "loc": 828,
+        "functions": 18,
+        "classes": [],
+        "imports": [
+          "__future__",
+          "fastmcp",
+          "fls_pilot",
+          "fls_pilot.analysis",
+          "fls_pilot.analysis.live",
+          "fls_pilot.connection",
+          "fls_pilot.music",
+          "fls_pilot.project_templates",
+          "fls_pilot.tools.audio",
+          "math",
+          "os",
+          "pydantic",
+          "typing"
+        ]
+      },
+      {
+        "path": "src/fls_pilot/runtime/product_workflows.py",
+        "module": "fls_pilot.runtime.product_workflows",
+        "loc": 787,
+        "functions": 21,
+        "classes": [],
+        "imports": [
+          "__future__",
+          "datetime",
+          "fls_pilot",
+          "fls_pilot.analysis.schema",
+          "fls_pilot.analysis.scoring",
+          "fls_pilot.music",
+          "fls_pilot.runtime.core",
+          "fls_pilot.tools.audio",
+          "hashlib",
+          "numpy",
+          "pathlib",
+          "soundfile",
+          "typing"
+        ]
+      },
+      {
+        "path": "src/fls_pilot/tools/routing.py",
+        "module": "fls_pilot.tools.routing",
+        "loc": 742,
+        "functions": 19,
+        "classes": [],
+        "imports": [
+          "__future__",
+          "fastmcp",
+          "fls_pilot",
+          "fls_pilot.analysis",
+          "fls_pilot.connection",
+          "fls_pilot.tools.registration",
+          "fls_pilot.tools.targets",
+          "pydantic",
+          "typing"
+        ]
+      },
+      {
+        "path": "scripts/normalize_template_dump.py",
+        "module": null,
+        "loc": 718,
+        "functions": 34,
+        "classes": [],
+        "imports": [
+          "__future__",
+          "argparse",
+          "collections",
+          "collections.abc",
+          "json",
+          "pathlib",
+          "re",
+          "sys",
+          "typing"
+        ]
+      },
+      {
+        "path": "src/fls_pilot/tools/project_organizer.py",
+        "module": "fls_pilot.tools.project_organizer",
+        "loc": 707,
+        "functions": 18,
+        "classes": [],
+        "imports": [
+          "__future__",
+          "fastmcp",
+          "fls_pilot",
+          "fls_pilot.analysis",
+          "fls_pilot.connection",
+          "fls_pilot.tools.channels",
+          "fls_pilot.tools.color",
+          "fls_pilot.tools.routing",
+          "pydantic",
+          "typing"
+        ]
+      },
+      {
+        "path": "tests/test_operation_registry.py",
+        "module": null,
+        "loc": 661,
+        "functions": 22,
+        "classes": [],
+        "imports": [
+          "__future__",
+          "fls_pilot",
+          "pathlib",
+          "pytest",
+          "sys"
+        ]
+      },
+      {
+        "path": "src/fls_pilot/safety.py",
+        "module": "fls_pilot.safety",
+        "loc": 633,
+        "functions": 39,
+        "classes": [
+          "ChangeLog",
+          "GroupWriteError"
+        ],
+        "imports": [
+          "__future__",
+          "collections",
+          "collections.abc",
+          "fls_pilot",
+          "fls_pilot.connection",
+          "fls_pilot.protocol",
+          "fls_pilot.runtime.invalidation",
+          "json",
+          "pathlib",
+          "threading",
+          "time",
+          "uuid"
+        ]
+      },
+      {
+        "path": "src/fls_pilot/tools/project_doctor.py",
+        "module": "fls_pilot.tools.project_doctor",
+        "loc": 621,
+        "functions": 14,
+        "classes": [],
+        "imports": [
+          "__future__",
+          "fastmcp",
+          "fls_pilot",
+          "fls_pilot.connection",
+          "fls_pilot.music"
+        ]
+      },
+      {
+        "path": "src/fls_pilot/project_templates.py",
+        "module": "fls_pilot.project_templates",
+        "loc": 574,
+        "functions": 32,
+        "classes": [],
+        "imports": [
+          "__future__",
+          "collections.abc",
+          "functools",
+          "json",
+          "pathlib",
+          "re",
+          "typing"
+        ]
+      },
+      {
+        "path": "src/fls_pilot/tools/mixing.py",
+        "module": "fls_pilot.tools.mixing",
+        "loc": 570,
+        "functions": 15,
+        "classes": [],
+        "imports": [
+          "__future__",
+          "fastmcp",
+          "fls_pilot",
+          "fls_pilot.connection",
+          "fls_pilot.music",
+          "fls_pilot.music.eq_curves",
+          "pydantic",
+          "typing"
+        ]
+      },
+      {
+        "path": "src/fls_pilot/tools/channels.py",
+        "module": "fls_pilot.tools.channels",
+        "loc": 525,
+        "functions": 21,
+        "classes": [],
+        "imports": [
+          "__future__",
+          "fastmcp",
+          "fls_pilot",
+          "fls_pilot.connection",
+          "fls_pilot.tools.registration",
+          "fls_pilot.tools.targets",
+          "pydantic",
+          "typing"
+        ]
+      },
+      {
+        "path": "src/fls_pilot/tools/mixer_core.py",
+        "module": "fls_pilot.tools.mixer_core",
+        "loc": 520,
+        "functions": 31,
+        "classes": [],
+        "imports": [
+          "__future__",
+          "fastmcp",
+          "fls_pilot",
+          "fls_pilot.connection",
+          "fls_pilot.music",
+          "fls_pilot.tools.registration",
+          "fls_pilot.tools.targets",
+          "pydantic",
+          "typing"
+        ]
+      }
+    ]
+  },
+  "architecture": {
+    "nodes": [
+      {
+        "id": "ai_clients",
+        "label": "MCP/AI Clients",
+        "type": "external",
+        "paths": [
+          "Claude Desktop",
+          "ChatGPT Desktop/SSE",
+          "Cursor",
+          "other MCP hosts"
+        ],
+        "responsibility": "User-facing AI host calls MCP tools/resources/prompts."
+      },
+      {
+        "id": "mcp_server",
+        "label": "FastMCP Server",
+        "type": "process",
+        "paths": [
+          "src/fls_pilot/server.py"
+        ],
+        "responsibility": "Registers tool modules, resources and prompts; exposes stdio or SSE MCP transports."
+      },
+      {
+        "id": "tool_surface",
+        "label": "MCP Tool Surface",
+        "type": "module_cluster",
+        "paths": [
+          "src/fls_pilot/tools/*.py"
+        ],
+        "responsibility": "Domain tools for transport, mixer, channel, pattern, playlist, effects, plugins, routing, mix review, project health, KB, audio, MIDI export."
+      },
+      {
+        "id": "operation_registry",
+        "label": "Operation Registry",
+        "type": "module",
+        "paths": [
+          "src/fls_pilot/operations.py"
+        ],
+        "responsibility": "Declarative safety classes, validation, command mapping, snapshots/readback/restore builders."
+      },
+      {
+        "id": "safety_layer",
+        "label": "Safety & Rollback Layer",
+        "type": "module",
+        "paths": [
+          "src/fls_pilot/safety.py"
+        ],
+        "responsibility": "Persistent-write contract: scoped snapshot, dry-run, readback verification, changelog, rollback units."
+      },
+      {
+        "id": "bridge",
+        "label": "Bridge Client",
+        "type": "module",
+        "paths": [
+          "src/fls_pilot/connection.py",
+          "src/fls_pilot/protocol.py"
+        ],
+        "responsibility": "MIDI SysEx or TCP bridge, request correlation, heartbeat tracking, pagination/retry."
+      },
+      {
+        "id": "daemon",
+        "label": "TCP Daemon + Runtime Host",
+        "type": "process",
+        "paths": [
+          "src/fls_pilot/daemon.py",
+          "src/fls_pilot/runtime/*.py"
+        ],
+        "responsibility": "Long-lived local RPC service with canonical runtime state, snapshots, reports, workflow execution."
+      },
+      {
+        "id": "control_center",
+        "label": "Control Center",
+        "type": "process/ui",
+        "paths": [
+          "src/fls_pilot/control_center.py",
+          "src/fls_pilot/control_center_static/*"
+        ],
+        "responsibility": "Local HTTP UI for setup checks, daemon/SSE lifecycle, reports, workflow panels."
+      },
+      {
+        "id": "analysis_runtime",
+        "label": "Analysis Runtime",
+        "type": "module_cluster",
+        "paths": [
+          "src/fls_pilot/analysis/*.py",
+          "src/fls_pilot/workflows/*.py",
+          "src/fls_pilot/workflow_report.py"
+        ],
+        "responsibility": "Static/live evidence broker, observation store, report schema, scoring, health aggregation, workflow registry."
+      },
+      {
+        "id": "knowledgebase",
+        "label": "Knowledgebase",
+        "type": "data",
+        "paths": [
+          "knowledgebase/**/*.md",
+          "knowledgebase/**/*.json",
+          "src/fls_pilot/kb_policy.py"
+        ],
+        "responsibility": "Calibration, FL API limits, safety policies, recipes, templates and workflow guidance."
+      },
+      {
+        "id": "music_logic",
+        "label": "Music Logic",
+        "type": "module_cluster",
+        "paths": [
+          "src/fls_pilot/music/*.py",
+          "src/fls_pilot/project_templates.py"
+        ],
+        "responsibility": "Scale/raga, plugin/preset libraries, mix doctor rules, MIDI generation, level/curve helpers."
+      },
+      {
+        "id": "pyscript_bridge",
+        "label": "Piano Roll .pyscript Bridge",
+        "type": "bridge",
+        "paths": [
+          "src/fls_pilot/pyscript_gen.py",
+          "src/fls_pilot/pyscript_trigger.py",
+          "fl_pyscripts/*.pyscript"
+        ],
+        "responsibility": "Generates/triggers FL Piano Roll scripts for note-writing operations where controller API is insufficient."
+      },
+      {
+        "id": "virtual_midi",
+        "label": "Virtual MIDI Loopback",
+        "type": "transport",
+        "paths": [
+          "loopMIDI/IAC Driver ports: FLStudioPilot RX/TX"
+        ],
+        "responsibility": "Bidirectional MIDI device layer carrying private-use SysEx payloads."
+      },
+      {
+        "id": "fl_controller",
+        "label": "FLStudioPilot Controller Script",
+        "type": "fl_script",
+        "paths": [
+          "fl_controller/FLStudioPilot/device_FLStudioPilot.py"
+        ],
+        "responsibility": "Always-on FL controller script; decodes SysEx commands, calls FL Studio API modules, sends responses and heartbeat."
+      },
+      {
+        "id": "fl_api",
+        "label": "FL Studio API",
+        "type": "external",
+        "paths": [
+          "channels",
+          "mixer",
+          "patterns",
+          "playlist",
+          "plugins",
+          "transport",
+          "general",
+          "device",
+          "ui"
+        ],
+        "responsibility": "Host DAW scripting APIs. Sandbox limitations define supported capabilities."
+      }
+    ],
+    "edges": [
+      {
+        "from": "ai_clients",
+        "to": "mcp_server",
+        "label": "MCP stdio/SSE"
+      },
+      {
+        "from": "mcp_server",
+        "to": "tool_surface",
+        "label": "registers calls"
+      },
+      {
+        "from": "tool_surface",
+        "to": "operation_registry",
+        "label": "domain validation / command preparation"
+      },
+      {
+        "from": "tool_surface",
+        "to": "safety_layer",
+        "label": "write-safe tools"
+      },
+      {
+        "from": "safety_layer",
+        "to": "bridge",
+        "label": "snapshot/write/readback/rollback"
+      },
+      {
+        "from": "operation_registry",
+        "to": "bridge",
+        "label": "protocol command names"
+      },
+      {
+        "from": "tool_surface",
+        "to": "bridge",
+        "label": "read-only/transient bridge calls"
+      },
+      {
+        "from": "tool_surface",
+        "to": "analysis_runtime",
+        "label": "workflow reports / health"
+      },
+      {
+        "from": "analysis_runtime",
+        "to": "daemon",
+        "label": "runtime-owned state"
+      },
+      {
+        "from": "control_center",
+        "to": "daemon",
+        "label": "JSON-over-TCP runtime RPC"
+      },
+      {
+        "from": "control_center",
+        "to": "mcp_server",
+        "label": "starts SSE/stdio probes"
+      },
+      {
+        "from": "daemon",
+        "to": "bridge",
+        "label": "central bridge ownership"
+      },
+      {
+        "from": "bridge",
+        "to": "virtual_midi",
+        "label": "SysEx request/response/heartbeat"
+      },
+      {
+        "from": "virtual_midi",
+        "to": "fl_controller",
+        "label": "FL MIDI engine routes by port"
+      },
+      {
+        "from": "fl_controller",
+        "to": "fl_api",
+        "label": "controller-script API calls"
+      },
+      {
+        "from": "tool_surface",
+        "to": "knowledgebase",
+        "label": "policy/calibration lookups"
+      },
+      {
+        "from": "analysis_runtime",
+        "to": "knowledgebase",
+        "label": "rule references / limits"
+      },
+      {
+        "from": "tool_surface",
+        "to": "music_logic",
+        "label": "composition/mix/plugin logic"
+      },
+      {
+        "from": "tool_surface",
+        "to": "pyscript_bridge",
+        "label": "Piano Roll note workflows"
+      },
+      {
+        "from": "pyscript_bridge",
+        "to": "fl_api",
+        "label": "user-triggered script execution"
+      }
+    ]
+  },
+  "communication_protocol": {
+    "primary": "MIDI SysEx JSON bridge",
+    "why": "FL controller scripts are sandboxed; always-on controller script cannot use files/network/subprocess, so virtual MIDI is the trusted boundary.",
+    "ports": {
+      "server_to_fl": "FLStudioPilot RX",
+      "fl_to_server": "FLStudioPilot TX",
+      "routing": "both FL MIDI devices must share the same FL port number, docs use 42"
+    },
+    "sysex_body": {
+      "manufacturer_id": "0x7D private use",
+      "magic": "MCP",
+      "direction_values": {
+        "0x01": "request",
+        "0x02": "response",
+        "0x03": "heartbeat"
+      },
+      "request_id": "8 ASCII [a-z0-9]",
+      "payload": "base64 encoded UTF-8 JSON"
+    },
+    "protocol_version": 2,
+    "heartbeat_seconds": 0.5,
+    "stale_threshold_seconds": 3.0,
+    "safe_payload_strategy": "controller paginates list responses to about 600 JSON bytes because larger SysEx payloads can be dropped"
+  },
+  "entrypoints": {
+    "console_scripts": {
+      "fls-pilot": "fls_pilot.server:main",
+      "fls-pilot-control-center": "fls_pilot.control_center:main",
+      "fls-pilot-daemon": "fls_pilot.daemon:main",
+      "fls-pilot-status": "fls_pilot.status:main",
+      "fls-pilot-doctor": "fls_pilot.doctor:main"
+    },
+    "mcp_server": "src/fls_pilot/server.py:build_server/main",
+    "control_center": "src/fls_pilot/control_center.py:main",
+    "daemon": "src/fls_pilot/daemon.py:main",
+    "doctor": "src/fls_pilot/doctor.py:main",
+    "fl_controller": "fl_controller/FLStudioPilot/device_FLStudioPilot.py:OnInit/OnIdle/OnMidiMsg/OnSysEx"
+  },
+  "mcp_surface": {
+    "tool_safety_summary": {
+      "external-write": 2,
+      "read-only": 71,
+      "server-state": 4,
+      "transient": 6,
+      "write-safe-required": 84
+    },
+    "tools_total": 167,
+    "tools_by_module": {
+      "arrange": [
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_ARRANGE_NEW_PATTERN,CMD_GENERAL_UNDO; uses safety layer; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 33,
+          "name": "fl_arrange_new_pattern",
+          "path": "src/fls_pilot/tools/arrange.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "New named pattern (selects it)"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_CHANNEL_SELECT; uses safety layer; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 50,
+          "name": "fl_arrange_select_channel",
+          "path": "src/fls_pilot/tools/arrange.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Select channel (note-bridge target)"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_ARRANGE_CLONE_PATTERN,CMD_GENERAL_UNDO; uses safety layer; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 70,
+          "name": "fl_arrange_clone_pattern",
+          "path": "src/fls_pilot/tools/arrange.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Clone a pattern (copies notes)"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_ARRANGE_ADD_MARKER,CMD_GENERAL_UNDO; uses safety layer; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 88,
+          "name": "fl_arrange_add_marker",
+          "path": "src/fls_pilot/tools/arrange.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Add a section marker at a bar"
+        }
+      ],
+      "audio": [
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; helper_calls=audio_analyze; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 338,
+          "name": "fl_analyze_audio",
+          "path": "src/fls_pilot/tools/audio.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "Analyze audio (tempo/key)"
+        },
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; helper_calls=audio_extract_melody; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 358,
+          "name": "fl_extract_melody",
+          "path": "src/fls_pilot/tools/audio.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "Extract melody from audio (pyin/CREPE)"
+        }
+      ],
+      "batch": [
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; uses safety layer; helper_calls=_bridge_call,_execute_persistent_write_batch,_prepare_batch,_prepared_batch_category; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 68,
+          "name": "fl_batch",
+          "path": "src/fls_pilot/tools/batch.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Batch FL operations"
+        }
+      ],
+      "bulk": [
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_MIXER_LIST_TRACKS,CMD_MIXER_SET_MUTE; uses safety layer; helper_calls=_applied_state_changes,_dry_run_report,_mute_writes,_tracks,resolve_targets; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 135,
+          "name": "fl_solo_tracks",
+          "path": "src/fls_pilot/tools/bulk.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Solo a group of tracks"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_MIXER_LIST_TRACKS,CMD_MIXER_SET_MUTE; uses safety layer; helper_calls=_applied_state_changes,_dry_run_report,_mute_writes,_tracks,resolve_targets; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 257,
+          "name": "fl_mute_tracks",
+          "path": "src/fls_pilot/tools/bulk.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Mute a group of tracks"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_MIXER_LIST_TRACKS,CMD_MIXER_SET_MUTE,CMD_MIXER_SET_SOLO; uses safety layer; helper_calls=_applied_state_changes,_dry_run_report,_tracks; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 361,
+          "name": "fl_clear_mute_solo",
+          "path": "src/fls_pilot/tools/bulk.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Clear all mutes + solos"
+        }
+      ],
+      "chains": [
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 32,
+          "name": "fl_list_chains",
+          "path": "src/fls_pilot/tools/chains.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "List genre chains"
+        },
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 41,
+          "name": "fl_list_installed_plugins",
+          "path": "src/fls_pilot/tools/chains.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "List installed plugins (FL DB on disk)"
+        },
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; protocol=CMD_PLUGIN_LIST; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 66,
+          "name": "fl_setup_chain",
+          "path": "src/fls_pilot/tools/chains.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "Set up a genre chain (plan)"
+        }
+      ],
+      "channel": [
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": true,
+          "evidence": "annotation readOnlyHint=False destructiveHint=True; protocol=CMD_CHANNEL_ROUTING_SUMMARY,CMD_PATTERN_SELECTED; uses safety layer; helper_calls=_bridge_call,_bridge_call_paginated,_classify_channels; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 35,
+          "name": "fl_channel",
+          "path": "src/fls_pilot/tools/channel.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Channel domain operation"
+        }
+      ],
+      "channels": [
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; protocol=CMD_CHANNEL_GET; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 136,
+          "name": "fl_get_channel_details",
+          "path": "src/fls_pilot/tools/channels.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "Get channel details"
+        },
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; protocol=CMD_CHANNEL_GET,CMD_CHANNEL_LIST; helper_calls=_needs_assignment; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 146,
+          "name": "fl_detect_unassigned_channels",
+          "path": "src/fls_pilot/tools/channels.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "Detect channels needing mixer assignment"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_CHANNEL_SET_NAME; uses safety layer; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 166,
+          "name": "fl_set_channel_name",
+          "path": "src/fls_pilot/tools/channels.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Set channel name"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_CHANNEL_SET_TARGET; uses safety layer; helper_calls=_target_restore; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 187,
+          "name": "fl_set_channel_mixer_track",
+          "path": "src/fls_pilot/tools/channels.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Set channel mixer target"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_CHANNEL_ROUTING_SUMMARY,CMD_CHANNEL_SET_TARGET,CMD_MIXER_GET_FREE_TRACK,CMD_MIXER_GET_ROUTING_ALL,CMD_MIXER_GET_TRACK,CMD_PLUGIN_LIST; uses safety layer; helper_calls=_find_free_mixer_track,_target_restore; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 210,
+          "name": "fl_assign_channel_to_free_mixer_track",
+          "path": "src/fls_pilot/tools/channels.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Assign channel to a free mixer track"
+        },
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; protocol=CMD_CHANNEL_GET_STEPS; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 237,
+          "name": "fl_channel_get_grid",
+          "path": "src/fls_pilot/tools/channels.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "Get channel step sequencer grid"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_CHANNEL_SET_STEPS,CMD_PATTERN_SELECTED; uses safety layer; helper_calls=_steps_restore; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 258,
+          "name": "fl_channel_set_grid_bit",
+          "path": "src/fls_pilot/tools/channels.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Set step sequencer grid bit"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_CHANNEL_SET_STEPS,CMD_PATTERN_SELECTED; uses safety layer; helper_calls=_steps_restore; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 311,
+          "name": "fl_channel_set_step_param",
+          "path": "src/fls_pilot/tools/channels.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Set one step sequencer parameter"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_CHANNEL_SET_STEPS,CMD_PATTERN_SELECTED; uses safety layer; helper_calls=_steps_restore; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 363,
+          "name": "fl_channel_set_steps",
+          "path": "src/fls_pilot/tools/channels.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Set step sequencer steps in batch"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_CHANNEL_GET_STEPS,CMD_CHANNEL_SET_STEPS,CMD_PATTERN_SELECTED; uses safety layer; helper_calls=_steps_restore; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 417,
+          "name": "fl_channel_clear_grid",
+          "path": "src/fls_pilot/tools/channels.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Clear step sequencer grid"
+        },
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; protocol=CMD_CHANNEL_ROUTING_SUMMARY; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 451,
+          "name": "fl_classify_channels",
+          "path": "src/fls_pilot/tools/channels.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "Classify channel types"
+        },
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; protocol=CMD_CHANNEL_ROUTING_SUMMARY; helper_calls=_looks_default_channel_name; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 473,
+          "name": "fl_inspect_audio_clips",
+          "path": "src/fls_pilot/tools/channels.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "Inspect Audio Clips"
+        },
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; protocol=CMD_CHANNEL_ROUTING_SUMMARY; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 509,
+          "name": "fl_plan_audio_clip_safe_defaults",
+          "path": "src/fls_pilot/tools/channels.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "Plan Audio Clip Safe Defaults"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_CHANNEL_ROUTING_SUMMARY,CMD_CHANNEL_SET_TARGET,CMD_CHANNEL_SET_VOLUME,CMD_MIXER_GET_FREE_TRACK,CMD_MIXER_GET_ROUTING_ALL,CMD_MIXER_GET_TRACK,CMD_PLUGIN_LIST; uses safety layer; helper_calls=_find_free_mixer_track,_target_restore; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 544,
+          "name": "fl_apply_audio_clip_safe_defaults",
+          "path": "src/fls_pilot/tools/channels.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Apply Audio Clip Safe Defaults"
+        }
+      ],
+      "color": [
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_MIXER_LIST_TRACKS,CMD_MIXER_SET_COLOR; uses safety layer; helper_calls=_before_int,_mixer_tracks,parse_color; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 106,
+          "name": "fl_set_track_color",
+          "path": "src/fls_pilot/tools/color.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Color mixer tracks"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_CHANNEL_LIST,CMD_CHANNEL_SET_COLOR; uses safety layer; helper_calls=_before_int,_rack_channels,_resolve_channels,parse_color; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 188,
+          "name": "fl_set_channel_color",
+          "path": "src/fls_pilot/tools/color.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Color channels"
+        }
+      ],
+      "compose": [
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": true,
+          "evidence": "annotation readOnlyHint=False destructiveHint=True; protocol=CMD_CHANNEL_SELECT,CMD_CHANNEL_SELECTED; uses safety layer; uses piano-roll apply_notes; helper_calls=_write; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 72,
+          "name": "fl_write_raga_melody",
+          "path": "src/fls_pilot/tools/compose.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Write a raga/scale MELODY"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": true,
+          "evidence": "annotation readOnlyHint=False destructiveHint=True; protocol=CMD_CHANNEL_SELECT,CMD_CHANNEL_SELECTED; uses safety layer; uses piano-roll apply_notes; helper_calls=_write; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 107,
+          "name": "fl_write_raga_chords",
+          "path": "src/fls_pilot/tools/compose.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Write raga/scale CHORDS"
+        },
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 143,
+          "name": "fl_scale_list",
+          "path": "src/fls_pilot/tools/compose.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "List all scales and ragas"
+        },
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 160,
+          "name": "fl_scale_get",
+          "path": "src/fls_pilot/tools/compose.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "Get details of a scale or raga"
+        }
+      ],
+      "effect": [
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": true,
+          "evidence": "annotation readOnlyHint=False destructiveHint=True; protocol=CMD_MIXER_GET_SLOT; uses safety layer; helper_calls=_bridge_call,_list_slots,_registry_target,_validate_effect_track; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 33,
+          "name": "fl_effect",
+          "path": "src/fls_pilot/tools/effect.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Effect domain operation"
+        }
+      ],
+      "effects": [
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; protocol=CMD_MIXER_GET_SLOT; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 44,
+          "name": "fl_effect_get_slot",
+          "path": "src/fls_pilot/tools/effects.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "Get effect slot details"
+        },
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; protocol=CMD_MIXER_GET_SLOT; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 64,
+          "name": "fl_effect_list_slots",
+          "path": "src/fls_pilot/tools/effects.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "List effect slots on a track"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_MIXER_SET_SLOT_MIX; uses safety layer; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 91,
+          "name": "fl_effect_set_slot_mix",
+          "path": "src/fls_pilot/tools/effects.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Set effect slot mix"
+        },
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; protocol=CMD_MIXER_GET_TRACK_SLOTS; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 117,
+          "name": "fl_effect_get_track_slots_enabled",
+          "path": "src/fls_pilot/tools/effects.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "Get track effect-slots enabled state"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_MIXER_SET_TRACK_SLOTS; uses safety layer; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 136,
+          "name": "fl_effect_set_track_slots_enabled",
+          "path": "src/fls_pilot/tools/effects.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Enable or bypass all track effect slots"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_MIXER_SET_SLOT_ENABLED; uses safety layer; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 162,
+          "name": "fl_effect_set_slot_enabled",
+          "path": "src/fls_pilot/tools/effects.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Enable or bypass one effect slot"
+        },
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; protocol=CMD_MIXER_GET_EQ; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 189,
+          "name": "fl_eq_get",
+          "path": "src/fls_pilot/tools/effects.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "Get native mixer EQ"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_MIXER_SET_EQ; uses safety layer; helper_calls=_band_before; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 206,
+          "name": "fl_eq_set_band",
+          "path": "src/fls_pilot/tools/effects.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Set one native EQ band"
+        }
+      ],
+      "export": [
+        {
+          "contract_safety_class": "external-write",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; safetyClass='external-write'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 48,
+          "name": "fl_export_midi",
+          "path": "src/fls_pilot/tools/export.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "external-write",
+          "status": "external-write",
+          "title": "Export arrangement to .mid"
+        }
+      ],
+      "mix_doctor": [
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; helper_calls=_gather_analysis_snapshot,_result; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 374,
+          "name": "fl_review_mix",
+          "path": "src/fls_pilot/tools/mix_doctor.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "Review mix"
+        },
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; helper_calls=_gather_analysis_snapshot,_low_end_stereo_result; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 410,
+          "name": "fl_review_low_end_stereo",
+          "path": "src/fls_pilot/tools/mix_doctor.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "Review low-end and stereo safety"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; uses safety layer; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 470,
+          "name": "fl_apply_mix_adjustment",
+          "path": "src/fls_pilot/tools/mix_doctor.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Apply mix adjustment (gated)"
+        },
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; protocol=CMD_MIXER_LIST_TRACKS; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 619,
+          "name": "fl_mix_watch_start",
+          "path": "src/fls_pilot/tools/mix_doctor.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "Start full-song peak watch (Mix Review)"
+        },
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 655,
+          "name": "fl_mix_watch_status",
+          "path": "src/fls_pilot/tools/mix_doctor.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "Peak watch status (Mix Review)"
+        },
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; helper_calls=_result; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 663,
+          "name": "fl_mix_watch_stop",
+          "path": "src/fls_pilot/tools/mix_doctor.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "Stop peak watch + review mix"
+        },
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; helper_calls=_proposal_from_plan; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 726,
+          "name": "fl_gain_stage",
+          "path": "src/fls_pilot/tools/mix_doctor.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "Review gain staging"
+        },
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 800,
+          "name": "fl_reference_match",
+          "path": "src/fls_pilot/tools/mix_doctor.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "Reference match (level/balance)"
+        }
+      ],
+      "mixer": [
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": true,
+          "evidence": "annotation readOnlyHint=False destructiveHint=True; uses safety layer; helper_calls=_bridge_call,_bridge_call_paginated; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 36,
+          "name": "fl_mixer",
+          "path": "src/fls_pilot/tools/mixer.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Mixer domain operation"
+        }
+      ],
+      "mixer_core": [
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; protocol=CMD_GET_PROJECT_STATE; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 43,
+          "name": "fl_get_project_state",
+          "path": "src/fls_pilot/tools/mixer_core.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "Get project state"
+        },
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; protocol=CMD_MIXER_LIST_TRACKS; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 51,
+          "name": "fl_get_mixer_state",
+          "path": "src/fls_pilot/tools/mixer_core.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "Get mixer state"
+        },
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; protocol=CMD_CHANNEL_LIST; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 60,
+          "name": "fl_get_channel_state",
+          "path": "src/fls_pilot/tools/mixer_core.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "Get channel state"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_MIXER_SET_VOLUME; uses safety layer; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 69,
+          "name": "fl_set_mixer_volume",
+          "path": "src/fls_pilot/tools/mixer_core.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Set mixer track volume"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_MIXER_SET_PAN; uses safety layer; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 95,
+          "name": "fl_set_mixer_pan",
+          "path": "src/fls_pilot/tools/mixer_core.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Set mixer track pan"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_MIXER_SET_MUTE; uses safety layer; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 120,
+          "name": "fl_set_mixer_mute",
+          "path": "src/fls_pilot/tools/mixer_core.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Set mixer track mute"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_MIXER_SET_SOLO; uses safety layer; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 143,
+          "name": "fl_set_mixer_solo",
+          "path": "src/fls_pilot/tools/mixer_core.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Set mixer track solo"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_MIXER_SET_NAME; uses safety layer; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 166,
+          "name": "fl_set_mixer_name",
+          "path": "src/fls_pilot/tools/mixer_core.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Set mixer track name"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_CHANNEL_SET_VOLUME; uses safety layer; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 189,
+          "name": "fl_set_channel_volume",
+          "path": "src/fls_pilot/tools/mixer_core.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Set channel volume"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_CHANNEL_SET_PAN; uses safety layer; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 211,
+          "name": "fl_set_channel_pan",
+          "path": "src/fls_pilot/tools/mixer_core.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Set channel pan"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_CHANNEL_SET_MUTE; uses safety layer; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 232,
+          "name": "fl_set_channel_mute",
+          "path": "src/fls_pilot/tools/mixer_core.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Set channel mute"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_CHANNEL_SET_SOLO; uses safety layer; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 251,
+          "name": "fl_set_channel_solo",
+          "path": "src/fls_pilot/tools/mixer_core.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Set channel solo"
+        },
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; protocol=CMD_MIXER_LIST_TRACKS; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 271,
+          "name": "fl_mixer_list_tracks",
+          "path": "src/fls_pilot/tools/mixer_core.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "List mixer tracks"
+        },
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; protocol=CMD_MIXER_GET_TRACK; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 279,
+          "name": "fl_mixer_get_track",
+          "path": "src/fls_pilot/tools/mixer_core.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "Get mixer track details"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_MIXER_SET_VOLUME; uses safety layer; helper_calls=fl_set_mixer_volume; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 293,
+          "name": "fl_mixer_set_volume",
+          "path": "src/fls_pilot/tools/mixer_core.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Set mixer track volume"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_MIXER_SET_PAN; uses safety layer; helper_calls=fl_set_mixer_pan; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 305,
+          "name": "fl_mixer_set_pan",
+          "path": "src/fls_pilot/tools/mixer_core.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Set mixer track pan"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_MIXER_SET_MUTE; uses safety layer; helper_calls=fl_set_mixer_mute; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 316,
+          "name": "fl_mixer_set_mute",
+          "path": "src/fls_pilot/tools/mixer_core.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Set mixer track mute"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_MIXER_SET_SOLO; uses safety layer; helper_calls=fl_set_mixer_solo; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 324,
+          "name": "fl_mixer_set_solo",
+          "path": "src/fls_pilot/tools/mixer_core.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Set mixer track solo"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_MIXER_SELECT_TRACK; uses safety layer; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 332,
+          "name": "fl_mixer_select_track",
+          "path": "src/fls_pilot/tools/mixer_core.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Select mixer track"
+        },
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; protocol=CMD_MIXER_GET_ROUTING; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 357,
+          "name": "fl_mixer_get_route",
+          "path": "src/fls_pilot/tools/mixer_core.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "Get mixer track routing"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_MIXER_SET_ROUTE; uses safety layer; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 372,
+          "name": "fl_mixer_set_route",
+          "path": "src/fls_pilot/tools/mixer_core.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Set mixer routing (src -> dst)"
+        },
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 400,
+          "name": "fl_mixer_get_levels",
+          "path": "src/fls_pilot/tools/mixer_core.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "Get mixer track levels"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_MIXER_SET_STEREO_SEP; uses safety layer; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 416,
+          "name": "fl_mixer_set_stereo_separation",
+          "path": "src/fls_pilot/tools/mixer_core.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Set mixer track stereo separation"
+        },
+        {
+          "contract_safety_class": "server-state",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; safetyClass='server-state'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 450,
+          "name": "fl_take_snapshot",
+          "path": "src/fls_pilot/tools/mixer_core.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "server-state",
+          "status": "server-state",
+          "title": "Take snapshot"
+        },
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 464,
+          "name": "fl_get_change_history",
+          "path": "src/fls_pilot/tools/mixer_core.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "Get change history"
+        },
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 481,
+          "name": "fl_get_change_log_summary",
+          "path": "src/fls_pilot/tools/mixer_core.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "Get change log summary"
+        },
+        {
+          "contract_safety_class": "external-write",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; safetyClass='external-write'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 524,
+          "name": "fl_export_change_log",
+          "path": "src/fls_pilot/tools/mixer_core.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "external-write",
+          "status": "external-write",
+          "title": "Export change log"
+        },
+        {
+          "contract_safety_class": "server-state",
+          "destructive_hint": true,
+          "evidence": "annotation readOnlyHint=False destructiveHint=True; safetyClass='server-state'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 553,
+          "name": "fl_rollback_last_change",
+          "path": "src/fls_pilot/tools/mixer_core.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "server-state",
+          "status": "server-state",
+          "title": "Rollback last change"
+        },
+        {
+          "contract_safety_class": "server-state",
+          "destructive_hint": true,
+          "evidence": "annotation readOnlyHint=False destructiveHint=True; safetyClass='server-state'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 571,
+          "name": "fl_rollback_change",
+          "path": "src/fls_pilot/tools/mixer_core.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "server-state",
+          "status": "server-state",
+          "title": "Rollback change by id"
+        },
+        {
+          "contract_safety_class": "server-state",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; safetyClass='server-state'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 593,
+          "name": "fl_set_dry_run",
+          "path": "src/fls_pilot/tools/mixer_core.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "server-state",
+          "status": "server-state",
+          "title": "Set dry-run mode"
+        }
+      ],
+      "mixing": [
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_PLUGIN_GET_PARAM,CMD_PLUGIN_LIST,CMD_PLUGIN_SET_PARAM; uses safety layer; helper_calls=_param_write,_plugin_name_at,_scan_bands; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 198,
+          "name": "fl_apply_eq_intent",
+          "path": "src/fls_pilot/tools/mixing.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Apply an EQ mixing intent"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_PLUGIN_GET_PARAMS,CMD_PLUGIN_LIST,CMD_PLUGIN_SET_PARAM; uses safety layer; helper_calls=_finish,_lerp,_named_params,_param_write,_plugin_name_at,add; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 318,
+          "name": "fl_apply_reverb_intent",
+          "path": "src/fls_pilot/tools/mixing.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Apply a reverb intent"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_PLUGIN_GET_PARAMS,CMD_PLUGIN_LIST,CMD_PLUGIN_SET_PARAM; uses safety layer; helper_calls=_finish,_lerp,_named_params,_param_write,_plugin_name_at,add; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 404,
+          "name": "fl_apply_delay_intent",
+          "path": "src/fls_pilot/tools/mixing.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Apply a delay intent"
+        },
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 497,
+          "name": "fl_get_track_level",
+          "path": "src/fls_pilot/tools/mixing.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "Get track level (dB)"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_MIXER_GET_TRACK,CMD_PLUGIN_GET_PARAMS,CMD_PLUGIN_LIST,CMD_PLUGIN_SET_PARAM; uses safety layer; helper_calls=_comp_target,_finish,_named_params,_param_write,_plugin_name_at; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 510,
+          "name": "fl_apply_compression_intent",
+          "path": "src/fls_pilot/tools/mixing.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Apply a compression intent"
+        }
+      ],
+      "pattern": [
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": true,
+          "evidence": "annotation readOnlyHint=False destructiveHint=True; uses safety layer; helper_calls=_bridge_call,_bridge_call_paginated; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 32,
+          "name": "fl_pattern",
+          "path": "src/fls_pilot/tools/pattern.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Pattern domain operation"
+        }
+      ],
+      "patterns_playlist": [
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; protocol=CMD_PATTERN_LIST; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 37,
+          "name": "fl_pattern_list",
+          "path": "src/fls_pilot/tools/patterns_playlist.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "List patterns"
+        },
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; protocol=CMD_PATTERN_GET; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 45,
+          "name": "fl_pattern_get",
+          "path": "src/fls_pilot/tools/patterns_playlist.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "Get pattern details"
+        },
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; protocol=CMD_PATTERN_GET_LENGTH; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 55,
+          "name": "fl_pattern_get_length",
+          "path": "src/fls_pilot/tools/patterns_playlist.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "Get pattern length"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_PATTERN_SELECT; uses safety layer; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 67,
+          "name": "fl_pattern_select",
+          "path": "src/fls_pilot/tools/patterns_playlist.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Select active pattern"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_PATTERN_RENAME; uses safety layer; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 87,
+          "name": "fl_pattern_rename",
+          "path": "src/fls_pilot/tools/patterns_playlist.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Rename pattern"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_PATTERN_SET_COLOR; uses safety layer; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 108,
+          "name": "fl_pattern_set_color",
+          "path": "src/fls_pilot/tools/patterns_playlist.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Set pattern color"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_PATTERN_SET_LENGTH; uses safety layer; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 137,
+          "name": "fl_pattern_set_length",
+          "path": "src/fls_pilot/tools/patterns_playlist.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Set pattern length"
+        },
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; protocol=CMD_PATTERN_FIND_EMPTY; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 160,
+          "name": "fl_pattern_find_empty",
+          "path": "src/fls_pilot/tools/patterns_playlist.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "Find next empty pattern"
+        },
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; protocol=CMD_PLAYLIST_LIST_TRACKS; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 170,
+          "name": "fl_playlist_list_tracks",
+          "path": "src/fls_pilot/tools/patterns_playlist.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "List playlist tracks"
+        },
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; protocol=CMD_PLAYLIST_GET_TRACK; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 178,
+          "name": "fl_playlist_get_track",
+          "path": "src/fls_pilot/tools/patterns_playlist.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "Get playlist track details"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_PLAYLIST_SET_MUTE; uses safety layer; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 190,
+          "name": "fl_playlist_set_mute",
+          "path": "src/fls_pilot/tools/patterns_playlist.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Set playlist track mute"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_PLAYLIST_SET_SOLO; uses safety layer; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 212,
+          "name": "fl_playlist_set_solo",
+          "path": "src/fls_pilot/tools/patterns_playlist.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Set playlist track solo"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_PLAYLIST_SET_NAME; uses safety layer; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 234,
+          "name": "fl_playlist_set_name",
+          "path": "src/fls_pilot/tools/patterns_playlist.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Set playlist track name"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_PLAYLIST_SET_COLOR; uses safety layer; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 255,
+          "name": "fl_playlist_set_color",
+          "path": "src/fls_pilot/tools/patterns_playlist.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Set playlist track color"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_PLAYLIST_SELECT_TRACK; uses safety layer; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 290,
+          "name": "fl_playlist_select_track",
+          "path": "src/fls_pilot/tools/patterns_playlist.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Select playlist track"
+        }
+      ],
+      "pianoroll": [
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": true,
+          "evidence": "annotation readOnlyHint=False destructiveHint=True; uses safety layer; uses piano-roll apply_notes; helper_calls=fl_piano_write_notes; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 432,
+          "name": "fl_write_piano_roll_notes",
+          "path": "src/fls_pilot/tools/pianoroll.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Write piano-roll notes (legacy)"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; uses safety layer; uses piano-roll apply_notes; helper_calls=fl_piano_quantize; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 448,
+          "name": "fl_quantize_pattern",
+          "path": "src/fls_pilot/tools/pianoroll.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Quantize piano-roll notes (legacy)"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": true,
+          "evidence": "annotation readOnlyHint=False destructiveHint=True; uses safety layer; uses piano-roll apply_notes; helper_calls=_run_piano_roll_action; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 471,
+          "name": "fl_piano_roll",
+          "path": "src/fls_pilot/tools/pianoroll.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Piano Roll domain operation"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": true,
+          "evidence": "annotation readOnlyHint=False destructiveHint=True; protocol=CMD_ENSURE_PIANO_ROLL; uses safety layer; uses piano-roll apply_notes; helper_calls=_ensure_piano_roll,_target_payload; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 524,
+          "name": "fl_piano_write_notes",
+          "path": "src/fls_pilot/tools/pianoroll.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Write notes to Piano roll"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_ENSURE_PIANO_ROLL; uses safety layer; uses piano-roll apply_notes; helper_calls=_ensure_piano_roll,_target_payload; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 567,
+          "name": "fl_piano_write_chord",
+          "path": "src/fls_pilot/tools/pianoroll.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Write chord to Piano roll"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_ENSURE_PIANO_ROLL; uses safety layer; uses piano-roll apply_notes; helper_calls=_ensure_piano_roll,_target_payload; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 651,
+          "name": "fl_piano_clear",
+          "path": "src/fls_pilot/tools/pianoroll.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Clear all notes in Piano roll"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_ENSURE_PIANO_ROLL; uses safety layer; uses piano-roll apply_notes; helper_calls=_ensure_piano_roll,_target_payload; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 676,
+          "name": "fl_piano_quantize",
+          "path": "src/fls_pilot/tools/pianoroll.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Quantize piano-roll notes"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_ENSURE_PIANO_ROLL; uses safety layer; uses piano-roll apply_notes; helper_calls=_ensure_piano_roll,_target_payload; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 718,
+          "name": "fl_piano_transpose",
+          "path": "src/fls_pilot/tools/pianoroll.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Transpose notes in Piano roll"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_ENSURE_PIANO_ROLL; uses safety layer; uses piano-roll apply_notes; helper_calls=_ensure_piano_roll,_target_payload; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 749,
+          "name": "fl_piano_duplicate",
+          "path": "src/fls_pilot/tools/pianoroll.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Duplicate Piano roll notes forward"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_ENSURE_PIANO_ROLL; uses safety layer; uses piano-roll apply_notes; helper_calls=_ensure_piano_roll,_target_payload; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 784,
+          "name": "fl_piano_velocity_ramp",
+          "path": "src/fls_pilot/tools/pianoroll.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Apply Piano roll velocity ramp"
+        },
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 817,
+          "name": "fl_piano_probe_return_channel",
+          "path": "src/fls_pilot/tools/pianoroll.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "Probe Piano roll return channel"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_ENSURE_PIANO_ROLL; uses safety layer; uses piano-roll apply_notes; helper_calls=_ensure_piano_roll,_target_payload; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 837,
+          "name": "fl_piano_add_marker",
+          "path": "src/fls_pilot/tools/pianoroll.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Add Piano roll marker"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_ENSURE_PIANO_ROLL; uses safety layer; uses piano-roll apply_notes; helper_calls=_ensure_piano_roll,_target_payload; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 876,
+          "name": "fl_piano_add_time_signature_marker",
+          "path": "src/fls_pilot/tools/pianoroll.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Add Piano roll time-signature marker"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_ENSURE_PIANO_ROLL; uses safety layer; uses piano-roll apply_notes; helper_calls=_ensure_piano_roll,_target_payload; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 925,
+          "name": "fl_piano_clear_markers",
+          "path": "src/fls_pilot/tools/pianoroll.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Clear Piano roll markers"
+        },
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 952,
+          "name": "fl_piano_get_notes",
+          "path": "src/fls_pilot/tools/pianoroll.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "Get notes in active Piano roll (API Limited)"
+        }
+      ],
+      "playlist": [
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": true,
+          "evidence": "annotation readOnlyHint=False destructiveHint=True; uses safety layer; helper_calls=_bridge_call,_bridge_call_paginated; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 32,
+          "name": "fl_playlist",
+          "path": "src/fls_pilot/tools/playlist.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Playlist domain operation"
+        }
+      ],
+      "plugin": [
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; protocol=CMD_PLUGIN_LIST; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 112,
+          "name": "fl_plugin_list",
+          "path": "src/fls_pilot/tools/plugin.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "List plugins on a mixer track"
+        },
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; protocol=CMD_PLUGIN_GET_PARAMS; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 134,
+          "name": "fl_plugin_get_params",
+          "path": "src/fls_pilot/tools/plugin.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "Get plugin parameters"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_PLUGIN_GET_PARAM,CMD_PLUGIN_GET_PARAMS,CMD_PLUGIN_SET_PARAM; uses safety layer; helper_calls=resolve_param_index; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 161,
+          "name": "fl_plugin_set_param",
+          "path": "src/fls_pilot/tools/plugin.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Set plugin parameter"
+        },
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; protocol=CMD_PLUGIN_GET_PARAMS; helper_calls=fl_plugin_get_params; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 200,
+          "name": "fl_plugin_list_params",
+          "path": "src/fls_pilot/tools/plugin.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "List plugin parameters"
+        },
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; protocol=CMD_PLUGIN_GET_PARAM,CMD_PLUGIN_GET_PARAMS; helper_calls=resolve_param_index; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 211,
+          "name": "fl_plugin_get_param",
+          "path": "src/fls_pilot/tools/plugin.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "Get plugin parameter value"
+        },
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; protocol=CMD_PLUGIN_GET_PRESET_NAME; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 250,
+          "name": "fl_plugin_get_preset_name",
+          "path": "src/fls_pilot/tools/plugin.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "Get current plugin preset name"
+        },
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; protocol=CMD_PLUGIN_GET_PRESET_NAME; helper_calls=fl_plugin_get_preset_name; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 285,
+          "name": "fl_plugin_next_preset",
+          "path": "src/fls_pilot/tools/plugin.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "Plan next plugin preset switch"
+        },
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; protocol=CMD_PLUGIN_GET_PRESET_NAME; helper_calls=fl_plugin_get_preset_name; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 308,
+          "name": "fl_plugin_prev_preset",
+          "path": "src/fls_pilot/tools/plugin.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "Plan previous plugin preset switch"
+        }
+      ],
+      "plugin_domain": [
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": true,
+          "evidence": "annotation readOnlyHint=False destructiveHint=True; uses safety layer; helper_calls=_bridge_call,_bridge_call_paginated,_prepare; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 43,
+          "name": "fl_plugin",
+          "path": "src/fls_pilot/tools/plugin_domain.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Plugin domain operation"
+        }
+      ],
+      "presets": [
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 30,
+          "name": "fl_list_presets",
+          "path": "src/fls_pilot/tools/presets.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "List presets (from disk)"
+        },
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 74,
+          "name": "fl_suggest_preset",
+          "path": "src/fls_pilot/tools/presets.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "Suggest a preset by description"
+        }
+      ],
+      "project_doctor": [
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; protocol=CMD_CHANNEL_GET,CMD_CHANNEL_LIST,CMD_CHANNEL_ROUTING_SUMMARY,CMD_GET_PROJECT_STATE,CMD_MIXER_GET_ROUTING_ALL,CMD_MIXER_LIST_TRACKS,CMD_PATTERN_LIST,CMD_PLAYLIST_LIST_TRACKS; helper_calls=_diagnostic_from_finding,_find_duplicate_names; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 94,
+          "name": "fl_project_health_report",
+          "path": "src/fls_pilot/tools/project_doctor.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "Project health report"
+        },
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; protocol=CMD_CHANNEL_GET,CMD_CHANNEL_LIST,CMD_CHANNEL_ROUTING_SUMMARY,CMD_GET_PROJECT_STATE,CMD_MIXER_GET_ROUTING_ALL,CMD_MIXER_LIST_TRACKS,CMD_PATTERN_LIST,CMD_PLAYLIST_LIST_TRACKS; helper_calls=fl_project_health_report; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 211,
+          "name": "fl_export_readiness_report",
+          "path": "src/fls_pilot/tools/project_doctor.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "Export readiness report"
+        },
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; protocol=CMD_CHANNEL_GET,CMD_CHANNEL_LIST,CMD_CHANNEL_ROUTING_SUMMARY,CMD_GET_PROJECT_STATE,CMD_MIXER_GET_ROUTING_ALL,CMD_MIXER_LIST_TRACKS,CMD_PATTERN_LIST,CMD_PLAYLIST_LIST_TRACKS; helper_calls=_find_duplicate_names,_proposal_from_action,_suggest_pattern_name,fl_export_readiness_report,fl_project_health_report; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 237,
+          "name": "fl_project_dry_run_fix_plan",
+          "path": "src/fls_pilot/tools/project_doctor.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "Project dry-run fix plan"
+        },
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; protocol=CMD_CHANNEL_ROUTING_SUMMARY,CMD_MIXER_GET_ROUTING_ALL,CMD_MIXER_LIST_TRACKS,CMD_PATTERN_LIST; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 360,
+          "name": "fl_project_health_overview",
+          "path": "src/fls_pilot/tools/project_doctor.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "Project health overview"
+        },
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; protocol=CMD_CHANNEL_ROUTING_SUMMARY,CMD_MIXER_GET_ROUTING_ALL,CMD_MIXER_LIST_TRACKS; helper_calls=_manual_check; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 430,
+          "name": "fl_check_project_preflight",
+          "path": "src/fls_pilot/tools/project_doctor.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "Project preflight check"
+        },
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; protocol=CMD_CHANNEL_ROUTING_SUMMARY,CMD_MIXER_GET_ROUTING_ALL,CMD_MIXER_LIST_TRACKS,CMD_PATTERN_LIST; helper_calls=fl_check_project_preflight,fl_project_health_overview; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 604,
+          "name": "fl_start_guided_cleanup",
+          "path": "src/fls_pilot/tools/project_doctor.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "Start guided cleanup assistant"
+        },
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; protocol=CMD_CHANNEL_ROUTING_SUMMARY,CMD_MIXER_GET_ROUTING_ALL,CMD_MIXER_LIST_TRACKS,CMD_PATTERN_LIST; helper_calls=fl_check_project_preflight,fl_project_health_overview; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 652,
+          "name": "fl_get_guided_cleanup_context",
+          "path": "src/fls_pilot/tools/project_doctor.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "Get guided cleanup context"
+        }
+      ],
+      "project_organizer": [
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; helper_calls=_channel_index,_looks_default_channel_name; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 264,
+          "name": "fl_analyze_project_organization",
+          "path": "src/fls_pilot/tools/project_organizer.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "Analyze Project Organization"
+        },
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; helper_calls=_channel_index,_looks_default_channel_name,_proposal_for_channel_routing,_proposal_for_rename,_suggest_channel_name; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 356,
+          "name": "fl_plan_project_cleanup",
+          "path": "src/fls_pilot/tools/project_organizer.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "Plan Project Cleanup"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; uses safety layer; helper_calls=_apply_report,_channel_rename_entry,_color_write_entry,_mixer_color_entry,_proposal_for_channel_routing,_proposal_for_color,_proposal_for_rename; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 465,
+          "name": "fl_apply_project_cleanup_step",
+          "path": "src/fls_pilot/tools/project_organizer.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Apply Project Cleanup Step"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; uses safety layer; helper_calls=_apply_report,_channel_rename_entry,_cleanup_proposal,_proposal_for_rename; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 622,
+          "name": "fl_apply_naming_standard",
+          "path": "src/fls_pilot/tools/project_organizer.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Apply Naming Standard"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; uses safety layer; helper_calls=_apply_report,_cleanup_proposal,_color_write_entry,_mixer_color_entry,_proposal_for_color; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 699,
+          "name": "fl_apply_color_standard",
+          "path": "src/fls_pilot/tools/project_organizer.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Apply Color Standard"
+        }
+      ],
+      "routing": [
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; protocol=CMD_MIXER_GET_ROUTING; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 222,
+          "name": "fl_get_routing",
+          "path": "src/fls_pilot/tools/routing.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "Get mixer track routing"
+        },
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; protocol=CMD_MIXER_GET_ROUTING_ALL; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 233,
+          "name": "fl_get_routing_all",
+          "path": "src/fls_pilot/tools/routing.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "Get full routing matrix"
+        },
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; protocol=CMD_CHANNEL_ROUTING_SUMMARY; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 242,
+          "name": "fl_get_channel_routing",
+          "path": "src/fls_pilot/tools/routing.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "Get channel->mixer routing"
+        },
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; protocol=CMD_CHANNEL_ROUTING_SUMMARY,CMD_MIXER_GET_ROUTING_ALL,CMD_PLUGIN_LIST; helper_calls=detect_cleanup; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 251,
+          "name": "fl_detect_cleanup_candidates",
+          "path": "src/fls_pilot/tools/routing.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "Detect cleanup candidates (read-only)"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_MIXER_SET_ROUTE; uses safety layer; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 261,
+          "name": "fl_set_route",
+          "path": "src/fls_pilot/tools/routing.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Set mixer routing (src -> dst)"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; uses safety layer; helper_calls=_bus_rename_entry,_dry_run_report,_no_write_report,_route_write_entry; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 290,
+          "name": "fl_group_tracks",
+          "path": "src/fls_pilot/tools/routing.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Group tracks into a bus"
+        },
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; helper_calls=_routing_review_findings; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 399,
+          "name": "fl_review_routing",
+          "path": "src/fls_pilot/tools/routing.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "Review routing"
+        },
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 535,
+          "name": "fl_plan_routing_cleanup",
+          "path": "src/fls_pilot/tools/routing.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "Plan routing cleanup"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; uses safety layer; helper_calls=_bus_rename_entry,_dry_run_report,_no_write_report,_route_write_entry; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 610,
+          "name": "fl_apply_routing_cleanup",
+          "path": "src/fls_pilot/tools/routing.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Apply routing cleanup"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; uses safety layer; helper_calls=_bus_rename_entry,_dry_run_report,_no_write_report,_route_write_entry; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 709,
+          "name": "fl_apply_bus_layout",
+          "path": "src/fls_pilot/tools/routing.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Apply bus layout"
+        }
+      ],
+      "transport": [
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; protocol=CMD_PING; helper_calls=_ping_bridge; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 33,
+          "name": "fl_ping",
+          "path": "src/fls_pilot/tools/transport.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "Ping FL Studio"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": true,
+          "evidence": "annotation readOnlyHint=False destructiveHint=True; protocol=CMD_PING; uses safety layer; helper_calls=_bridge_call,_ping_bridge; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 54,
+          "name": "fl_transport",
+          "path": "src/fls_pilot/tools/transport.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Transport domain operation"
+        },
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; protocol=CMD_GET_TEMPO; helper_calls=_safe_call; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 112,
+          "name": "fl_get_tempo",
+          "path": "src/fls_pilot/tools/transport.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "Get tempo (BPM)"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_SET_TEMPO; uses safety layer; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 130,
+          "name": "fl_set_tempo",
+          "path": "src/fls_pilot/tools/transport.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Set tempo (BPM)"
+        },
+        {
+          "contract_safety_class": "transient",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_PLAY; helper_calls=_safe_call; safetyClass='transient'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 161,
+          "name": "fl_play",
+          "path": "src/fls_pilot/tools/transport.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "transient",
+          "status": "transient",
+          "title": "Play"
+        },
+        {
+          "contract_safety_class": "transient",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_STOP; helper_calls=_safe_call; safetyClass='transient'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 178,
+          "name": "fl_stop",
+          "path": "src/fls_pilot/tools/transport.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "transient",
+          "status": "transient",
+          "title": "Stop"
+        },
+        {
+          "contract_safety_class": "transient",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_PAUSE; helper_calls=_safe_call; safetyClass='transient'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 195,
+          "name": "fl_pause",
+          "path": "src/fls_pilot/tools/transport.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "transient",
+          "status": "transient",
+          "title": "Pause"
+        },
+        {
+          "contract_safety_class": "transient",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_TOGGLE_PLAY; helper_calls=_safe_call; safetyClass='transient'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 212,
+          "name": "fl_toggle_play",
+          "path": "src/fls_pilot/tools/transport.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "transient",
+          "status": "transient",
+          "title": "Toggle play"
+        },
+        {
+          "contract_safety_class": "transient",
+          "destructive_hint": true,
+          "evidence": "annotation readOnlyHint=False destructiveHint=True; protocol=CMD_RECORD; helper_calls=_safe_call; safetyClass='transient'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 229,
+          "name": "fl_record",
+          "path": "src/fls_pilot/tools/transport.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "transient",
+          "status": "transient",
+          "title": "Toggle record"
+        },
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; protocol=CMD_GET_PLAY_STATE; helper_calls=_safe_call; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 245,
+          "name": "fl_get_play_state",
+          "path": "src/fls_pilot/tools/transport.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "Get play state"
+        },
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; protocol=CMD_GET_SONG_POS; helper_calls=_safe_call; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 261,
+          "name": "fl_get_song_position",
+          "path": "src/fls_pilot/tools/transport.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "Get song position (beats)"
+        },
+        {
+          "contract_safety_class": "transient",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_SET_SONG_POS; helper_calls=_safe_call; safetyClass='transient'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 278,
+          "name": "fl_set_song_position",
+          "path": "src/fls_pilot/tools/transport.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "transient",
+          "status": "transient",
+          "title": "Set song position (beats)"
+        },
+        {
+          "contract_safety_class": "read-only",
+          "destructive_hint": null,
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; protocol=CMD_GET_TIME_SIG; helper_calls=_safe_call; safetyClass='read-only'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 296,
+          "name": "fl_get_time_signature",
+          "path": "src/fls_pilot/tools/transport.py",
+          "read_only_hint": true,
+          "safety_class_annotation": "read-only",
+          "status": "read-only",
+          "title": "Get time signature"
+        },
+        {
+          "contract_safety_class": "write-safe-required",
+          "destructive_hint": false,
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_SET_TIME_SIG; uses safety layer; safetyClass='write-safe-required'; doc_safety=True",
+          "has_safety_doc": true,
+          "line": 313,
+          "name": "fl_set_time_signature",
+          "path": "src/fls_pilot/tools/transport.py",
+          "read_only_hint": false,
+          "safety_class_annotation": "write-safe-required",
+          "status": "write-safe-required",
+          "title": "Set time signature"
+        }
+      ]
+    },
+    "resources": [
+      "fl://agent-briefing",
+      "fl://status",
+      "fl://project",
+      "fl://transport",
+      "fl://channels",
+      "fl://mixer",
+      "fl://patterns",
+      "fls://docs/safety-contract",
+      "fls://docs/api-capability-audit",
+      "fls://docs/default-safe-ux",
+      "fls://docs/runtime-usage",
+      "fls://docs/knowledgebase-protocol",
+      "fls://docs/tool-policy",
+      "fls://capabilities/supported",
+      "fls://capabilities/not-possible",
+      "fls://capabilities/api-limits",
+      "fls://capabilities/write-safety"
+    ],
+    "prompts": [
+      "api-probe.md",
+      "audio-to-midi.md",
+      "bug-triage.md",
+      "composition-scale-writer.md",
+      "implementation-slice.md",
+      "mix-review.md",
+      "plugin-chain-planner.md",
+      "project-organizer.md",
+      "project-preflight.md",
+      "release.md",
+      "routing-review.md"
+    ]
+  },
+  "controller_surface": {
+    "protocol_commands_defined": [
+      {
+        "constant": "CMD_PING",
+        "command": "ping"
+      },
+      {
+        "constant": "CMD_GET_TEMPO",
+        "command": "get_tempo"
+      },
+      {
+        "constant": "CMD_SET_TEMPO",
+        "command": "set_tempo"
+      },
+      {
+        "constant": "CMD_GENERAL_UNDO",
+        "command": "general_undo"
+      },
+      {
+        "constant": "CMD_PLAY",
+        "command": "play"
+      },
+      {
+        "constant": "CMD_STOP",
+        "command": "stop"
+      },
+      {
+        "constant": "CMD_PAUSE",
+        "command": "pause"
+      },
+      {
+        "constant": "CMD_TOGGLE_PLAY",
+        "command": "toggle_play"
+      },
+      {
+        "constant": "CMD_RECORD",
+        "command": "record"
+      },
+      {
+        "constant": "CMD_GET_PLAY_STATE",
+        "command": "get_play_state"
+      },
+      {
+        "constant": "CMD_GET_SONG_POS",
+        "command": "get_song_position"
+      },
+      {
+        "constant": "CMD_SET_SONG_POS",
+        "command": "set_song_position"
+      },
+      {
+        "constant": "CMD_GET_PROJECT_STATE",
+        "command": "get_project_state"
+      },
+      {
+        "constant": "CMD_MIXER_LIST_TRACKS",
+        "command": "mixer_list_tracks"
+      },
+      {
+        "constant": "CMD_MIXER_GET_TRACK",
+        "command": "mixer_get_track"
+      },
+      {
+        "constant": "CMD_MIXER_SET_VOLUME",
+        "command": "mixer_set_volume"
+      },
+      {
+        "constant": "CMD_MIXER_SET_PAN",
+        "command": "mixer_set_pan"
+      },
+      {
+        "constant": "CMD_MIXER_SET_MUTE",
+        "command": "mixer_set_mute"
+      },
+      {
+        "constant": "CMD_MIXER_SET_SOLO",
+        "command": "mixer_set_solo"
+      },
+      {
+        "constant": "CMD_MIXER_SET_NAME",
+        "command": "mixer_set_name"
+      },
+      {
+        "constant": "CMD_MIXER_SELECTED",
+        "command": "mixer_selected"
+      },
+      {
+        "constant": "CMD_MIXER_SELECT_TRACK",
+        "command": "mixer_select_track"
+      },
+      {
+        "constant": "CMD_MIXER_SET_STEREO_SEP",
+        "command": "mixer_set_stereo_sep"
+      },
+      {
+        "constant": "CMD_CHANNEL_LIST",
+        "command": "channel_list"
+      },
+      {
+        "constant": "CMD_CHANNEL_GET",
+        "command": "channel_get"
+      },
+      {
+        "constant": "CMD_CHANNEL_SET_VOLUME",
+        "command": "channel_set_volume"
+      },
+      {
+        "constant": "CMD_CHANNEL_SET_PAN",
+        "command": "channel_set_pan"
+      },
+      {
+        "constant": "CMD_CHANNEL_SET_MUTE",
+        "command": "channel_set_mute"
+      },
+      {
+        "constant": "CMD_CHANNEL_SET_SOLO",
+        "command": "channel_set_solo"
+      },
+      {
+        "constant": "CMD_CHANNEL_SELECT",
+        "command": "channel_select"
+      },
+      {
+        "constant": "CMD_CHANNEL_SELECTED",
+        "command": "channel_selected"
+      },
+      {
+        "constant": "CMD_CHANNEL_SET_NAME",
+        "command": "channel_set_name"
+      },
+      {
+        "constant": "CMD_CHANNEL_SET_TARGET",
+        "command": "channel_set_target"
+      },
+      {
+        "constant": "CMD_PATTERN_LIST",
+        "command": "pattern_list"
+      },
+      {
+        "constant": "CMD_PATTERN_SELECT",
+        "command": "pattern_select"
+      },
+      {
+        "constant": "CMD_PATTERN_RENAME",
+        "command": "pattern_rename"
+      },
+      {
+        "constant": "CMD_PATTERN_GET_LENGTH",
+        "command": "pattern_get_length"
+      },
+      {
+        "constant": "CMD_PLUGIN_LIST",
+        "command": "plugin_list"
+      },
+      {
+        "constant": "CMD_PLUGIN_GET_PARAMS",
+        "command": "plugin_get_params"
+      },
+      {
+        "constant": "CMD_PLUGIN_LIST_PARAMS",
+        "command": "plugin_list_params"
+      },
+      {
+        "constant": "CMD_PLUGIN_GET_PARAM",
+        "command": "plugin_get_param"
+      },
+      {
+        "constant": "CMD_PLUGIN_SET_PARAM",
+        "command": "plugin_set_param"
+      },
+      {
+        "constant": "CMD_MIXER_GET_ROUTING",
+        "command": "mixer_get_routing"
+      },
+      {
+        "constant": "CMD_MIXER_GET_ROUTING_ALL",
+        "command": "mixer_get_routing_all"
+      },
+      {
+        "constant": "CMD_MIXER_GET_FREE_TRACK",
+        "command": "mixer_get_free_track"
+      },
+      {
+        "constant": "CMD_CHANNEL_ROUTING_SUMMARY",
+        "command": "channel_routing_summary"
+      },
+      {
+        "constant": "CMD_MIXER_SET_ROUTE",
+        "command": "mixer_set_route"
+      },
+      {
+        "constant": "CMD_MIXER_GET_PEAKS",
+        "command": "mixer_get_peaks"
+      },
+      {
+        "constant": "CMD_MIXER_SET_COLOR",
+        "command": "mixer_set_color"
+      },
+      {
+        "constant": "CMD_MIXER_GET_COLOR",
+        "command": "mixer_get_color"
+      },
+      {
+        "constant": "CMD_CHANNEL_SET_COLOR",
+        "command": "channel_set_color"
+      },
+      {
+        "constant": "CMD_CHANNEL_GET_COLOR",
+        "command": "channel_get_color"
+      },
+      {
+        "constant": "CMD_PLUGIN_PRESET",
+        "command": "plugin_preset"
+      },
+      {
+        "constant": "CMD_PLUGIN_GET_PRESET_NAME",
+        "command": "plugin_get_preset_name"
+      },
+      {
+        "constant": "CMD_API_PROBE",
+        "command": "api_probe"
+      },
+      {
+        "constant": "CMD_ARRANGE_NEW_PATTERN",
+        "command": "arrange_new_pattern"
+      },
+      {
+        "constant": "CMD_ARRANGE_CLONE_PATTERN",
+        "command": "arrange_clone_pattern"
+      },
+      {
+        "constant": "CMD_ARRANGE_ADD_MARKER",
+        "command": "arrange_add_marker"
+      },
+      {
+        "constant": "CMD_ENSURE_PIANO_ROLL",
+        "command": "ensure_piano_roll"
+      },
+      {
+        "constant": "CMD_CHANNEL_GET_STEPS",
+        "command": "channel_get_steps"
+      },
+      {
+        "constant": "CMD_PATTERN_GET",
+        "command": "pattern_get"
+      },
+      {
+        "constant": "CMD_PATTERN_SELECTED",
+        "command": "pattern_selected"
+      },
+      {
+        "constant": "CMD_PATTERN_SET_COLOR",
+        "command": "pattern_set_color"
+      },
+      {
+        "constant": "CMD_PATTERN_SET_LENGTH",
+        "command": "pattern_set_length"
+      },
+      {
+        "constant": "CMD_PATTERN_FIND_EMPTY",
+        "command": "pattern_find_empty"
+      },
+      {
+        "constant": "CMD_PLAYLIST_GET_TRACK",
+        "command": "playlist_get_track"
+      },
+      {
+        "constant": "CMD_PLAYLIST_LIST_TRACKS",
+        "command": "playlist_list_tracks"
+      },
+      {
+        "constant": "CMD_PLAYLIST_SET_MUTE",
+        "command": "playlist_set_mute"
+      },
+      {
+        "constant": "CMD_PLAYLIST_SET_SOLO",
+        "command": "playlist_set_solo"
+      },
+      {
+        "constant": "CMD_PLAYLIST_SET_NAME",
+        "command": "playlist_set_name"
+      },
+      {
+        "constant": "CMD_PLAYLIST_SET_COLOR",
+        "command": "playlist_set_color"
+      },
+      {
+        "constant": "CMD_PLAYLIST_SELECT_TRACK",
+        "command": "playlist_select_track"
+      },
+      {
+        "constant": "CMD_MIXER_GET_SLOT",
+        "command": "mixer_get_slot"
+      },
+      {
+        "constant": "CMD_MIXER_SET_SLOT_MIX",
+        "command": "mixer_set_slot_mix"
+      },
+      {
+        "constant": "CMD_MIXER_GET_TRACK_SLOTS",
+        "command": "mixer_get_track_slots"
+      },
+      {
+        "constant": "CMD_MIXER_SET_TRACK_SLOTS",
+        "command": "mixer_set_track_slots"
+      },
+      {
+        "constant": "CMD_MIXER_SET_SLOT_ENABLED",
+        "command": "mixer_set_slot_enabled"
+      },
+      {
+        "constant": "CMD_MIXER_GET_EQ",
+        "command": "mixer_get_eq"
+      },
+      {
+        "constant": "CMD_MIXER_SET_EQ",
+        "command": "mixer_set_eq"
+      },
+      {
+        "constant": "CMD_MIXER_PROBE_EQ_TYPE",
+        "command": "mixer_probe_eq_type"
+      },
+      {
+        "constant": "CMD_GET_TIME_SIG",
+        "command": "get_time_sig"
+      },
+      {
+        "constant": "CMD_SET_TIME_SIG",
+        "command": "set_time_sig"
+      },
+      {
+        "constant": "CMD_CHANNEL_SET_STEPS",
+        "command": "channel_set_steps"
+      }
+    ],
+    "controller_handlers": [
+      {
+        "command": "ping",
+        "handler": "_h_ping"
+      },
+      {
+        "command": "bridge_eval",
+        "handler": "lambda"
+      },
+      {
+        "command": "get_tempo",
+        "handler": "_h_get_tempo"
+      },
+      {
+        "command": "set_tempo",
+        "handler": "_h_set_tempo"
+      },
+      {
+        "command": "general_undo",
+        "handler": "_h_general_undo"
+      },
+      {
+        "command": "play",
+        "handler": "_h_play"
+      },
+      {
+        "command": "stop",
+        "handler": "_h_stop"
+      },
+      {
+        "command": "pause",
+        "handler": "_h_pause"
+      },
+      {
+        "command": "toggle_play",
+        "handler": "_h_toggle_play"
+      },
+      {
+        "command": "record",
+        "handler": "_h_record"
+      },
+      {
+        "command": "get_play_state",
+        "handler": "_h_get_play_state"
+      },
+      {
+        "command": "get_song_position",
+        "handler": "_h_get_song_pos"
+      },
+      {
+        "command": "set_song_position",
+        "handler": "_h_set_song_pos"
+      },
+      {
+        "command": "get_project_state",
+        "handler": "_h_get_project_state"
+      },
+      {
+        "command": "mixer_list_tracks",
+        "handler": "_h_mixer_list_tracks"
+      },
+      {
+        "command": "mixer_get_track",
+        "handler": "_h_mixer_get_track"
+      },
+      {
+        "command": "mixer_selected",
+        "handler": "_h_mixer_selected"
+      },
+      {
+        "command": "mixer_select_track",
+        "handler": "_h_mixer_select_track"
+      },
+      {
+        "command": "channel_list",
+        "handler": "_h_channel_list"
+      },
+      {
+        "command": "channel_get",
+        "handler": "_h_channel_get"
+      },
+      {
+        "command": "mixer_set_volume",
+        "handler": "_h_mixer_set_volume"
+      },
+      {
+        "command": "mixer_set_pan",
+        "handler": "_h_mixer_set_pan"
+      },
+      {
+        "command": "mixer_set_stereo_sep",
+        "handler": "_h_mixer_set_stereo_sep"
+      },
+      {
+        "command": "mixer_get_stereo_sep",
+        "handler": "_h_mixer_get_stereo_sep"
+      },
+      {
+        "command": "mixer_set_mute",
+        "handler": "_h_mixer_set_mute"
+      },
+      {
+        "command": "mixer_set_solo",
+        "handler": "_h_mixer_set_solo"
+      },
+      {
+        "command": "mixer_set_name",
+        "handler": "_h_mixer_set_name"
+      },
+      {
+        "command": "channel_set_volume",
+        "handler": "_h_channel_set_volume"
+      },
+      {
+        "command": "channel_set_pan",
+        "handler": "_h_channel_set_pan"
+      },
+      {
+        "command": "channel_set_mute",
+        "handler": "_h_channel_set_mute"
+      },
+      {
+        "command": "channel_set_solo",
+        "handler": "_h_channel_set_solo"
+      },
+      {
+        "command": "channel_set_name",
+        "handler": "_h_channel_set_name"
+      },
+      {
+        "command": "channel_set_target",
+        "handler": "_h_channel_set_target"
+      },
+      {
+        "command": "plugin_list",
+        "handler": "_h_plugin_list"
+      },
+      {
+        "command": "plugin_get_params",
+        "handler": "_h_plugin_get_params"
+      },
+      {
+        "command": "plugin_get_param",
+        "handler": "_h_plugin_get_param"
+      },
+      {
+        "command": "plugin_set_param",
+        "handler": "_h_plugin_set_param"
+      },
+      {
+        "command": "mixer_get_routing",
+        "handler": "_h_mixer_get_routing"
+      },
+      {
+        "command": "mixer_get_routing_all",
+        "handler": "_h_mixer_get_routing_all"
+      },
+      {
+        "command": "mixer_get_free_track",
+        "handler": "_h_mixer_get_free_track"
+      },
+      {
+        "command": "channel_routing_summary",
+        "handler": "_h_channel_routing_summary"
+      },
+      {
+        "command": "mixer_set_route",
+        "handler": "_h_mixer_set_route"
+      },
+      {
+        "command": "mixer_get_peaks",
+        "handler": "_h_mixer_get_peaks"
+      },
+      {
+        "command": "mixer_get_all_peaks",
+        "handler": "_h_mixer_get_all_peaks"
+      },
+      {
+        "command": "mixer_set_color",
+        "handler": "_h_mixer_set_color"
+      },
+      {
+        "command": "mixer_get_color",
+        "handler": "_h_mixer_get_color"
+      },
+      {
+        "command": "channel_set_color",
+        "handler": "_h_channel_set_color"
+      },
+      {
+        "command": "channel_get_color",
+        "handler": "_h_channel_get_color"
+      },
+      {
+        "command": "plugin_preset",
+        "handler": "_h_plugin_preset"
+      },
+      {
+        "command": "plugin_get_preset_name",
+        "handler": "_h_plugin_get_preset_name"
+      },
+      {
+        "command": "api_probe",
+        "handler": "_h_api_probe"
+      },
+      {
+        "command": "arrange_new_pattern",
+        "handler": "_h_arrange_new_pattern"
+      },
+      {
+        "command": "arrange_clone_pattern",
+        "handler": "_h_arrange_clone_pattern"
+      },
+      {
+        "command": "arrange_add_marker",
+        "handler": "_h_arrange_add_marker"
+      },
+      {
+        "command": "channel_select",
+        "handler": "_h_channel_select"
+      },
+      {
+        "command": "channel_selected",
+        "handler": "_h_channel_selected"
+      },
+      {
+        "command": "ensure_piano_roll",
+        "handler": "_h_ensure_piano_roll"
+      },
+      {
+        "command": "pattern_list",
+        "handler": "_h_pattern_list"
+      },
+      {
+        "command": "pattern_select",
+        "handler": "_h_pattern_select"
+      },
+      {
+        "command": "pattern_rename",
+        "handler": "_h_pattern_rename"
+      },
+      {
+        "command": "pattern_get_length",
+        "handler": "_h_pattern_get_length"
+      },
+      {
+        "command": "pattern_set_color",
+        "handler": "_h_pattern_set_color"
+      },
+      {
+        "command": "pattern_set_length",
+        "handler": "_h_pattern_set_length"
+      },
+      {
+        "command": "pattern_find_empty",
+        "handler": "_h_pattern_find_empty"
+      },
+      {
+        "command": "channel_get_steps",
+        "handler": "_h_channel_get_steps"
+      },
+      {
+        "command": "pattern_get",
+        "handler": "_h_pattern_get"
+      },
+      {
+        "command": "pattern_selected",
+        "handler": "_h_pattern_selected"
+      },
+      {
+        "command": "playlist_get_track",
+        "handler": "_h_playlist_get_track"
+      },
+      {
+        "command": "playlist_list_tracks",
+        "handler": "_h_playlist_list_tracks"
+      },
+      {
+        "command": "playlist_set_mute",
+        "handler": "_h_playlist_set_mute"
+      },
+      {
+        "command": "playlist_set_solo",
+        "handler": "_h_playlist_set_solo"
+      },
+      {
+        "command": "playlist_set_name",
+        "handler": "_h_playlist_set_name"
+      },
+      {
+        "command": "playlist_set_color",
+        "handler": "_h_playlist_set_color"
+      },
+      {
+        "command": "playlist_select_track",
+        "handler": "_h_playlist_select_track"
+      },
+      {
+        "command": "mixer_get_slot",
+        "handler": "_h_mixer_get_slot"
+      },
+      {
+        "command": "mixer_set_slot_mix",
+        "handler": "_h_mixer_set_slot_mix"
+      },
+      {
+        "command": "mixer_get_track_slots",
+        "handler": "_h_mixer_get_track_slots"
+      },
+      {
+        "command": "mixer_set_track_slots",
+        "handler": "_h_mixer_set_track_slots"
+      },
+      {
+        "command": "mixer_set_slot_enabled",
+        "handler": "_h_mixer_set_slot_enabled"
+      },
+      {
+        "command": "mixer_get_eq",
+        "handler": "_h_mixer_get_eq"
+      },
+      {
+        "command": "mixer_set_eq",
+        "handler": "_h_mixer_set_eq"
+      },
+      {
+        "command": "mixer_probe_eq_type",
+        "handler": "_h_mixer_probe_eq_type"
+      },
+      {
+        "command": "mixer_probe_eq_gain",
+        "handler": "_h_mixer_probe_eq_gain"
+      },
+      {
+        "command": "mixer_probe_eq_freq",
+        "handler": "_h_mixer_probe_eq_freq"
+      },
+      {
+        "command": "mixer_probe_eq_q",
+        "handler": "_h_mixer_probe_eq_q"
+      },
+      {
+        "command": "mixer_format_event_value",
+        "handler": "_h_mixer_format_event_value"
+      },
+      {
+        "command": "get_time_sig",
+        "handler": "_h_get_time_sig"
+      },
+      {
+        "command": "set_time_sig",
+        "handler": "_h_set_time_sig"
+      },
+      {
+        "command": "channel_set_steps",
+        "handler": "_h_channel_set_steps"
+      }
+    ],
+    "handler_count": 89
+  },
+  "operation_registry": {
+    "summary": {
+      "total": 65,
+      "by_safety_class": {
+        "read-only": 25,
+        "write-safe-required": 34,
+        "transient": 6
+      },
+      "by_domain": {
+        "channel": 13,
+        "effect": 5,
+        "eq": 2,
+        "mixer": 13,
+        "pattern": 9,
+        "playlist": 7,
+        "plugin": 4,
+        "transport": 12
+      }
+    },
+    "operations": [
+      {
+        "domain": "channel",
+        "action": "get",
+        "safety_class": "read-only",
+        "batch_eligible": true,
+        "batch_category": "read_only",
+        "requires_write_contract": false
+      },
+      {
+        "domain": "channel",
+        "action": "get_selected",
+        "safety_class": "read-only",
+        "batch_eligible": true,
+        "batch_category": "read_only",
+        "requires_write_contract": false
+      },
+      {
+        "domain": "channel",
+        "action": "get_steps",
+        "safety_class": "read-only",
+        "batch_eligible": true,
+        "batch_category": "read_only",
+        "requires_write_contract": false
+      },
+      {
+        "domain": "channel",
+        "action": "list",
+        "safety_class": "read-only",
+        "batch_eligible": true,
+        "batch_category": "read_only",
+        "requires_write_contract": false
+      },
+      {
+        "domain": "channel",
+        "action": "select",
+        "safety_class": "write-safe-required",
+        "batch_eligible": true,
+        "batch_category": "persistent_write",
+        "requires_write_contract": true
+      },
+      {
+        "domain": "channel",
+        "action": "set_color",
+        "safety_class": "write-safe-required",
+        "batch_eligible": true,
+        "batch_category": "persistent_write",
+        "requires_write_contract": true
+      },
+      {
+        "domain": "channel",
+        "action": "set_mixer_target",
+        "safety_class": "write-safe-required",
+        "batch_eligible": true,
+        "batch_category": "persistent_write",
+        "requires_write_contract": true
+      },
+      {
+        "domain": "channel",
+        "action": "set_mute",
+        "safety_class": "write-safe-required",
+        "batch_eligible": true,
+        "batch_category": "persistent_write",
+        "requires_write_contract": true
+      },
+      {
+        "domain": "channel",
+        "action": "set_name",
+        "safety_class": "write-safe-required",
+        "batch_eligible": true,
+        "batch_category": "persistent_write",
+        "requires_write_contract": true
+      },
+      {
+        "domain": "channel",
+        "action": "set_pan",
+        "safety_class": "write-safe-required",
+        "batch_eligible": true,
+        "batch_category": "persistent_write",
+        "requires_write_contract": true
+      },
+      {
+        "domain": "channel",
+        "action": "set_solo",
+        "safety_class": "write-safe-required",
+        "batch_eligible": true,
+        "batch_category": "persistent_write",
+        "requires_write_contract": true
+      },
+      {
+        "domain": "channel",
+        "action": "set_steps",
+        "safety_class": "write-safe-required",
+        "batch_eligible": true,
+        "batch_category": "persistent_write",
+        "requires_write_contract": true
+      },
+      {
+        "domain": "channel",
+        "action": "set_volume",
+        "safety_class": "write-safe-required",
+        "batch_eligible": true,
+        "batch_category": "persistent_write",
+        "requires_write_contract": true
+      },
+      {
+        "domain": "effect",
+        "action": "get_slot",
+        "safety_class": "read-only",
+        "batch_eligible": true,
+        "batch_category": "read_only",
+        "requires_write_contract": false
+      },
+      {
+        "domain": "effect",
+        "action": "get_track_slots_enabled",
+        "safety_class": "read-only",
+        "batch_eligible": true,
+        "batch_category": "read_only",
+        "requires_write_contract": false
+      },
+      {
+        "domain": "effect",
+        "action": "set_slot_enabled",
+        "safety_class": "write-safe-required",
+        "batch_eligible": true,
+        "batch_category": "persistent_write",
+        "requires_write_contract": true
+      },
+      {
+        "domain": "effect",
+        "action": "set_slot_mix",
+        "safety_class": "write-safe-required",
+        "batch_eligible": true,
+        "batch_category": "persistent_write",
+        "requires_write_contract": true
+      },
+      {
+        "domain": "effect",
+        "action": "set_track_slots_enabled",
+        "safety_class": "write-safe-required",
+        "batch_eligible": true,
+        "batch_category": "persistent_write",
+        "requires_write_contract": true
+      },
+      {
+        "domain": "eq",
+        "action": "get",
+        "safety_class": "read-only",
+        "batch_eligible": true,
+        "batch_category": "read_only",
+        "requires_write_contract": false
+      },
+      {
+        "domain": "eq",
+        "action": "set_band",
+        "safety_class": "write-safe-required",
+        "batch_eligible": true,
+        "batch_category": "persistent_write",
+        "requires_write_contract": true
+      },
+      {
+        "domain": "mixer",
+        "action": "get",
+        "safety_class": "read-only",
+        "batch_eligible": true,
+        "batch_category": "read_only",
+        "requires_write_contract": false
+      },
+      {
+        "domain": "mixer",
+        "action": "get_route",
+        "safety_class": "read-only",
+        "batch_eligible": true,
+        "batch_category": "read_only",
+        "requires_write_contract": false
+      },
+      {
+        "domain": "mixer",
+        "action": "get_selected",
+        "safety_class": "read-only",
+        "batch_eligible": true,
+        "batch_category": "read_only",
+        "requires_write_contract": false
+      },
+      {
+        "domain": "mixer",
+        "action": "list",
+        "safety_class": "read-only",
+        "batch_eligible": true,
+        "batch_category": "read_only",
+        "requires_write_contract": false
+      },
+      {
+        "domain": "mixer",
+        "action": "select",
+        "safety_class": "write-safe-required",
+        "batch_eligible": true,
+        "batch_category": "persistent_write",
+        "requires_write_contract": true
+      },
+      {
+        "domain": "mixer",
+        "action": "set_color",
+        "safety_class": "write-safe-required",
+        "batch_eligible": true,
+        "batch_category": "persistent_write",
+        "requires_write_contract": true
+      },
+      {
+        "domain": "mixer",
+        "action": "set_mute",
+        "safety_class": "write-safe-required",
+        "batch_eligible": true,
+        "batch_category": "persistent_write",
+        "requires_write_contract": true
+      },
+      {
+        "domain": "mixer",
+        "action": "set_name",
+        "safety_class": "write-safe-required",
+        "batch_eligible": true,
+        "batch_category": "persistent_write",
+        "requires_write_contract": true
+      },
+      {
+        "domain": "mixer",
+        "action": "set_pan",
+        "safety_class": "write-safe-required",
+        "batch_eligible": true,
+        "batch_category": "persistent_write",
+        "requires_write_contract": true
+      },
+      {
+        "domain": "mixer",
+        "action": "set_route",
+        "safety_class": "write-safe-required",
+        "batch_eligible": true,
+        "batch_category": "persistent_write",
+        "requires_write_contract": true
+      },
+      {
+        "domain": "mixer",
+        "action": "set_solo",
+        "safety_class": "write-safe-required",
+        "batch_eligible": true,
+        "batch_category": "persistent_write",
+        "requires_write_contract": true
+      },
+      {
+        "domain": "mixer",
+        "action": "set_stereo_separation",
+        "safety_class": "write-safe-required",
+        "batch_eligible": true,
+        "batch_category": "persistent_write",
+        "requires_write_contract": true
+      },
+      {
+        "domain": "mixer",
+        "action": "set_volume",
+        "safety_class": "write-safe-required",
+        "batch_eligible": true,
+        "batch_category": "persistent_write",
+        "requires_write_contract": true
+      },
+      {
+        "domain": "pattern",
+        "action": "find_empty",
+        "safety_class": "read-only",
+        "batch_eligible": true,
+        "batch_category": "read_only",
+        "requires_write_contract": false
+      },
+      {
+        "domain": "pattern",
+        "action": "get",
+        "safety_class": "read-only",
+        "batch_eligible": true,
+        "batch_category": "read_only",
+        "requires_write_contract": false
+      },
+      {
+        "domain": "pattern",
+        "action": "get_length",
+        "safety_class": "read-only",
+        "batch_eligible": true,
+        "batch_category": "read_only",
+        "requires_write_contract": false
+      },
+      {
+        "domain": "pattern",
+        "action": "get_selected",
+        "safety_class": "read-only",
+        "batch_eligible": true,
+        "batch_category": "read_only",
+        "requires_write_contract": false
+      },
+      {
+        "domain": "pattern",
+        "action": "list",
+        "safety_class": "read-only",
+        "batch_eligible": true,
+        "batch_category": "read_only",
+        "requires_write_contract": false
+      },
+      {
+        "domain": "pattern",
+        "action": "rename",
+        "safety_class": "write-safe-required",
+        "batch_eligible": true,
+        "batch_category": "persistent_write",
+        "requires_write_contract": true
+      },
+      {
+        "domain": "pattern",
+        "action": "select",
+        "safety_class": "write-safe-required",
+        "batch_eligible": true,
+        "batch_category": "persistent_write",
+        "requires_write_contract": true
+      },
+      {
+        "domain": "pattern",
+        "action": "set_color",
+        "safety_class": "write-safe-required",
+        "batch_eligible": true,
+        "batch_category": "persistent_write",
+        "requires_write_contract": true
+      },
+      {
+        "domain": "pattern",
+        "action": "set_length",
+        "safety_class": "write-safe-required",
+        "batch_eligible": true,
+        "batch_category": "persistent_write",
+        "requires_write_contract": true
+      },
+      {
+        "domain": "playlist",
+        "action": "get",
+        "safety_class": "read-only",
+        "batch_eligible": true,
+        "batch_category": "read_only",
+        "requires_write_contract": false
+      },
+      {
+        "domain": "playlist",
+        "action": "list",
+        "safety_class": "read-only",
+        "batch_eligible": true,
+        "batch_category": "read_only",
+        "requires_write_contract": false
+      },
+      {
+        "domain": "playlist",
+        "action": "select",
+        "safety_class": "write-safe-required",
+        "batch_eligible": true,
+        "batch_category": "persistent_write",
+        "requires_write_contract": true
+      },
+      {
+        "domain": "playlist",
+        "action": "set_color",
+        "safety_class": "write-safe-required",
+        "batch_eligible": true,
+        "batch_category": "persistent_write",
+        "requires_write_contract": true
+      },
+      {
+        "domain": "playlist",
+        "action": "set_mute",
+        "safety_class": "write-safe-required",
+        "batch_eligible": true,
+        "batch_category": "persistent_write",
+        "requires_write_contract": true
+      },
+      {
+        "domain": "playlist",
+        "action": "set_name",
+        "safety_class": "write-safe-required",
+        "batch_eligible": true,
+        "batch_category": "persistent_write",
+        "requires_write_contract": true
+      },
+      {
+        "domain": "playlist",
+        "action": "set_solo",
+        "safety_class": "write-safe-required",
+        "batch_eligible": true,
+        "batch_category": "persistent_write",
+        "requires_write_contract": true
+      },
+      {
+        "domain": "plugin",
+        "action": "get_param",
+        "safety_class": "read-only",
+        "batch_eligible": true,
+        "batch_category": "read_only",
+        "requires_write_contract": false
+      },
+      {
+        "domain": "plugin",
+        "action": "list",
+        "safety_class": "read-only",
+        "batch_eligible": true,
+        "batch_category": "read_only",
+        "requires_write_contract": false
+      },
+      {
+        "domain": "plugin",
+        "action": "list_params",
+        "safety_class": "read-only",
+        "batch_eligible": true,
+        "batch_category": "read_only",
+        "requires_write_contract": false
+      },
+      {
+        "domain": "plugin",
+        "action": "set_param",
+        "safety_class": "write-safe-required",
+        "batch_eligible": true,
+        "batch_category": "persistent_write",
+        "requires_write_contract": true
+      },
+      {
+        "domain": "transport",
+        "action": "get_play_state",
+        "safety_class": "read-only",
+        "batch_eligible": true,
+        "batch_category": "read_only",
+        "requires_write_contract": false
+      },
+      {
+        "domain": "transport",
+        "action": "get_song_position",
+        "safety_class": "read-only",
+        "batch_eligible": true,
+        "batch_category": "read_only",
+        "requires_write_contract": false
+      },
+      {
+        "domain": "transport",
+        "action": "get_tempo",
+        "safety_class": "read-only",
+        "batch_eligible": true,
+        "batch_category": "read_only",
+        "requires_write_contract": false
+      },
+      {
+        "domain": "transport",
+        "action": "get_time_signature",
+        "safety_class": "read-only",
+        "batch_eligible": true,
+        "batch_category": "read_only",
+        "requires_write_contract": false
+      },
+      {
+        "domain": "transport",
+        "action": "pause",
+        "safety_class": "transient",
+        "batch_eligible": false,
+        "batch_category": "transient",
+        "requires_write_contract": false
+      },
+      {
+        "domain": "transport",
+        "action": "play",
+        "safety_class": "transient",
+        "batch_eligible": false,
+        "batch_category": "transient",
+        "requires_write_contract": false
+      },
+      {
+        "domain": "transport",
+        "action": "record",
+        "safety_class": "transient",
+        "batch_eligible": false,
+        "batch_category": "transient",
+        "requires_write_contract": false
+      },
+      {
+        "domain": "transport",
+        "action": "set_song_position",
+        "safety_class": "transient",
+        "batch_eligible": false,
+        "batch_category": "transient",
+        "requires_write_contract": false
+      },
+      {
+        "domain": "transport",
+        "action": "set_tempo",
+        "safety_class": "write-safe-required",
+        "batch_eligible": true,
+        "batch_category": "persistent_write",
+        "requires_write_contract": true
+      },
+      {
+        "domain": "transport",
+        "action": "set_time_signature",
+        "safety_class": "write-safe-required",
+        "batch_eligible": true,
+        "batch_category": "persistent_write",
+        "requires_write_contract": true
+      },
+      {
+        "domain": "transport",
+        "action": "stop",
+        "safety_class": "transient",
+        "batch_eligible": false,
+        "batch_category": "transient",
+        "requires_write_contract": false
+      },
+      {
+        "domain": "transport",
+        "action": "toggle_play",
+        "safety_class": "transient",
+        "batch_eligible": false,
+        "batch_category": "transient",
+        "requires_write_contract": false
+      }
+    ]
+  },
+  "runtime": {
+    "operations": [
+      "analysis.health.get",
+      "analysis.live_meter.normalize",
+      "analysis.report.add",
+      "analysis.report.latest",
+      "analysis.report.list",
+      "analysis.workflow.run",
+      "project.current",
+      "project.snapshot.get",
+      "project.snapshot.refresh",
+      "runtime.capabilities",
+      "runtime.invalidate",
+      "runtime.session",
+      "runtime.status",
+      "workflow.catalog",
+      "workflow.declaration.get"
+    ],
+    "workflows": [
+      {
+        "id": "setup_runtime",
+        "title": "Setup & Runtime Doctor",
+        "kind": "runtime_readiness",
+        "status": "active",
+        "enabled": true,
+        "analysis_report_required": false,
+        "health_inclusion_policy": "runtime_prerequisite_only",
+        "requirements": null,
+        "parent_workflow_id": null,
+        "panel_id": null,
+        "group": "Project Review",
+        "endpoint": null,
+        "action_label": null,
+        "safety_note": "",
+        "supported_next_actions": [],
+        "manual_only_actions": [],
+        "forbidden_actions": [],
+        "metadata": {}
+      },
+      {
+        "id": "project_health",
+        "title": "Health",
+        "kind": "aggregator",
+        "status": "active",
+        "enabled": true,
+        "analysis_report_required": false,
+        "health_inclusion_policy": "primary_aggregator",
+        "requirements": null,
+        "parent_workflow_id": null,
+        "panel_id": "producer_health",
+        "group": "Project Review",
+        "endpoint": "/api/workflows/project-health",
+        "action_label": "Run Health Scan",
+        "safety_note": "Read-only overview across current Runtime workflow reports.",
+        "supported_next_actions": [],
+        "manual_only_actions": [],
+        "forbidden_actions": [],
+        "metadata": {}
+      },
+      {
+        "id": "mix_review",
+        "title": "Mix Review",
+        "kind": "analysis_workflow",
+        "status": "active",
+        "enabled": true,
+        "analysis_report_required": true,
+        "health_inclusion_policy": "included_when_current_report_available",
+        "requirements": null,
+        "parent_workflow_id": null,
+        "panel_id": "producer_mix_review",
+        "group": "Project Review",
+        "endpoint": "/api/workflows/mix-review",
+        "action_label": "Run Mix Review",
+        "safety_note": "Read-only mixer review. No project changes are made.",
+        "supported_next_actions": [],
+        "manual_only_actions": [],
+        "forbidden_actions": [],
+        "metadata": {}
+      },
+      {
+        "id": "routing_audit",
+        "title": "Routing Audit",
+        "kind": "analysis_workflow",
+        "status": "active",
+        "enabled": true,
+        "analysis_report_required": true,
+        "health_inclusion_policy": "included_when_current_report_available",
+        "requirements": null,
+        "parent_workflow_id": null,
+        "panel_id": "producer_routing",
+        "group": "Project Review",
+        "endpoint": "/api/workflows/routing-audit",
+        "action_label": "Run Routing Audit",
+        "safety_note": "Read-only routing audit. Cleanup remains proposal-first.",
+        "supported_next_actions": [],
+        "manual_only_actions": [],
+        "forbidden_actions": [],
+        "metadata": {}
+      },
+      {
+        "id": "low_end_analysis",
+        "title": "Low-End Safety Check",
+        "kind": "analysis_workflow",
+        "status": "active",
+        "enabled": true,
+        "analysis_report_required": true,
+        "health_inclusion_policy": "included_when_current_report_available",
+        "requirements": null,
+        "parent_workflow_id": null,
+        "panel_id": "producer_low_end",
+        "group": "Project Review",
+        "endpoint": "/api/workflows/low-end-analysis",
+        "action_label": "Run Low-End Safety Check",
+        "safety_note": "Metadata-based read-only low-end safety review.",
+        "supported_next_actions": [],
+        "manual_only_actions": [],
+        "forbidden_actions": [],
+        "metadata": {}
+      },
+      {
+        "id": "project_organizer",
+        "title": "Organizer",
+        "kind": "analysis_workflow",
+        "status": "active",
+        "enabled": true,
+        "analysis_report_required": true,
+        "health_inclusion_policy": "included_when_current_report_available",
+        "requirements": null,
+        "parent_workflow_id": null,
+        "panel_id": "producer_organizer",
+        "group": "Project Review",
+        "endpoint": "/api/workflows/project-organizer",
+        "action_label": "Run Organizer",
+        "safety_note": "Read-only scan. Cleanup requires an approved safe-write tool.",
+        "supported_next_actions": [],
+        "manual_only_actions": [],
+        "forbidden_actions": [],
+        "metadata": {}
+      },
+      {
+        "id": "preflight",
+        "title": "Preflight",
+        "kind": "analysis_workflow",
+        "status": "active",
+        "enabled": true,
+        "analysis_report_required": true,
+        "health_inclusion_policy": "included_when_enabled_and_current_report_available",
+        "requirements": {
+          "workflow_id": "preflight",
+          "required": [
+            {
+              "id": "fl_session_alive",
+              "observation_kind": "fl_session_alive",
+              "required": true,
+              "evidence_mode": "static_snapshot",
+              "invalidates_on": [],
+              "ttl_seconds": 2
+            },
+            {
+              "id": "static_project_snapshot",
+              "observation_kind": "static_project_snapshot",
+              "required": true,
+              "evidence_mode": "static_snapshot",
+              "invalidates_on": [],
+              "ttl_seconds": 60
+            }
+          ],
+          "optional": [
+            {
+              "id": "live_meter_window",
+              "observation_kind": "live_meter_window",
+              "required": false,
+              "evidence_mode": "live_runtime",
+              "invalidates_on": [],
+              "ttl_seconds": 2
+            }
+          ]
+        },
+        "parent_workflow_id": null,
+        "panel_id": "producer_preflight",
+        "group": "Project Review",
+        "endpoint": "/api/workflows/preflight",
+        "action_label": "Run Preflight",
+        "safety_note": "Read-only export-readiness review. Render, save, export, and mastering remain manual.",
+        "supported_next_actions": [
+          "run_mix_review",
+          "review_safe_proposals"
+        ],
+        "manual_only_actions": [
+          "render",
+          "save",
+          "export",
+          "mastering",
+          "audio_clip_stretch_mode",
+          "audio_clip_normalize"
+        ],
+        "forbidden_actions": [
+          "automatic_render",
+          "automatic_save_as"
+        ],
+        "metadata": {}
+      },
+      {
+        "id": "jam_2_project",
+        "title": "Structure Jammed Project",
+        "kind": "organizer_subworkflow",
+        "status": "planned",
+        "enabled": false,
+        "analysis_report_required": true,
+        "health_inclusion_policy": "excluded",
+        "requirements": {
+          "workflow_id": "jam_2_project",
+          "required": [
+            {
+              "id": "fl_session_alive",
+              "observation_kind": "fl_session_alive",
+              "required": true,
+              "evidence_mode": "static_snapshot",
+              "invalidates_on": [],
+              "ttl_seconds": 2
+            },
+            {
+              "id": "static_project_snapshot",
+              "observation_kind": "static_project_snapshot",
+              "required": true,
+              "evidence_mode": "static_snapshot",
+              "invalidates_on": [],
+              "ttl_seconds": 60
+            },
+            {
+              "id": "patterns_snapshot",
+              "observation_kind": "patterns_snapshot",
+              "required": true,
+              "evidence_mode": "static_snapshot",
+              "invalidates_on": [],
+              "ttl_seconds": 60
+            },
+            {
+              "id": "playlist_tracks_snapshot",
+              "observation_kind": "playlist_tracks_snapshot",
+              "required": true,
+              "evidence_mode": "static_snapshot",
+              "invalidates_on": [],
+              "ttl_seconds": 60
+            }
+          ],
+          "optional": []
+        },
+        "parent_workflow_id": "project_organizer",
+        "panel_id": "producer_jam_2_project",
+        "group": "Roadmap",
+        "endpoint": null,
+        "action_label": null,
+        "safety_note": "Planned for v3.1+. No Control Center action is available in v3.0.",
+        "supported_next_actions": [
+          "run_project_organizer",
+          "review_safe_proposals"
+        ],
+        "manual_only_actions": [
+          "confirm_sections",
+          "confirm_musical_roles"
+        ],
+        "forbidden_actions": [
+          "playlist_clip_editing",
+          "automatic_arrangement",
+          "destructive_cleanup"
+        ],
+        "metadata": {}
+      },
+      {
+        "id": "sidechain_routing_check",
+        "title": "Sidechain Routing Check",
+        "kind": "analysis_workflow",
+        "status": "planned",
+        "enabled": false,
+        "analysis_report_required": true,
+        "health_inclusion_policy": "excluded",
+        "requirements": {
+          "workflow_id": "sidechain_routing_check",
+          "required": [
+            {
+              "id": "fl_session_alive",
+              "observation_kind": "fl_session_alive",
+              "required": true,
+              "evidence_mode": "static_snapshot",
+              "invalidates_on": [],
+              "ttl_seconds": 2
+            },
+            {
+              "id": "routing_snapshot",
+              "observation_kind": "routing_snapshot",
+              "required": true,
+              "evidence_mode": "static_snapshot",
+              "invalidates_on": [],
+              "ttl_seconds": 60
+            }
+          ],
+          "optional": []
+        },
+        "parent_workflow_id": null,
+        "panel_id": "producer_sidechaining",
+        "group": "Roadmap",
+        "endpoint": null,
+        "action_label": null,
+        "safety_note": "Planned after v3.0. Plugin detector settings remain a manual check.",
+        "supported_next_actions": [
+          "inspect_loaded_plugin"
+        ],
+        "manual_only_actions": [
+          "verify_plugin_sidechain_input"
+        ],
+        "forbidden_actions": [
+          "plugin_loading",
+          "unknown_parameter_writes"
+        ],
+        "metadata": {}
+      },
+      {
+        "id": "plugin_assistant",
+        "title": "Plugin Assistant",
+        "kind": "assistant_workflow",
+        "status": "planned",
+        "enabled": false,
+        "analysis_report_required": true,
+        "health_inclusion_policy": "excluded",
+        "requirements": {
+          "workflow_id": "plugin_assistant",
+          "required": [
+            {
+              "id": "fl_session_alive",
+              "observation_kind": "fl_session_alive",
+              "required": true,
+              "evidence_mode": "static_snapshot",
+              "invalidates_on": [],
+              "ttl_seconds": 2
+            },
+            {
+              "id": "mixer_track_target",
+              "observation_kind": "mixer_track_target",
+              "required": true,
+              "evidence_mode": "manual_check",
+              "invalidates_on": []
+            }
+          ],
+          "optional": []
+        },
+        "parent_workflow_id": null,
+        "panel_id": "producer_plugin_assistant",
+        "group": "Roadmap",
+        "endpoint": null,
+        "action_label": null,
+        "safety_note": "Planned after v3.0. Plugin loading and unknown parameter writes remain manual.",
+        "supported_next_actions": [
+          "list_loaded_plugins",
+          "inspect_named_parameters"
+        ],
+        "manual_only_actions": [
+          "choose_mixer_track",
+          "load_plugin"
+        ],
+        "forbidden_actions": [
+          "plugin_loading",
+          "plugin_insertion"
+        ],
+        "metadata": {}
+      },
+      {
+        "id": "preset_assistant",
+        "title": "Preset Assistant",
+        "kind": "assistant_workflow",
+        "status": "planned",
+        "enabled": false,
+        "analysis_report_required": true,
+        "health_inclusion_policy": "excluded",
+        "requirements": {
+          "workflow_id": "preset_assistant",
+          "required": [
+            {
+              "id": "local_preset_library",
+              "observation_kind": "local_preset_library",
+              "required": true,
+              "evidence_mode": "static_snapshot",
+              "invalidates_on": []
+            }
+          ],
+          "optional": []
+        },
+        "parent_workflow_id": null,
+        "panel_id": "producer_preset_assistant",
+        "group": "Roadmap",
+        "endpoint": null,
+        "action_label": null,
+        "safety_note": "Planned after v3.0. Preset loading remains manual.",
+        "supported_next_actions": [
+          "list_preset_names",
+          "suggest_by_name"
+        ],
+        "manual_only_actions": [
+          "load_preset",
+          "audition_preset"
+        ],
+        "forbidden_actions": [
+          "automatic_preset_loading"
+        ],
+        "metadata": {}
+      },
+      {
+        "id": "audio_evidence",
+        "title": "Audio Evidence",
+        "kind": "evidence_worker",
+        "status": "planned",
+        "enabled": false,
+        "analysis_report_required": true,
+        "health_inclusion_policy": "excluded",
+        "requirements": {
+          "workflow_id": "audio_evidence",
+          "required": [
+            {
+              "id": "rendered_audio_features",
+              "observation_kind": "rendered_audio_features",
+              "required": true,
+              "evidence_mode": "rendered_audio",
+              "invalidates_on": [
+                "file_hash_change"
+              ]
+            }
+          ],
+          "optional": []
+        },
+        "parent_workflow_id": null,
+        "panel_id": null,
+        "group": "Project Review",
+        "endpoint": null,
+        "action_label": null,
+        "safety_note": "",
+        "supported_next_actions": [
+          "link_evidence_to_workflow"
+        ],
+        "manual_only_actions": [
+          "select_audio_file",
+          "render_audio_in_fl_studio"
+        ],
+        "forbidden_actions": [
+          "automatic_render",
+          "full_mixer_stem_batch"
+        ],
+        "metadata": {
+          "accepted_evidence_kinds": [
+            "rendered_master",
+            "stem",
+            "candidate"
+          ],
+          "short_file_limit_seconds": 180
+        }
+      }
+    ],
+    "core_state": [
+      "RuntimeSession",
+      "ProjectContext",
+      "ObservationStore",
+      "AnalysisBroker",
+      "ReportStore",
+      "WorkflowRegistry"
+    ],
+    "rpc_transport": "line-delimited JSON over local TCP to daemon, validated by runtime.protocol"
+  },
+  "data_and_state": [
+    {
+      "name": "Knowledgebase",
+      "paths": [
+        "knowledgebase/**/*.md",
+        "knowledgebase/**/*.json"
+      ],
+      "purpose": "Human and structured policy/calibration/template source of truth"
+    },
+    {
+      "name": "MCP context docs/prompts",
+      "paths": [
+        "src/fls_pilot/context/docs",
+        "src/fls_pilot/context/prompts"
+      ],
+      "purpose": "Packaged agent resources/prompts"
+    },
+    {
+      "name": "Change log",
+      "paths": [
+        "~/.fls-pilot/changelog.jsonl"
+      ],
+      "purpose": "Rollback and audit history for persistent writes"
+    },
+    {
+      "name": "Control Center static assets",
+      "paths": [
+        "src/fls_pilot/control_center_static"
+      ],
+      "purpose": "Browser UI"
+    },
+    {
+      "name": "Piano Roll bridge files",
+      "paths": [
+        "fl_pyscripts/*.pyscript",
+        "generated .pyscript paths"
+      ],
+      "purpose": "Manual/user-triggered Piano Roll changes"
+    }
+  ],
+  "safety_model": {
+    "classes": [
+      "read-only",
+      "transient",
+      "server-state",
+      "external-write",
+      "write-safe-required",
+      "forbidden"
+    ],
+    "default_write_contract": [
+      "scan/read-only first",
+      "one reversible proposal",
+      "explicit approval before persistent write",
+      "scoped snapshot",
+      "smallest practical write",
+      "readback where supported",
+      "changelog entry",
+      "rollback path",
+      "stop after verified change"
+    ],
+    "forbidden_or_out_of_scope": [
+      "raw FL API escape hatches",
+      "plugin loading/insertion",
+      "playlist clip placement/movement/deletion",
+      "pattern/clip deletion",
+      "project open/new/save-as/render automation",
+      "broad UI automation",
+      "full-FLP restore claims"
+    ],
+    "notable_risk_findings": [
+      {
+        "id": "controller_bridge_eval",
+        "severity": "high",
+        "path": "fl_controller/FLStudioPilot/device_FLStudioPilot.py",
+        "line": 2170,
+        "finding": "Controller handler map contains bridge_eval using Python eval(expr). It is not defined in protocol.py command constants and is not exposed by normal MCP tools, but if reachable over the bridge it is a raw execution escape hatch and conflicts with the documented no-raw-escape-hatch safety posture."
+      }
+    ]
+  },
+  "import_graph_top": [
+    {
+      "from": "fls_pilot.server",
+      "to": "fls_pilot",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.server",
+      "to": "fls_pilot.connection",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.server",
+      "to": "fls_pilot.protocol",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.server",
+      "to": "fls_pilot.runtime_config",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.server",
+      "to": "fls_pilot.tools",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.control_center",
+      "to": "fls_pilot",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.control_center",
+      "to": "fls_pilot.analysis",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.control_center",
+      "to": "fls_pilot.analysis.live",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.control_center",
+      "to": "fls_pilot.connection",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.control_center",
+      "to": "fls_pilot.music",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.control_center",
+      "to": "fls_pilot.runtime.client",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.control_center",
+      "to": "fls_pilot.runtime_config",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.control_center",
+      "to": "fls_pilot.status",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.control_center",
+      "to": "fls_pilot.workflows.registry",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.__init__",
+      "to": "fls_pilot.connection",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.__init__",
+      "to": "fls_pilot.protocol",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.prompts",
+      "to": "fls_pilot.tools.workflow_context",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.operations",
+      "to": "fls_pilot",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.connection",
+      "to": "fls_pilot",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.connection",
+      "to": "fls_pilot.pianoroll",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.connection",
+      "to": "fls_pilot.protocol",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.pianoroll",
+      "to": "fls_pilot.pyscript_gen",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.pianoroll",
+      "to": "fls_pilot.pyscript_trigger",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.safety",
+      "to": "fls_pilot",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.safety",
+      "to": "fls_pilot.connection",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.safety",
+      "to": "fls_pilot.protocol",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.safety",
+      "to": "fls_pilot.runtime.invalidation",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.doctor",
+      "to": "fls_pilot",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.doctor",
+      "to": "fls_pilot.runtime_config",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.doctor",
+      "to": "fls_pilot.server",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.daemon",
+      "to": "fls_pilot",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.daemon",
+      "to": "fls_pilot.analysis.broker",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.daemon",
+      "to": "fls_pilot.analysis.live",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.daemon",
+      "to": "fls_pilot.analysis.schema",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.daemon",
+      "to": "fls_pilot.connection",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.daemon",
+      "to": "fls_pilot.pianoroll",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.daemon",
+      "to": "fls_pilot.runtime.contracts",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.daemon",
+      "to": "fls_pilot.runtime.core",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.daemon",
+      "to": "fls_pilot.runtime.protocol",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.daemon",
+      "to": "fls_pilot.runtime.workflow_runner",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.daemon",
+      "to": "fls_pilot.runtime_config",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.daemon",
+      "to": "fls_pilot.workflows.registry",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.status",
+      "to": "fls_pilot",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.music.mix_doctor",
+      "to": "fls_pilot",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.music.mix_doctor",
+      "to": "fls_pilot.analysis.fl_reads",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.music.mix_doctor",
+      "to": "fls_pilot.connection",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.music.mix_doctor",
+      "to": "fls_pilot.music.levels",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.music.levels",
+      "to": "fls_pilot",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.tools.effects",
+      "to": "fls_pilot",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.tools.effects",
+      "to": "fls_pilot.connection",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.tools.effects",
+      "to": "fls_pilot.tools.registration",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.tools.effects",
+      "to": "fls_pilot.tools.targets",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.tools.mixer_core",
+      "to": "fls_pilot",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.tools.mixer_core",
+      "to": "fls_pilot.connection",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.tools.mixer_core",
+      "to": "fls_pilot.music",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.tools.mixer_core",
+      "to": "fls_pilot.tools.registration",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.tools.mixer_core",
+      "to": "fls_pilot.tools.targets",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.tools.chains",
+      "to": "fls_pilot",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.tools.chains",
+      "to": "fls_pilot.connection",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.tools.chains",
+      "to": "fls_pilot.music",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.tools.color",
+      "to": "fls_pilot",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.tools.color",
+      "to": "fls_pilot.connection",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.tools.color",
+      "to": "fls_pilot.tools.bulk",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.tools.targets",
+      "to": "fls_pilot",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.tools.compose",
+      "to": "fls_pilot",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.tools.compose",
+      "to": "fls_pilot.connection",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.tools.compose",
+      "to": "fls_pilot.music",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.tools.compose",
+      "to": "fls_pilot.music.scales",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.tools.transport",
+      "to": "fls_pilot",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.tools.transport",
+      "to": "fls_pilot.connection",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.tools.transport",
+      "to": "fls_pilot.tools.registration",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.tools.bulk",
+      "to": "fls_pilot",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.tools.bulk",
+      "to": "fls_pilot.connection",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.tools.bulk",
+      "to": "fls_pilot.music.mix_doctor",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.tools.presets",
+      "to": "fls_pilot.music",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.tools.batch",
+      "to": "fls_pilot",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.tools.batch",
+      "to": "fls_pilot.connection",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.tools.channel",
+      "to": "fls_pilot",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.tools.channel",
+      "to": "fls_pilot.connection",
+      "count": 1
+    },
+    {
+      "from": "fls_pilot.tools.__init__",
+      "to": "fls_pilot.tools",
+      "count": 1
+    }
+  ],
+  "external_imports_observed": {
+    "fastmcp": 45,
+    "pydantic": 26,
+    "pytest": 21,
+    "numpy": 5,
+    "soundfile": 4,
+    "test_runtime_core": 3,
+    "mido": 3,
+    "ast": 3,
+    "mcp": 3,
+    "audit_tool_safety": 2,
+    "anyio": 2,
+    "jsonschema": 1,
+    "tomllib": 1,
+    "ctypes": 1,
+    "pyautogui": 1,
+    "ipaddress": 1,
+    "secrets": 1,
+    "librosa": 1,
+    "torch": 1,
+    "torchcrepe": 1
+  },
+  "quality_observations": [
+    "Strong separation between MCP tool surface, protocol bridge, safety contract, runtime analysis, and FL controller script.",
+    "Operation registry makes persistent writes declarative and auditable with restore builders.",
+    "Runtime protocol rejects raw command/code/script fields for daemon RPC.",
+    "Knowledgebase and policy files reduce guessed DAW/plugin ranges.",
+    "Controller script is large and central; consider splitting if FL sandbox packaging allows it, or generate a command inventory test from protocol.py to avoid handler drift.",
+    "server.json version (3.0.0b3) differs from pyproject/README version (3.0.0b4)."
+  ]
+}

@@ -7,10 +7,8 @@
 Lives at:
     Documents/Image-Line/FL Studio/Settings/Hardware/FLStudioPilot/device_FLStudioPilot.py
 
-v0.1 tried to use a file-based JSON queue. That doesn't work: FL's
-controller-script Python sandbox blocks every form of file write (open(),
-os.open, os.makedirs all raise SystemError or TypeError with no useful
-message). This v0.2 rewrite uses MIDI SysEx for both directions.
+This v3.0 rewrite uses MIDI SysEx in both directions, implementing strict byte governance
+and improvements to performance and safety.
 
 To activate in FL:
   1. Create two loopMIDI ports (Windows) or two IAC Driver buses (macOS):
