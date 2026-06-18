@@ -41,19 +41,6 @@ def aggregate_project_health(
         )
         for workflow, _title in WORKFLOWS
     }
-    audio_evidence = (
-        store.get_latest_compatible("audio_evidence", project_context)
-        if project_context is not None
-        else store.get_latest_report("audio_evidence")
-    )
-    audio_links = set(
-        str(value)
-        for value in (
-            audio_evidence.metadata.get("workflow_links", ())
-            if audio_evidence is not None
-            else ()
-        )
-    )
     for report in reports.values():
         if report and report.project_fingerprint not in {None, "unknown"}:
             fingerprints.add(str(report.project_fingerprint))
@@ -92,24 +79,6 @@ def aggregate_project_health(
             "findings": [finding.to_dict() for finding in report.findings],
             "next_actions": [dict(row) for row in report.next_actions],
         }
-        if audio_evidence is not None and workflow in audio_links:
-            section["audio_evidence"] = {
-                "report_id": audio_evidence.report_id,
-                "evidence_mode": audio_evidence.evidence_mode,
-                "file_sha256": (
-                    (audio_evidence.metadata.get("file") or {}).get("sha256")
-                ),
-                "confidence_score": audio_evidence.confidence_score,
-            }
-            section["confidence_score"] = max(
-                report.confidence_score,
-                audio_evidence.confidence_score,
-            )
-            section["coverage"] = {
-                **coverage.to_dict(),
-                "optional_available": coverage.optional_available + 1,
-                "evidence_upgrade": "rendered_audio",
-            }
         if freshness != "fresh":
             section["reason"] = _section_reason(
                 report,
@@ -137,14 +106,8 @@ def aggregate_project_health(
     )
     overall_confidence = round(
         sum(
-            (
-                max(report.confidence_score, audio_evidence.confidence_score)
-                if audio_evidence is not None and workflow in audio_links
-                else report.confidence_score
-            )
-            if report in usable_reports
-            else 0
-            for workflow, report in reports.items()
+            report.confidence_score if report in usable_reports else 0
+            for report in reports.values()
             if report is not None
         )
         / len(WORKFLOWS)
@@ -175,19 +138,6 @@ def aggregate_project_health(
             project_context.project_scope_id if project_context else "unknown"
         ),
         "snapshot_id": project_context.snapshot_id if project_context else "unknown",
-        "evidence_upgrades": (
-            [
-                {
-                    "workflow": workflow,
-                    "report_id": audio_evidence.report_id,
-                    "evidence_mode": audio_evidence.evidence_mode,
-                }
-                for workflow in sorted(audio_links)
-                if workflow in reports
-            ]
-            if audio_evidence is not None
-            else []
-        ),
     }
 
 

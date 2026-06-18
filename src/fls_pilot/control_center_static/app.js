@@ -59,10 +59,10 @@ const DEFAULT_WORKFLOW_CATALOG = [
   { id: "low_end_analysis", panel_id: "producer_low_end", title: "Low-End Analysis", group: "Project Review", maturity: "read_only", enabled: true, endpoint: "/api/workflows/low-end-analysis", action_label: "Run Low-End Analysis", safety_note: "Read-only low-end and stereo safety review." },
   { id: "project_organizer", panel_id: "producer_organizer", title: "Organizer", group: "Project Review", maturity: "read_only", enabled: true, endpoint: "/api/workflows/project-organizer", action_label: "Run Organizer", safety_note: "Read-only scan. Any cleanup requires an approved safe-write tool." },
   { id: "preflight", panel_id: "producer_preflight", title: "Preflight", group: "Project Review", maturity: "read_only", enabled: true, endpoint: "/api/workflows/preflight", action_label: "Run Preflight", safety_note: "Read-only export-readiness review. Render, save, export, and mastering remain manual." },
-  { id: "jam_2_project", panel_id: "producer_jam_2_project", title: "Structure Jammed Project", group: "Project Review", maturity: "read_only", enabled: true, endpoint: "/api/workflows/jam-2-project", action_label: "Build Structure Plan", safety_note: "Read-only structure plan. Playlist clips are not moved, created, or deleted." },
-  { id: "sidechain_routing_check", panel_id: "producer_sidechaining", title: "Sidechain Routing Check", group: "Project Review", maturity: "read_only", enabled: true, endpoint: "/api/workflows/sidechain-routing-check", action_label: "Check Sidechain Routing", safety_note: "Read-only routing evidence. Plugin detector settings remain a manual check." },
-  { id: "plugin_assistant", panel_id: "producer_plugin_assistant", title: "Plugin Assistant", group: "Assistants", maturity: "read_only", enabled: true, endpoint: "/api/workflows/plugin-assistant", action_label: "Inspect Plugin Target", safety_note: "Inspects already-loaded plugins only. Plugin loading remains manual." },
-  { id: "preset_assistant", panel_id: "producer_preset_assistant", title: "Preset Assistant", group: "Assistants", maturity: "read_only", enabled: true, endpoint: "/api/workflows/preset-assistant", action_label: "Scan Preset Names", safety_note: "Reads local preset names. Suggestions are name-based and preset loading remains manual." }
+  { id: "jam_2_project", panel_id: "producer_jam_2_project", title: "Jam 2 Project", group: "Roadmap", maturity: "planned", enabled: false, endpoint: null, action_label: null, safety_note: "Planned for v3.1+. No Control Center action is available in v3.0." },
+  { id: "sidechain_routing_check", panel_id: "producer_sidechaining", title: "Sidechain Routing Check", group: "Roadmap", maturity: "planned", enabled: false, endpoint: null, action_label: null, safety_note: "Planned after v3.0. Plugin detector settings remain a manual check." },
+  { id: "plugin_assistant", panel_id: "producer_plugin_assistant", title: "Plugin Assistant", group: "Roadmap", maturity: "planned", enabled: false, endpoint: null, action_label: null, safety_note: "Planned after v3.0. Plugin loading remains manual." },
+  { id: "preset_assistant", panel_id: "producer_preset_assistant", title: "Preset Assistant", group: "Roadmap", maturity: "planned", enabled: false, endpoint: null, action_label: null, safety_note: "Planned after v3.0. Preset loading remains manual." }
 ];
 
 // ─── Setup Doctor Layers ──────────────────────────────────────────────────────
@@ -314,7 +314,7 @@ async function runRuntimeProductWorkflow(workflowId) {
 
 function renderRuntimeProductPanels() {
   for (const workflow of workflowCatalog()) {
-    if (["preflight", "jam_2_project", "sidechain_routing_check", "plugin_assistant", "preset_assistant"].includes(workflow.id)) {
+    if (workflow.id === "preflight") {
       renderRuntimeProductPanel(workflow.id);
     }
   }
@@ -4321,7 +4321,7 @@ function selectPanel(targetId) {
   if (targetId === "producer_organizer") renderProjectOrganizer();
   if (targetId === "producer_health") renderProjectHealth();
   const runtimeWorkflow = workflowByPanel(targetId);
-  if (runtimeWorkflow && ["preflight", "jam_2_project", "sidechain_routing_check", "plugin_assistant", "preset_assistant"].includes(runtimeWorkflow.id)) {
+  if (runtimeWorkflow?.id === "preflight") {
     renderRuntimeProductPanel(runtimeWorkflow.id);
   }
   if (targetId === "producer_roadmap") renderPlannedWorkflows();

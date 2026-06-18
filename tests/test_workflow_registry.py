@@ -40,6 +40,10 @@ def test_default_catalog_uses_canonical_ids_and_backend_health() -> None:
     }
     assert catalog["project_health"]["endpoint"] == "/api/workflows/project-health"
     assert catalog["preflight"]["enabled"] is True
-    assert catalog["sidechain_routing_check"]["enabled"] is True
-    assert catalog["plugin_assistant"]["health_inclusion_policy"] == "optional_context_report"
+    assert catalog["sidechain_routing_check"]["enabled"] is False
+    assert catalog["sidechain_routing_check"]["endpoint"] is None
+    assert catalog["plugin_assistant"]["enabled"] is False
+    assert catalog["plugin_assistant"]["health_inclusion_policy"] == "excluded"
+    assert catalog["jam_2_project"]["enabled"] is False
+    assert catalog["jam_2_project"]["group"] == "Roadmap"
     assert "sidechaining" not in catalog

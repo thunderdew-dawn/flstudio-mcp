@@ -1,18 +1,18 @@
 # fls-pilot
 
-![version](https://img.shields.io/static/v1?label=version&message=v3-beta&color=blue)
+![version](https://img.shields.io/badge/version-3.0.0b4-blue)
 ![release](https://img.shields.io/badge/release-prerelease-orange)
 ![branch](https://img.shields.io/badge/branch-v3%2Falpha-blue)
 ![status](https://img.shields.io/badge/status-beta-yellow)
 [![CI](https://github.com/thunderdew-dawn/fls-pilot/actions/workflows/ci.yml/badge.svg)](https://github.com/thunderdew-dawn/fls-pilot/actions/workflows/ci.yml)
 ![license](https://img.shields.io/badge/license-MIT-green)
 
-![Python](https://img.shields.io/badge/python-3.10+-blue)
+![Python](https://img.shields.io/badge/python-3.10--3.12-blue)
 ![Windows](https://img.shields.io/badge/Windows-10%2F11-0078D6?logo=windows&logoColor=white)
 ![macOS](https://img.shields.io/badge/macOS-12%2B-000000?logo=apple&logoColor=white)
 ![FL Studio](https://img.shields.io/badge/FL%20Studio-2025%2B-orange)
 
-[![Documentation Status](https://readthedocs.org/projects/fl-studio-pilot/badge/?version=v3-beta)](https://fl-studio-pilot.readthedocs.io/en/v3-beta/)
+[![Documentation Status](https://readthedocs.org/projects/fl-studio-pilot/badge/?version=latest)](https://fl-studio-pilot.readthedocs.io/en/latest/)
 
 ![fls-pilot](docs/assets/fls-pilot-logo-with-title-and-slogan.png)
 
@@ -60,8 +60,9 @@ Built around a safety-first model: scan before changing, explain findings in pla
 
 - Windows 10/11 or macOS 12+
   - Optional for Windows: ffmpeg on PATH (for MP3 analysis)
-- FL Studio 20.7+ with the FLStudioPilot controller script configured
-- Python 3.10+
+- FL Studio 20.7+ with the FLStudioPilot controller script configured.
+  Current compatibility testing targets FL Studio 2025+.
+- Python 3.10-3.12
 - Two virtual MIDI ports named exactly:
   - `FLStudioPilot RX`
   - `FLStudioPilot TX`
@@ -143,7 +144,7 @@ part of the public ReadTheDocs site.
 
 Public documentation:
 
-<https://fl-studio-pilot.readthedocs.io/en/v3-beta/>
+<https://fl-studio-pilot.readthedocs.io/en/latest/>
 
 Useful local pages:
 

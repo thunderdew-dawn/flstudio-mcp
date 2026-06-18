@@ -31,11 +31,12 @@ def test_v3_runtime_workflow_copy_exposes_evidence_limits() -> None:
 
     assert "Preflight <span class=\"badge badge-ok\">Read-only</span>" in html
     assert "Level evidence, render settings, and mastering remain separate checks." in html
-    assert "Verify plugin detector inputs" in html
-    assert "Loading plugins and guessing parameter values are not supported." in html
+    assert "Jam 2 Project <span class=\"badge badge-planned\">Planned</span>" in html
+    assert "It is not part of the v3.0 release scope." in html
+    assert "/api/workflows/jam-2-project" not in js
+    assert "/api/workflows/plugin-assistant" not in js
     assert "rendered_master: \"Rendered master audio\"" in js
     assert "static_snapshot_only: \"Project metadata\"" in js
-    assert "Planned. No Control Center action is available yet." not in html
 
 
 def test_control_center_static_runtime_and_disconnect_behaviour() -> None:
@@ -157,7 +158,7 @@ function response(payload) {
 
 function baseStatus(daemonProcess, bridgeState = "unavailable") {
   return {
-    version: "3.0.0b3",
+    version: "3.0.0b4",
     readiness: { state: "blocked" },
     groups: {
       environment: [],

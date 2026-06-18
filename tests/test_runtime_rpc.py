@@ -46,6 +46,8 @@ def test_runtime_catalog_is_canonical(runtime_server) -> None:
     assert "sidechain_routing_check" in catalog
     assert "sidechaining" not in catalog
     assert catalog["project_health"]["status"] == "active"
+    assert catalog["sidechain_routing_check"]["status"] == "planned"
+    assert catalog["jam_2_project"]["enabled"] is False
 
 
 def test_unknown_runtime_operation_fails_without_bridge_access(
@@ -61,6 +63,25 @@ def test_unknown_runtime_operation_fails_without_bridge_access(
 
     with pytest.raises(ValueError, match="unknown Runtime operation"):
         client.request("raw.execute", {"code": "anything"})
+
+
+def test_planned_workflow_cannot_run_or_access_bridge(monkeypatch) -> None:
+    monkeypatch.setattr(
+        daemon,
+        "_get_bridge",
+        lambda: pytest.fail("planned workflow must not access the bridge"),
+    )
+
+    response = daemon._handle_request(
+        {
+            "op": "runtime",
+            "operation": "analysis.workflow.run",
+            "params": {"workflow_id": "jam_2_project", "inputs": {}},
+        }
+    )
+
+    assert response["ok"] is False
+    assert response["error"] == "workflow is not active: jam_2_project"
 
 
 def test_daemon_rejects_unknown_params_without_bridge_access(monkeypatch) -> None:

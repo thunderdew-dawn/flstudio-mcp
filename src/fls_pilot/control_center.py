@@ -354,7 +354,7 @@ def _run_runtime_product_workflow(
 ) -> dict[str, Any]:
     """Run a declared read-only Runtime workflow for a Control Center panel."""
     try:
-        return state.runtime_client.run_workflow(workflow_id, inputs=inputs)
+        return _runtime_client(state).run_workflow(workflow_id, inputs=inputs)
     except Exception as exc:
         return {
             "contract_version": "fls-pilot.analysis-report.v1",
@@ -833,7 +833,7 @@ def _run_mix_review(
     """Run the read-only Mix Review workflow for the Control Center UI."""
     if bridge_override is None and hasattr(state, "runtime_client"):
         try:
-            return state.runtime_client.run_workflow("mix_review")
+            return _runtime_client(state).run_workflow("mix_review")
         except Exception as exc:
             report = _mix_review_unavailable_report(f"{type(exc).__name__}: {exc}")
             analysis = _generic_analysis_report_from_legacy(
@@ -889,7 +889,7 @@ def _run_low_end_analysis(
     """Run the read-only Low-End Analysis workflow for the Control Center UI."""
     if bridge_override is None and hasattr(state, "runtime_client"):
         try:
-            return state.runtime_client.run_workflow("low_end_analysis")
+            return _runtime_client(state).run_workflow("low_end_analysis")
         except Exception as exc:
             report = _low_end_unavailable_report(f"{type(exc).__name__}: {exc}")
             analysis = _build_low_end_analysis_report(report)
@@ -1765,7 +1765,7 @@ def _run_project_organizer(
     """Run the read-only Project Organizer workflow for the Control Center UI."""
     if bridge_override is None and hasattr(state, "runtime_client"):
         try:
-            return state.runtime_client.run_workflow("project_organizer")
+            return _runtime_client(state).run_workflow("project_organizer")
         except Exception as exc:
             report = _project_organizer_unavailable_report(
                 f"{type(exc).__name__}: {exc}"
@@ -2895,7 +2895,7 @@ def _run_routing_audit(
     """Run the read-only Routing Audit workflow for the Control Center UI."""
     if bridge_override is None and hasattr(state, "runtime_client"):
         try:
-            return state.runtime_client.run_workflow("routing_audit")
+            return _runtime_client(state).run_workflow("routing_audit")
         except Exception as exc:
             report = _routing_unavailable_report(f"{type(exc).__name__}: {exc}")
             analysis = routing_analysis_report_from_legacy_payload(
@@ -3715,34 +3715,9 @@ def _handler_factory(state: ControlCenterState):
                 self._json(_run_routing_audit(state))
             elif self.path == "/api/workflows/preflight":
                 self._json(_run_runtime_product_workflow(state, "preflight"))
-            elif self.path == "/api/workflows/jam-2-project":
-                self._json(_run_runtime_product_workflow(state, "jam_2_project"))
-            elif self.path == "/api/workflows/sidechain-routing-check":
-                self._json(
-                    _run_runtime_product_workflow(
-                        state,
-                        "sidechain_routing_check",
-                    )
-                )
-            elif self.path == "/api/workflows/plugin-assistant":
-                self._json(
-                    _run_runtime_product_workflow(
-                        state,
-                        "plugin_assistant",
-                        inputs=body,
-                    )
-                )
-            elif self.path == "/api/workflows/preset-assistant":
-                self._json(
-                    _run_runtime_product_workflow(
-                        state,
-                        "preset_assistant",
-                        inputs=body,
-                    )
-                )
             elif self.path == "/api/workflows/project-health":
                 try:
-                    self._json(state.runtime_client.project_health())
+                    self._json(_runtime_client(state).project_health())
                 except Exception as exc:
                     self._json(
                         {
@@ -4408,6 +4383,15 @@ def _resolve_daemon_endpoint() -> tuple[str, int]:
 
 def _selected_daemon_endpoint(state: ControlCenterState) -> tuple[str, int]:
     return state.daemon_host, state.daemon_fallback_port or state.daemon_port
+
+
+def _runtime_client(state: ControlCenterState) -> RuntimeClient:
+    host, port = _selected_daemon_endpoint(state)
+    client = state.runtime_client
+    if client.host != host or client.port != port:
+        client = RuntimeClient(host, port)
+        state.runtime_client = client
+    return client
 
 
 def _console_script_path(script: str) -> str:

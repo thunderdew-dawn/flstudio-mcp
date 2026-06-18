@@ -85,7 +85,9 @@ def test_ui_payload_surfaces_catalog_next_action_and_service_actions():
     assert catalog["mix_review"]["enabled"] is True
     assert catalog["preflight"]["enabled"] is True
     assert catalog["preflight"]["endpoint"] == "/api/workflows/preflight"
-    assert catalog["plugin_assistant"]["endpoint"] == "/api/workflows/plugin-assistant"
+    assert catalog["plugin_assistant"]["enabled"] is False
+    assert catalog["plugin_assistant"]["endpoint"] is None
+    assert catalog["jam_2_project"]["group"] == "Roadmap"
     assert payload["next_action"]["target_panel"] == "producer_health"
     assert payload["next_action"]["action_label"] == "Open Health"
     assert payload["service_actions"]["daemon"]["stop"]["enabled"] is True
@@ -312,6 +314,26 @@ def test_client_snippets_use_daemon_fallback_port():
     assert snippets["claude"]["mcpServers"]["fls-pilot"]["env"]["FLS_PILOT_TCP_PORT"] == "9788"
     assert "9788" in snippets["terminal"]["daemon"]
     assert "FLS_PILOT_TCP_PORT=9788" in snippets["terminal"]["sse"]
+
+
+def test_runtime_client_follows_selected_daemon_fallback_port(monkeypatch):
+    state = _state()
+    state.daemon_fallback_port = 9788
+    created = []
+
+    class FakeRuntimeClient:
+        def __init__(self, host, port):  # noqa: ANN001
+            self.host = host
+            self.port = port
+            created.append((host, port))
+
+    monkeypatch.setattr(control_center, "RuntimeClient", FakeRuntimeClient)
+
+    client = control_center._runtime_client(state)
+
+    assert created == [("127.0.0.1", 9788)]
+    assert client is state.runtime_client
+    assert client.port == 9788
 
 
 def test_start_daemon_reports_non_daemon_port_conflict(monkeypatch):

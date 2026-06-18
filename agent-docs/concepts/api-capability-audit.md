@@ -334,16 +334,6 @@ dispatching persistent writes; approved organizer cleanup writes, including
 channel-routing cleanup, still route through operation-registry entries and
 `safety.safe_write_group`.
 
-The v3 Runtime product workflow activation was completed on 2026-06-18 without
-new FL Studio write capability claims. Preflight, Structure Jammed Project,
-Sidechain Routing Check, Plugin Assistant, and Preset Assistant are declared
-read-only Runtime workflows. Plugin inspection is limited to one explicitly
-targeted mixer track and already-loaded plugins; preset loading remains manual.
-`fl_analyze_audio` now emits file-hash-scoped Audio Evidence for user-selected
-rendered masters, stems, and candidates. Short stem/candidate evidence is capped
-at 180 seconds, never triggers FL render/save/export, and marks unavailable
-metrics explicitly when optional audio dependencies are absent.
-
 The Low-End/Stereo Safety Assistant was added on 2026-06-07 as a read-only Mix
 Review companion. `fl_review_low_end_stereo` uses the existing mixer snapshot
 path plus `mixer_list_tracks.stereo_sep` metadata from controller build

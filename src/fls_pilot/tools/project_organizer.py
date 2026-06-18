@@ -11,11 +11,11 @@ from typing import Annotated
 from fastmcp import FastMCP
 from pydantic import Field
 
-from .. import kb_policy, operations, protocol, safety
+from .. import kb_policy, operations, safety
 from .. import project_templates as templates
 from .. import workflow_report as wr
 from ..analysis import enrich_workflow_report_with_analysis, get_analysis_broker
-from ..connection import fetch_all_pages, get_bridge
+from ..connection import get_bridge
 from .channels import _find_free_mixer_track
 from .color import parse_color
 from .routing import _bus_rename_entry
@@ -269,7 +269,6 @@ def register(mcp: FastMCP) -> None:
         bridge = get_bridge()
         snapshot = get_analysis_broker().get_static_project_snapshot(bridge)
         chans = {"channels": list(snapshot.channels)}
-        routing = {"routing": list(snapshot.routing)}
         template_context = snapshot.template_context
 
         diagnostics = []
@@ -363,7 +362,6 @@ def register(mcp: FastMCP) -> None:
         snapshot = get_analysis_broker().get_static_project_snapshot(bridge)
         chans = list(snapshot.channels)
         mixer_tracks = list(snapshot.mixer_tracks)
-        routing = list(snapshot.routing)
         template_context = snapshot.template_context
 
         diagnostics = []

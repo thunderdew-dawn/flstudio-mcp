@@ -9,7 +9,7 @@ from ..analysis.broker import StaticProjectSnapshot, StaticSnapshotPolicy
 from ..analysis.live import LiveMeterPolicy, LiveMeterWindow
 from ..analysis.schema import AnalysisReport
 from ..connection import TCPBridge
-from .client import RuntimeClient
+from .client import RuntimeClient, RuntimeClientError
 
 _LOCAL_RUNTIME = None
 
@@ -77,27 +77,25 @@ class RuntimeReportStore:
     def add_report(self, report: AnalysisReport) -> AnalysisReport:
         client = _default_client()
         if client is not None:
-            try:
-                data = client.request(
-                    "analysis.report.add",
-                    {"report": report.to_dict()},
-                ).data
-                return AnalysisReport.from_dict(dict(data["report"]))
-            except Exception:
-                pass
+            data = client.request(
+                "analysis.report.add",
+                {"report": report.to_dict()},
+            ).data
+            return AnalysisReport.from_dict(dict(data["report"]))
         return local_runtime().add_report(report)
 
     def get_latest_report(self, workflow: str) -> AnalysisReport | None:
         client = _default_client()
         if client is not None:
-            try:
-                payload = client.latest_report(workflow)
-                return AnalysisReport.from_dict(payload) if payload else None
-            except Exception:
-                pass
+            payload = client.latest_report(workflow)
+            return AnalysisReport.from_dict(payload) if payload else None
         return local_runtime().latest_report(workflow)
 
     def clear(self) -> None:
+        if _default_client() is not None:
+            raise RuntimeClientError(
+                "Clearing canonical Runtime reports is not exposed over TCP."
+            )
         local_runtime().report_store.clear()
 
 

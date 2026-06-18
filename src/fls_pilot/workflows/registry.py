@@ -319,8 +319,8 @@ DEFAULT_WORKFLOW_REGISTRY = WorkflowRegistry(
             "jam_2_project",
             "Structure Jammed Project",
             "organizer_subworkflow",
-            "active",
-            "included_when_enabled_and_current_report_available",
+            "planned",
+            "excluded",
             True,
             requirements=WorkflowRequirementSet(
                 "jam_2_project",
@@ -333,12 +333,9 @@ DEFAULT_WORKFLOW_REGISTRY = WorkflowRegistry(
             ),
             parent_workflow_id="project_organizer",
             panel_id="producer_jam_2_project",
-            group="Project Review",
-            endpoint="/api/workflows/jam-2-project",
-            action_label="Build Structure Plan",
+            group="Roadmap",
             safety_note=(
-                "Read-only structure plan. Playlist clips are not moved, created, "
-                "or deleted."
+                "Planned for v3.1+. No Control Center action is available in v3.0."
             ),
             supported_next_actions=("run_project_organizer", "review_safe_proposals"),
             manual_only_actions=("confirm_sections", "confirm_musical_roles"),
@@ -352,8 +349,8 @@ DEFAULT_WORKFLOW_REGISTRY = WorkflowRegistry(
             "sidechain_routing_check",
             "Sidechain Routing Check",
             "analysis_workflow",
-            "active",
-            "included_when_enabled_and_current_report_available",
+            "planned",
+            "excluded",
             True,
             requirements=WorkflowRequirementSet(
                 "sidechain_routing_check",
@@ -363,12 +360,9 @@ DEFAULT_WORKFLOW_REGISTRY = WorkflowRegistry(
                 ),
             ),
             panel_id="producer_sidechaining",
-            group="Project Review",
-            endpoint="/api/workflows/sidechain-routing-check",
-            action_label="Check Sidechain Routing",
+            group="Roadmap",
             safety_note=(
-                "Read-only routing evidence. Plugin detector settings remain a "
-                "manual check."
+                "Planned after v3.0. Plugin detector settings remain a manual check."
             ),
             supported_next_actions=("inspect_loaded_plugin",),
             manual_only_actions=("verify_plugin_sidechain_input",),
@@ -378,8 +372,8 @@ DEFAULT_WORKFLOW_REGISTRY = WorkflowRegistry(
             "plugin_assistant",
             "Plugin Assistant",
             "assistant_workflow",
-            "active",
-            "optional_context_report",
+            "planned",
+            "excluded",
             True,
             requirements=WorkflowRequirementSet(
                 "plugin_assistant",
@@ -393,12 +387,10 @@ DEFAULT_WORKFLOW_REGISTRY = WorkflowRegistry(
                 ),
             ),
             panel_id="producer_plugin_assistant",
-            group="Assistants",
-            endpoint="/api/workflows/plugin-assistant",
-            action_label="Inspect Selected Track",
+            group="Roadmap",
             safety_note=(
-                "Inspects already-loaded plugins only. Plugin loading and unknown "
-                "parameter writes remain manual."
+                "Planned after v3.0. Plugin loading and unknown parameter writes "
+                "remain manual."
             ),
             supported_next_actions=("list_loaded_plugins", "inspect_named_parameters"),
             manual_only_actions=("choose_mixer_track", "load_plugin"),
@@ -408,20 +400,17 @@ DEFAULT_WORKFLOW_REGISTRY = WorkflowRegistry(
             "preset_assistant",
             "Preset Assistant",
             "assistant_workflow",
-            "active",
-            "optional_context_report",
+            "planned",
+            "excluded",
             True,
             requirements=WorkflowRequirementSet(
                 "preset_assistant",
                 (requirement("local_preset_library"),),
             ),
             panel_id="producer_preset_assistant",
-            group="Assistants",
-            endpoint="/api/workflows/preset-assistant",
-            action_label="Scan Preset Names",
+            group="Roadmap",
             safety_note=(
-                "Reads local preset names. Suggestions are name-based and preset "
-                "loading remains manual."
+                "Planned after v3.0. Preset loading remains manual."
             ),
             supported_next_actions=("list_preset_names", "suggest_by_name"),
             manual_only_actions=("load_preset", "audition_preset"),
@@ -431,8 +420,8 @@ DEFAULT_WORKFLOW_REGISTRY = WorkflowRegistry(
             "audio_evidence",
             "Audio Evidence",
             "evidence_worker",
-            "active",
-            "evidence_upgrade_when_available",
+            "planned",
+            "excluded",
             True,
             requirements=WorkflowRequirementSet(
                 "audio_evidence",

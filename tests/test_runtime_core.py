@@ -10,6 +10,8 @@ from fls_pilot.analysis import (
     StaticSnapshotPolicy,
 )
 from fls_pilot.runtime import RuntimeSession
+from fls_pilot.runtime import access as runtime_access
+from fls_pilot.runtime.client import RuntimeClientError
 from fls_pilot.runtime.core import RuntimeCore
 
 
@@ -123,3 +125,33 @@ def test_runtime_health_cannot_use_other_project_reports() -> None:
     assert health["project_scope_id"] == runtime.project_context.project_scope_id
     assert health["overall_health_score"] is None
     assert "mix_review" in health["missing_workflows"]
+
+
+def test_tcp_report_store_does_not_fall_back_to_process_local_state(
+    monkeypatch,
+) -> None:
+    def fail_request(*args, **kwargs):  # noqa: ANN002, ANN003, ANN202
+        raise RuntimeClientError("runtime unavailable")
+
+    def fail_local_runtime():
+        raise AssertionError("TCP mode must not use process-local Runtime state")
+
+    monkeypatch.setenv("FLS_PILOT_TRANSPORT", "tcp")
+    monkeypatch.setattr(
+        runtime_access.RuntimeClient,
+        "request",
+        fail_request,
+    )
+    monkeypatch.setattr(
+        runtime_access,
+        "local_runtime",
+        fail_local_runtime,
+    )
+    store = runtime_access.RuntimeReportStore()
+
+    try:
+        store.add_report(_report("mix_review", "fingerprint"))
+    except RuntimeClientError as exc:
+        assert str(exc) == "runtime unavailable"
+    else:
+        raise AssertionError("RuntimeClientError was not propagated")
