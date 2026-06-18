@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import collections
 import threading
-from typing import Any, Optional
 
 from .schema import AnalysisReport
 
@@ -24,7 +23,7 @@ class ReportStore:
         with self._lock:
             self._reports[report.workflow].append(report)
 
-    def get_latest_report(self, workflow: str) -> Optional[AnalysisReport]:
+    def get_latest_report(self, workflow: str) -> AnalysisReport | None:
         """Get the most recent report for a given workflow."""
         with self._lock:
             queue = self._reports.get(workflow)

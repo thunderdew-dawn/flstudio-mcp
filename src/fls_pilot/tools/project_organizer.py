@@ -14,6 +14,7 @@ from pydantic import Field
 from .. import kb_policy, operations, protocol, safety
 from .. import project_templates as templates
 from .. import workflow_report as wr
+from ..analysis import enrich_workflow_report_with_analysis, get_analysis_broker
 from ..connection import fetch_all_pages, get_bridge
 from .channels import _find_free_mixer_track
 from .color import parse_color
@@ -266,13 +267,10 @@ def register(mcp: FastMCP) -> None:
         Safety: Read-Only.
         """
         bridge = get_bridge()
-        chans = fetch_all_pages(bridge, protocol.CMD_CHANNEL_ROUTING_SUMMARY, "channels")
-        routing = fetch_all_pages(bridge, protocol.CMD_MIXER_GET_ROUTING_ALL, "routing")
-        template_context = templates.classify_topology(
-            routing.get("routing", []),
-            routing.get("routing", []),
-            chans.get("channels", []),
-        )
+        snapshot = get_analysis_broker().get_static_project_snapshot(bridge)
+        chans = {"channels": list(snapshot.channels)}
+        routing = {"routing": list(snapshot.routing)}
+        template_context = snapshot.template_context
 
         diagnostics = []
         unnamed = []
@@ -316,7 +314,7 @@ def register(mcp: FastMCP) -> None:
                     )
                 )
 
-        return wr.workflow_report(
+        payload = wr.workflow_report(
             workflow="project_organizer",
             title="Project Organization Analysis",
             mode="diagnostic",
@@ -347,6 +345,13 @@ def register(mcp: FastMCP) -> None:
             },
             safety={"read_only": True, "requires_explicit_approval": False},
         )
+        return enrich_workflow_report_with_analysis(
+            payload,
+            analysis_mode="static_snapshot",
+            evidence_mode="static_snapshot_only",
+            project_fingerprint=snapshot.project_fingerprint,
+            source_observations=snapshot.source_observation_ids,
+        )
 
     @mcp.tool(annotations={"title": "Plan Project Cleanup", **_RO})
     def fl_plan_project_cleanup() -> dict:
@@ -355,16 +360,11 @@ def register(mcp: FastMCP) -> None:
         Safety: Read-Only.
         """
         bridge = get_bridge()
-        chans = fetch_all_pages(bridge, protocol.CMD_CHANNEL_ROUTING_SUMMARY, "channels").get(
-            "channels", []
-        )
-        mixer_tracks = fetch_all_pages(bridge, protocol.CMD_MIXER_LIST_TRACKS, "tracks").get(
-            "tracks", []
-        )
-        routing = fetch_all_pages(bridge, protocol.CMD_MIXER_GET_ROUTING_ALL, "routing").get(
-            "routing", []
-        )
-        template_context = templates.classify_topology(mixer_tracks, routing, chans)
+        snapshot = get_analysis_broker().get_static_project_snapshot(bridge)
+        chans = list(snapshot.channels)
+        mixer_tracks = list(snapshot.mixer_tracks)
+        routing = list(snapshot.routing)
+        template_context = snapshot.template_context
 
         diagnostics = []
         proposed_changes = []
@@ -427,7 +427,7 @@ def register(mcp: FastMCP) -> None:
                 )
                 proposed_changes.append(_proposal_for_rename("mixer", idx, name, suggested))
 
-        return wr.workflow_report(
+        payload = wr.workflow_report(
             workflow="project_organizer",
             title="Project Cleanup Proposal",
             mode="proposal",
@@ -454,6 +454,13 @@ def register(mcp: FastMCP) -> None:
             ),
             metadata={"template_context": templates.compact_context(template_context)},
             safety={"read_only": True, "requires_explicit_approval": bool(proposed_changes)},
+        )
+        return enrich_workflow_report_with_analysis(
+            payload,
+            analysis_mode="static_snapshot",
+            evidence_mode="static_snapshot_only",
+            project_fingerprint=snapshot.project_fingerprint,
+            source_observations=snapshot.source_observation_ids,
         )
 
     @mcp.tool(annotations={"title": "Apply Project Cleanup Step", **_WR})

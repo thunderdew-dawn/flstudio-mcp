@@ -16,7 +16,7 @@ import time
 import webbrowser
 from collections import deque
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib import resources
@@ -26,12 +26,14 @@ from typing import Any
 from . import doctor, kb_policy, protocol
 from . import project_templates as templates
 from .analysis import (
+    AnalysisBroker,
     AnalysisReport,
     Coverage,
     EntityRef,
     Finding,
     Freshness,
     Prerequisite,
+    StaticSnapshotPolicy,
     analysis_report_to_control_center_legacy,
     confidence_from_coverage,
     low_end_health_score,
@@ -43,6 +45,7 @@ from .analysis import (
     routing_health_score,
 )
 from .analysis.health_aggregator import aggregate_project_health
+from .analysis.live import LiveMeterPolicy
 from .analysis.store import ReportStore
 from .connection import DEFAULT_TCP_HOST, DEFAULT_TCP_PORT, TCPBridge, fetch_all_pages
 from .music import mix_doctor as mix_review
@@ -237,6 +240,7 @@ class ControlCenterState:
         self.daemon_port = daemon_port
         self.daemon_fallback_port: int | None = None
         self.report_store = ReportStore()
+        self.broker = AnalysisBroker()
         self.checkpoints: dict[str, dict[str, Any]] = {}
         self.processes: dict[str, ManagedProcess] = {}
         self.last_findings: list[doctor.Finding] = []
@@ -857,6 +861,34 @@ MIX_POLICY_RULE_IDS = [
 ]
 
 
+def _collect_mix_snapshot(
+    state: ControlCenterState,
+    bridge: TCPBridge,
+) -> dict[str, Any]:
+    static_snapshot = state.broker.get_static_project_snapshot(
+        bridge,
+        StaticSnapshotPolicy(),
+    )
+    watcher = mix_review.get_watcher()
+    live_window = state.broker.get_live_meter_window(
+        bridge,
+        policy=LiveMeterPolicy(require_playing=False, min_capture_seconds=30.0),
+        watcher_provider=watcher,
+        static_snapshot=static_snapshot,
+    )
+    watch_peaks = (
+        {int(track): peak for track, peak in live_window.track_meter_summaries.items()}
+        if live_window.freshness == "fresh"
+        else None
+    )
+    return mix_review.gather_snapshot(
+        bridge,
+        peaks_override=watch_peaks or None,
+        live_window=live_window,
+        static_snapshot=static_snapshot,
+    )
+
+
 def _run_mix_review(state: ControlCenterState) -> dict[str, Any]:
     """Run the read-only Mix Review workflow for the Control Center UI."""
     with state.lock:
@@ -870,32 +902,29 @@ def _run_mix_review(state: ControlCenterState) -> dict[str, Any]:
             wait(timeout=1.0)
         alive = bool(getattr(bridge, "is_alive", lambda: False)())
         if not alive:
-            return _mix_review_unavailable_report(
+            raise ConnectionError(
                 "No fresh FL Studio controller heartbeat. Open FL Studio and refresh "
                 "the connection."
             )
 
-        watcher_provider = mix_review.get_watcher()
-        watch_peaks = watcher_provider.last_max()
-        
-        from .analysis.live import LiveMeterPolicy
-        live_window = state.report_store.broker.get_live_meter_window(
-            bridge,
-            policy=LiveMeterPolicy(require_playing=False),
-            watcher_provider=watcher_provider,
-        )
-        
-        snapshot = mix_review.gather_snapshot(
-            bridge,
-            peaks_override=watch_peaks or None,
-            live_window=live_window,
-        )
+        snapshot = _collect_mix_snapshot(state, bridge)
         report_payload = _build_mix_review_report(snapshot)
-        analysis_report = _generic_analysis_report_from_legacy(report_payload, "mix_review", "Mix Review")
+        analysis_report = _generic_analysis_report_from_legacy(
+            report_payload,
+            "mix_review",
+            "Mix Review",
+        )
         state.report_store.add_report(analysis_report)
         return analysis_report_to_control_center_legacy(analysis_report, report_payload)
     except Exception as exc:
-        return _mix_review_unavailable_report(f"{type(exc).__name__}: {exc}")
+        report = _mix_review_unavailable_report(f"{type(exc).__name__}: {exc}")
+        analysis_report = _generic_analysis_report_from_legacy(
+            report,
+            "mix_review",
+            "Mix Review",
+        )
+        state.report_store.add_report(analysis_report)
+        return analysis_report_to_control_center_legacy(analysis_report, report)
     finally:
         if bridge is not None:
             with contextlib.suppress(Exception):
@@ -904,44 +933,171 @@ def _run_mix_review(state: ControlCenterState) -> dict[str, Any]:
 
 def _run_low_end_analysis(state: ControlCenterState) -> dict[str, Any]:
     """Run the read-only Low-End Analysis workflow for the Control Center UI."""
-    return _build_low_end_analysis_legacy_report(state, _run_mix_review(state))
+    with state.lock:
+        daemon_host, daemon_port = _selected_daemon_endpoint(state)
+
+    bridge = None
+    try:
+        bridge = TCPBridge(daemon_host, daemon_port)
+        wait = getattr(bridge, "wait_for_heartbeat", None)
+        if callable(wait):
+            wait(timeout=1.0)
+        if not bool(getattr(bridge, "is_alive", lambda: False)()):
+            report = _low_end_unavailable_report(
+                "No fresh FL Studio controller heartbeat. Open FL Studio and "
+                "refresh the connection."
+            )
+        else:
+            report = _build_low_end_legacy_report(_collect_mix_snapshot(state, bridge))
+        return _store_low_end_report(state, report)
+    except Exception as exc:
+        return _store_low_end_report(
+            state,
+            _low_end_unavailable_report(f"{type(exc).__name__}: {exc}"),
+        )
+    finally:
+        if bridge is not None:
+            with contextlib.suppress(Exception):
+                bridge.close()
 
 
-def _build_low_end_analysis_legacy_report(state: ControlCenterState, mix_report: dict[str, Any]) -> dict[str, Any]:
-    legacy_report = _low_end_legacy_report_from_mix_report(mix_report)
+def _store_low_end_report(
+    state: ControlCenterState,
+    legacy_report: dict[str, Any],
+) -> dict[str, Any]:
     analysis_report = _build_low_end_analysis_report(legacy_report)
     state.report_store.add_report(analysis_report)
     return analysis_report_to_control_center_legacy(analysis_report, legacy_report)
 
 
-def _low_end_legacy_report_from_mix_report(mix_report: dict[str, Any]) -> dict[str, Any]:
-    report = dict(mix_report or {})
+def _build_low_end_legacy_report(snapshot: dict[str, Any]) -> dict[str, Any]:
+    low_end = mix_review.low_end_stereo_safety(snapshot)
+    band_balance = mix_review.mix_band_balance(snapshot)
+    tracks = [dict(row) for row in snapshot.get("tracks", []) if isinstance(row, dict)]
+    master = next((row for row in tracks if _as_int(row.get("index")) == 0), None)
+    master_peak = _as_float(master.get("peak_db")) if master else None
+    findings = [
+        _mix_finding_summary(row, index=index)
+        for index, row in enumerate(low_end.get("findings") or [], start=1)
+    ]
+    low_tracks = [
+        {
+            **dict(row),
+            "low_end": True,
+            "low_end_role": _low_end_role(row.get("name")),
+        }
+        for row in low_end.get("low_end_tracks") or []
+        if isinstance(row, dict)
+    ]
+    levels_valid = bool(low_end.get("levels_valid"))
+    health_score = low_end_health_score(
+        high=sum(1 for row in findings if row["severity"] in {"high", "critical"}),
+        medium=sum(1 for row in findings if row["severity"] in {"medium", "warning"}),
+        low=sum(1 for row in findings if row["severity"] == "low"),
+        stereo_risks=sum(
+            1
+            for row in low_tracks
+            if (
+                abs(_as_float(row.get("pan")) or 0.0) >= 0.2
+                or abs(_as_float(row.get("stereo_sep")) or 0.0) >= 0.25
+            )
+        ),
+        levels_valid=levels_valid,
+    )
+    evidence_mode = _snapshot_evidence_mode(snapshot)
+    return {
+        "ok": True,
+        "state": "live",
+        "workflow": "low_end_analysis",
+        "title": "Low-End Analysis",
+        "evidence_mode": evidence_mode,
+        "generated_at": _now_iso(),
+        "summary": {
+            "health_score": health_score,
+            "health_label": _mix_health_label(health_score),
+            "levels_valid": levels_valid,
+            "playing": bool(snapshot.get("playing")),
+            "peak_source": (snapshot.get("peak_window") or {}).get("source"),
+            "master_peak_db": _round_optional(master_peak),
+            "master_headroom_db": _round_optional(
+                -master_peak if master_peak is not None else None
+            ),
+            "low_end_tracks": len(low_tracks),
+            "low_end_findings": len(findings),
+        },
+        "findings": findings,
+        "proposals": [],
+        "visuals": {
+            "band_balance": band_balance,
+            "stereo_tracks": low_tracks,
+        },
+        "details": {
+            "tracks": low_tracks,
+            "notes": list(low_end.get("notes") or []),
+            "limits": [str(low_end.get("analysis_limits") or "")],
+            "gather_errors": list(snapshot.get("gather_errors") or []),
+            "project_fingerprint": snapshot.get("project_fingerprint"),
+            "source_observation_ids": list(snapshot.get("source_observation_ids") or []),
+            "low_end": {
+                "summary": dict(low_end.get("summary") or {}),
+                "tracks": low_tracks,
+                "findings": findings,
+                "manual_checks": list(low_end.get("manual_checks") or []),
+                "analysis_limits": low_end.get("analysis_limits"),
+            },
+            "kb_policy_refs": kb_policy.rule_refs(MIX_POLICY_RULE_IDS),
+        },
+        "safety": {"read_only": True, "project_changes": False},
+    }
+
+
+def _low_end_unavailable_report(message: str) -> dict[str, Any]:
+    report = _mix_review_unavailable_report(message)
     report["workflow"] = "low_end_analysis"
     report["title"] = "Low-End Analysis"
-    details = dict(report.get("details") or {})
-    details.setdefault("low_end", {})
-    report["details"] = details
-    report.setdefault("summary", {})
-    report.setdefault("findings", [])
-    report.setdefault("proposals", [])
-    report.setdefault("visuals", {})
-    report.setdefault("safety", {"read_only": True, "project_changes": False})
+    report["evidence_mode"] = "no_level_evidence"
+    report["findings"][0]["id"] = "low_end_analysis_unavailable"
+    report["summary"]["health_score"] = 0
     return report
+
+
+def _low_end_role(name: Any) -> str:
+    normalized = str(name or "").lower()
+    if "kick" in normalized:
+        return "kick"
+    if "sub" in normalized or "808" in normalized:
+        return "sub"
+    if "bass" in normalized:
+        return "bass"
+    return "other"
+
+
+def _snapshot_evidence_mode(snapshot: dict[str, Any]) -> str:
+    live_window = snapshot.get("live_window")
+    levels_valid = bool(snapshot.get("levels_valid"))
+    if isinstance(live_window, dict):
+        freshness = live_window.get("freshness")
+        captured = _as_float(live_window.get("captured_seconds")) or 0.0
+        target = _as_float(live_window.get("target_capture_seconds")) or 0.0
+        if freshness == "fresh" and captured >= target > 0:
+            return "sufficient_watch_window"
+        if freshness == "fresh":
+            return "recent_live_meter_window"
+    if levels_valid:
+        return "short_live_snapshot"
+    return "static_snapshot_only"
 
 
 def _build_low_end_analysis_report(report: dict[str, Any]) -> AnalysisReport:
     summary = dict(report.get("summary") or {})
     details = dict(report.get("details") or {})
     low_end = dict(details.get("low_end") or {})
-    low_end_findings = [
-        dict(row) for row in low_end.get("findings") or [] if isinstance(row, dict)
-    ]
-    low_end_tracks = [
-        dict(row) for row in low_end.get("tracks") or [] if isinstance(row, dict)
-    ]
+    low_end_findings = [dict(row) for row in low_end.get("findings") or [] if isinstance(row, dict)]
+    low_end_tracks = [dict(row) for row in low_end.get("tracks") or [] if isinstance(row, dict)]
     levels_valid = bool(summary.get("levels_valid"))
     ok = bool(report.get("ok"))
     analysis_mode = _low_end_analysis_mode(summary)
+    evidence_mode = str(report.get("evidence_mode") or "static_snapshot_only")
     required = 3
     available = 0
     missing: list[str] = []
@@ -1000,23 +1156,44 @@ def _build_low_end_analysis_report(report: dict[str, Any]) -> AnalysisReport:
     for track in low_end_tracks:
         pan = _as_float(track.get("pan"))
         stereo_sep = _as_float(track.get("stereo_sep"))
-        if (pan is not None and abs(pan) >= 0.2) or (stereo_sep is not None and abs(stereo_sep) >= 0.25):
+        if (pan is not None and abs(pan) >= 0.2) or (
+            stereo_sep is not None and abs(stereo_sep) >= 0.25
+        ):
             stereo_risks += 1
-            
+
     health_score = low_end_health_score(
-        high=sum(1 for row in low_end_findings if str(row.get("severity", "")).lower() in ("high", "critical")),
-        medium=sum(1 for row in low_end_findings if str(row.get("severity", "")).lower() in ("medium", "warning")),
-        low=sum(1 for row in low_end_findings if str(row.get("severity", "")).lower() == "low"),
+        high=sum(
+            1
+            for row in low_end_findings
+            if str(row.get("severity", "")).lower() in ("high", "critical")
+        ),
+        medium=sum(
+            1
+            for row in low_end_findings
+            if str(row.get("severity", "")).lower() in ("medium", "warning")
+        ),
+        low=sum(
+            1
+            for row in low_end_findings
+            if str(row.get("severity", "")).lower() == "low"
+        ),
         stereo_risks=stereo_risks,
         levels_valid=levels_valid,
     )
+    created_at, valid_until = _report_validity(report.get("generated_at"))
+    source_observations = tuple(details.get("source_observation_ids") or ())
     return AnalysisReport(
         workflow="low_end_analysis",
         title="Low-End Analysis",
         analysis_mode=analysis_mode,
-        created_at=str(report.get("generated_at") or _now_iso()),
+        evidence_mode=evidence_mode,
+        created_at=created_at,
+        project_fingerprint=details.get("project_fingerprint"),
         freshness=Freshness(
             status=freshness_status,
+            created_at=created_at,
+            valid_until=valid_until,
+            source_observation_ids=source_observations,
             details="Control Center legacy payload adapted into the shared analysis contract.",
         ),
         coverage=coverage,
@@ -1035,10 +1212,9 @@ def _build_low_end_analysis_report(report: dict[str, Any]) -> AnalysisReport:
         findings=findings,
         assumptions=tuple(assumptions),
         limitations=tuple(limits),
+        source_observations=source_observations,
         manual_checks=tuple(
-            dict(row)
-            for row in low_end.get("manual_checks") or []
-            if isinstance(row, dict)
+            dict(row) for row in low_end.get("manual_checks") or [] if isinstance(row, dict)
         ),
         next_actions=(
             {
@@ -1103,9 +1279,7 @@ def _low_end_analysis_finding(
                 "proposed_fix": row.get("proposed_fix") or {},
             },
         ),
-        limitations=(
-            "Mixer pan/stereo metadata cannot prove true low-band phase behavior.",
-        ),
+        limitations=("Mixer pan/stereo metadata cannot prove true low-band phase behavior.",),
         metadata={"legacy_finding": row},
     )
 
@@ -1116,11 +1290,7 @@ def _low_end_track_index_by_name(
 ) -> dict[str, int]:
     rows = [
         *low_end_tracks,
-        *[
-            dict(row)
-            for row in details.get("tracks") or []
-            if isinstance(row, dict)
-        ],
+        *[dict(row) for row in details.get("tracks") or [] if isinstance(row, dict)],
     ]
     out: dict[str, int] = {}
     for row in rows:
@@ -1152,6 +1322,7 @@ def _mix_review_unavailable_report(message: str) -> dict[str, Any]:
         "state": "unavailable",
         "workflow": "mix_review",
         "title": "Mix Review",
+        "evidence_mode": "no_level_evidence",
         "generated_at": _now_iso(),
         "error": message,
         "summary": {
@@ -1314,6 +1485,8 @@ def _build_mix_review_report(snapshot: dict[str, Any]) -> dict[str, Any]:
             "notes": _unique_strings(notes),
             "limits": _unique_strings(limits),
             "gather_errors": list(snapshot.get("gather_errors") or []),
+            "project_fingerprint": snapshot.get("project_fingerprint"),
+            "source_observation_ids": list(snapshot.get("source_observation_ids") or []),
             "template_context": templates.compact_context(
                 diagnosis.get("template_context") or snapshot.get("template_context") or {}
             ),
@@ -1515,7 +1688,6 @@ def _mix_level_state(peak: float | None, row: dict[str, Any]) -> str:
     return "ok"
 
 
-
 def _mix_health_label(score: int) -> str:
     if score >= 90:
         return "Good"
@@ -1634,128 +1806,226 @@ def _run_project_organizer(state: ControlCenterState) -> dict[str, Any]:
             wait(timeout=1.0)
         alive = bool(getattr(bridge, "is_alive", lambda: False)())
         if not alive:
-            return _project_organizer_unavailable_report(
+            raise ConnectionError(
                 "No fresh FL Studio controller heartbeat. Open FL Studio and refresh "
                 "the connection."
             )
 
-        channel_routing = fetch_all_pages(
-            bridge,
-            protocol.CMD_CHANNEL_ROUTING_SUMMARY,
-            "channels",
-        ).get("channels", [])
+        static_snapshot = state.broker.get_static_project_snapshot(bridge)
+        channel_routing = list(static_snapshot.channels)
         channel_list = fetch_all_pages(
             bridge,
             protocol.CMD_CHANNEL_LIST,
             "channels",
         ).get("channels", [])
-        mixer_tracks = fetch_all_pages(
-            bridge,
-            protocol.CMD_MIXER_LIST_TRACKS,
-            "tracks",
-        ).get("tracks", [])
-        patterns = fetch_all_pages(
-            bridge,
-            protocol.CMD_PATTERN_LIST,
-            "patterns",
-        ).get("patterns", [])
-        playlist_tracks = fetch_all_pages(
-            bridge,
-            protocol.CMD_PLAYLIST_LIST_TRACKS,
-            "tracks",
-        ).get("tracks", [])
-        routing = fetch_all_pages(
-            bridge,
-            protocol.CMD_MIXER_GET_ROUTING_ALL,
-            "routing",
-        ).get("routing", [])
-        
+        mixer_tracks = list(static_snapshot.mixer_tracks)
+        patterns = list(static_snapshot.patterns)
+        playlist_tracks = list(static_snapshot.playlist_tracks)
+        routing = list(static_snapshot.routing)
+        merged_channels = _merge_channel_snapshots(
+            routing_rows=_dict_rows(channel_routing),
+            channel_rows=_dict_rows(channel_list),
+        )
         report_payload = _build_project_organizer_report(
-            channels=_merge_channel_snapshots(
-                routing_rows=_dict_rows(channel_routing),
-                channel_rows=_dict_rows(channel_list),
-            ),
+            channels=merged_channels,
             mixer_tracks=_dict_rows(mixer_tracks),
             patterns=_dict_rows(patterns),
             playlist_tracks=_dict_rows(playlist_tracks),
             routing=_dict_rows(routing),
-            template_context=templates.classify_topology(_dict_rows(mixer_tracks), _dict_rows(routing), _merge_channel_snapshots(
-                routing_rows=_dict_rows(channel_routing),
-                channel_rows=_dict_rows(channel_list),
-            )),
+            template_context=static_snapshot.template_context,
         )
-        analysis_report = _generic_analysis_report_from_legacy(report_payload, "project_organizer", "Organizer")
+        report_payload.setdefault("details", {}).update(
+            {
+                "project_fingerprint": static_snapshot.project_fingerprint,
+                "source_observation_ids": list(static_snapshot.source_observation_ids),
+            }
+        )
+        analysis_report = _generic_analysis_report_from_legacy(
+            report_payload,
+            "project_organizer",
+            "Organizer",
+        )
         state.report_store.add_report(analysis_report)
         return analysis_report_to_control_center_legacy(analysis_report, report_payload)
     except Exception as exc:
-        return _project_organizer_unavailable_report(f"{type(exc).__name__}: {exc}")
+        report = _project_organizer_unavailable_report(f"{type(exc).__name__}: {exc}")
+        analysis_report = _generic_analysis_report_from_legacy(
+            report,
+            "project_organizer",
+            "Organizer",
+        )
+        state.report_store.add_report(analysis_report)
+        return analysis_report_to_control_center_legacy(analysis_report, report)
     finally:
         if bridge is not None:
             with contextlib.suppress(Exception):
                 bridge.close()
 
 
-def _generic_analysis_report_from_legacy(report: dict[str, Any], workflow: str, title: str) -> AnalysisReport:
+def _generic_analysis_report_from_legacy(
+    report: dict[str, Any],
+    workflow: str,
+    title: str,
+) -> AnalysisReport:
     summary = dict(report.get("summary") or {})
-    levels_valid = bool(summary.get("levels_valid"))
     ok = bool(report.get("ok"))
-    
+    evidence_mode = str(report.get("evidence_mode") or "static_snapshot_only")
+    details = dict(report.get("details") or {})
+
     available = 0
     missing: list[str] = []
-    prereqs = []
-    
+    prereqs: list[Prerequisite] = []
+
     if ok:
         available += 1
         prereqs.append(Prerequisite("fl_session_alive", "ok"))
     else:
         missing.append("fl_session_alive")
         prereqs.append(Prerequisite("fl_session_alive", "missing"))
-        
+
     if workflow == "mix_review":
-        if levels_valid:
+        has_level_evidence = evidence_mode in {
+            "short_live_snapshot",
+            "recent_live_meter_window",
+            "sufficient_watch_window",
+        }
+        if has_level_evidence:
             available += 1
-            prereqs.append(Prerequisite("requires_playback", "ok"))
         else:
-            missing.append("requires_playback")
-            prereqs.append(Prerequisite("requires_playback", "missing"))
+            missing.append("live_meter_window")
+        playback_status = (
+            "ok"
+            if evidence_mode == "short_live_snapshot"
+            else "skipped"
+            if evidence_mode in {"recent_live_meter_window", "sufficient_watch_window"}
+            else "missing"
+        )
+        prereqs.extend(
+            (
+                Prerequisite("requires_playback", playback_status),
+                Prerequisite(
+                    "requires_meter_window",
+                    "ok" if has_level_evidence else "missing",
+                ),
+                Prerequisite(
+                    "requires_recent_watch",
+                    (
+                        "ok"
+                        if evidence_mode in {"recent_live_meter_window", "sufficient_watch_window"}
+                        else "missing"
+                    ),
+                ),
+            )
+        )
         required = 2
     else:
         required = 1
-        
+
     coverage = Coverage(
         required=required,
         available=available,
         missing=tuple(missing),
     )
-    
-    risk = risk_from_severities(
-        tuple(row.get("severity", "info") for row in report.get("findings") or [])
-    )
+
+    legacy_findings = [dict(row) for row in report.get("findings") or [] if isinstance(row, dict)]
+    risk = risk_from_severities(tuple(row.get("severity", "info") for row in legacy_findings))
     confidence = confidence_from_coverage(
         required=required,
         available=available,
-        evidence_mode="live_runtime" if levels_valid else "static_snapshot",
+        evidence_mode=_broad_analysis_mode(evidence_mode),
     )
     freshness_status = "fresh" if ok and not missing else "partial" if ok else "unavailable"
-    
-    limitations = list(report.get("details", {}).get("limits", []))
-    for m in missing:
-        limitations.append(f"Missing prerequisite: {m}")
-        
+    created_at, valid_until = _report_validity(report.get("generated_at"))
+    limitations = list(details.get("limits") or [])
+    limitations.extend(f"Missing prerequisite: {item}" for item in missing)
+    findings = tuple(
+        _generic_analysis_finding(
+            row,
+            workflow=workflow,
+            index=index,
+            evidence_mode=_broad_analysis_mode(evidence_mode),
+            confidence_score=confidence,
+        )
+        for index, row in enumerate(legacy_findings, start=1)
+    )
+
     return AnalysisReport(
         workflow=workflow,
         title=title,
-        analysis_mode="live_runtime" if levels_valid else "static_snapshot",
-        evidence_mode="live_runtime" if levels_valid else "static_snapshot_only",
-        freshness=Freshness(status=freshness_status),
+        analysis_mode=_broad_analysis_mode(evidence_mode),
+        evidence_mode=evidence_mode,
+        created_at=created_at,
+        project_fingerprint=details.get("project_fingerprint"),
+        freshness=Freshness(
+            status=freshness_status,
+            created_at=created_at,
+            valid_until=valid_until,
+            source_observation_ids=tuple(details.get("source_observation_ids") or ()),
+        ),
         coverage=coverage,
         prerequisites=tuple(prereqs),
         risk_score=risk,
-        health_score=summary.get("health_score"),
+        health_score=summary.get("health_score", summary.get("organization_score")),
         confidence_score=confidence,
+        findings=findings,
         limitations=tuple(limitations),
+        source_observations=tuple(details.get("source_observation_ids") or ()),
         safety=report.get("safety") or {"read_only": True},
     )
+
+
+def _broad_analysis_mode(evidence_mode: str) -> str:
+    if evidence_mode in {"short_live_snapshot", "recent_live_meter_window"}:
+        return "live_runtime"
+    if evidence_mode == "sufficient_watch_window":
+        return "watch_window"
+    return "static_snapshot"
+
+
+def _report_validity(generated_at: Any, *, ttl_seconds: float = 120.0) -> tuple[str, str]:
+    try:
+        created = datetime.fromisoformat(str(generated_at).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        created = datetime.now(timezone.utc)
+    if created.tzinfo is None:
+        created = created.replace(tzinfo=timezone.utc)
+    created = created.astimezone(timezone.utc)
+    return created.isoformat(), (created + timedelta(seconds=ttl_seconds)).isoformat()
+
+
+def _generic_analysis_finding(
+    row: dict[str, Any],
+    *,
+    workflow: str,
+    index: int,
+    evidence_mode: str,
+    confidence_score: int,
+) -> Finding:
+    severity = str(row.get("severity") or "info")
+    rule = str(row.get("rule") or row.get("id") or "finding")
+    entities: tuple[EntityRef, ...] = ()
+    track = _as_int(row.get("track"))
+    if track is not None:
+        entities = (
+            EntityRef(
+                "mixer_track",
+                mixer_entity_id(track),
+                str(row.get("track_name") or row.get("track") or ""),
+            ),
+        )
+    return Finding(
+        id=str(row.get("id") or f"{workflow}.{rule}.{index}"),
+        rule_id=f"{workflow}.{rule}",
+        title=str(row.get("title") or row.get("detail") or rule),
+        severity=severity,
+        risk_score=risk_from_severities((severity,)),
+        confidence_score=confidence_score,
+        evidence_mode=evidence_mode,
+        entities=entities,
+        evidence=(dict(row),),
+        metadata={"legacy_finding": row},
+    )
+
 
 def _project_organizer_unavailable_report(message: str) -> dict[str, Any]:
     return {
@@ -2629,9 +2899,6 @@ def safe_debug_value(value: Any) -> str:
     return str(value)
 
 
-
-
-
 def _organizer_health_label(score: int) -> str:
     if score >= 90:
         return "Organized"
@@ -2653,24 +2920,15 @@ def _run_routing_audit(state: ControlCenterState) -> dict[str, Any]:
             wait(timeout=1.0)
         alive = bool(getattr(bridge, "is_alive", lambda: False)())
         if not alive:
-            return _routing_unavailable_report(
+            raise ConnectionError(
                 "No fresh FL Studio controller heartbeat. Open FL Studio and refresh "
                 "the connection."
             )
 
-        channel_payload = fetch_all_pages(
-            bridge,
-            protocol.CMD_CHANNEL_ROUTING_SUMMARY,
-            "channels",
-        )
-        routing_payload = fetch_all_pages(
-            bridge,
-            protocol.CMD_MIXER_GET_ROUTING_ALL,
-            "routing",
-        )
-        channels = _payload_rows(channel_payload, "channels")
-        routing = _payload_rows(routing_payload, "routing")
-        template_context = templates.classify_topology(routing, routing, channels)
+        static_snapshot = state.broker.get_static_project_snapshot(bridge)
+        channels = list(static_snapshot.channels)
+        routing = list(static_snapshot.routing)
+        template_context = static_snapshot.template_context
         unused_probe = _probe_unused_mixer_tracks(
             bridge,
             tracks=routing,
@@ -2683,12 +2941,22 @@ def _run_routing_audit(state: ControlCenterState) -> dict[str, Any]:
             template_context=template_context,
             unused_mixer_tracks=unused_probe["tracks"],
             unused_mixer_track_truncated=unused_probe["truncated"],
-            unused_mixer_track_probe_failed=unused_probe["failed"],
+            unused_mixer_track_probe_failed=unused_probe["probe_failed"],
+            project_fingerprint=static_snapshot.project_fingerprint,
+            source_observation_ids=static_snapshot.source_observation_ids,
         )
         state.report_store.add_report(analysis_report)
         return legacy_report
     except Exception as exc:
-        return _routing_unavailable_report(f"{type(exc).__name__}: {exc}")
+        report = _routing_unavailable_report(f"{type(exc).__name__}: {exc}")
+        analysis_report = routing_analysis_report_from_legacy_payload(
+            report,
+            workflow="routing_audit",
+            title="Routing Audit",
+            created_at=report["generated_at"],
+        )
+        state.report_store.add_report(analysis_report)
+        return analysis_report_to_control_center_legacy(analysis_report, report)
     finally:
         if bridge is not None:
             with contextlib.suppress(Exception):
@@ -2735,18 +3003,8 @@ def _routing_unavailable_report(message: str) -> dict[str, Any]:
         },
         "safety": {"read_only": True, "project_changes": False},
     }
-    
-    analysis_report = routing_analysis_report_from_legacy_payload(
-        report,
-        workflow="routing_audit",
-        title="Routing Audit",
-        created_at=report["generated_at"],
-    )
-    
-    return analysis_report, analysis_report_to_control_center_legacy(
-        analysis_report,
-        report,
-    )
+
+    return report
 
 
 def _build_routing_audit_report(
@@ -2757,6 +3015,8 @@ def _build_routing_audit_report(
     unused_mixer_tracks: list[dict[str, Any]] | None = None,
     unused_mixer_track_truncated: bool = False,
     unused_mixer_track_probe_failed: bool = False,
+    project_fingerprint: str | None = None,
+    source_observation_ids: tuple[str, ...] = (),
 ) -> tuple[AnalysisReport, dict[str, Any]]:
     unrouted_automation_clips = 0
     filtered_channels = []
@@ -2928,16 +3188,19 @@ def _build_routing_audit_report(
                 "This Control Center audit is read-only; it does not apply cleanup changes.",
             ],
             "kb_policy_refs": kb_policy.rule_refs(ROUTING_POLICY_RULE_IDS),
+            "project_fingerprint": project_fingerprint,
+            "source_observation_ids": list(source_observation_ids),
         },
         "safety": {"read_only": True, "project_changes": False},
     }
-    return analysis_report_to_control_center_legacy(
-        routing_analysis_report_from_legacy_payload(
-            report,
-            workflow="routing_audit",
-            title="Routing Audit",
-            created_at=report["generated_at"],
-        ),
+    analysis_report = routing_analysis_report_from_legacy_payload(
+        report,
+        workflow="routing_audit",
+        title="Routing Audit",
+        created_at=report["generated_at"],
+    )
+    return analysis_report, analysis_report_to_control_center_legacy(
+        analysis_report,
         report,
     )
 
@@ -3230,9 +3493,6 @@ def _routing_findings(
             }
         )
     return findings
-
-
-
 
 
 def _routing_health_label(score: int) -> str:

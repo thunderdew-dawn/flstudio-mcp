@@ -14,7 +14,11 @@ from .canonical import (
 )
 from .fl_reads import StaticReadSpec, project_fingerprint
 from .observations import Observation, ObservationStore
-from .reports import analysis_report_to_control_center_legacy, analysis_report_to_workflow_report
+from .reports import (
+    analysis_report_to_control_center_legacy,
+    analysis_report_to_workflow_report,
+    enrich_workflow_report_with_analysis,
+)
 from .requirements import (
     COMMON_OBSERVATIONS,
     WorkflowRequirement,
@@ -22,6 +26,7 @@ from .requirements import (
     requirement,
 )
 from .routing import routing_analysis_report_from_legacy_payload
+from .runtime import get_analysis_broker, get_report_store
 from .schema import (
     ANALYSIS_REPORT_CONTRACT_VERSION,
     AnalysisReport,
@@ -65,12 +70,15 @@ __all__ = [
     "WorkflowRequirementSet",
     "analysis_report_to_control_center_legacy",
     "analysis_report_to_workflow_report",
+    "enrich_workflow_report_with_analysis",
     "channel_entity_id",
     "clamp_score",
     "confidence_band",
     "confidence_from_coverage",
     "coverage_score",
     "health_from_risk",
+    "get_analysis_broker",
+    "get_report_store",
     "low_end_health_score",
     "mix_health_score",
     "mixer_count_policy",

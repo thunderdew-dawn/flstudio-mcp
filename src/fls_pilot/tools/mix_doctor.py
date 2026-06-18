@@ -19,9 +19,45 @@ from pydantic import Field
 
 from .. import kb_policy, operations, protocol, safety
 from .. import workflow_report as wr
+from ..analysis import (
+    StaticSnapshotPolicy,
+    enrich_workflow_report_with_analysis,
+    get_analysis_broker,
+)
+from ..analysis.live import LiveMeterPolicy
 from ..connection import fetch_all_pages, get_bridge
 from ..music import mix_doctor as md
 from ..project_templates import compact_context
+
+
+def _gather_analysis_snapshot(bridge, *, with_params: bool = True) -> dict:
+    broker = get_analysis_broker()
+    static_snapshot = broker.get_static_project_snapshot(
+        bridge,
+        StaticSnapshotPolicy(),
+    )
+    watcher = md.get_watcher()
+    live_window = broker.get_live_meter_window(
+        bridge,
+        policy=LiveMeterPolicy(require_playing=False, min_capture_seconds=30.0),
+        watcher_provider=watcher,
+        static_snapshot=static_snapshot,
+    )
+    watch_peaks = (
+        {
+            int(track): peak
+            for track, peak in live_window.track_meter_summaries.items()
+        }
+        if live_window.freshness == "fresh"
+        else None
+    )
+    return md.gather_snapshot(
+        bridge,
+        with_params=with_params,
+        peaks_override=watch_peaks or None,
+        live_window=live_window,
+        static_snapshot=static_snapshot,
+    )
 
 
 def _compact_kb_fields(row: dict) -> dict:
@@ -203,7 +239,7 @@ def register(mcp: FastMCP) -> None:
         manual_checks: list[dict] | None = None,
         limits: list[str] | None = None,
     ) -> dict:
-        return wr.workflow_report(
+        payload = wr.workflow_report(
             workflow=workflow,
             title=title,
             mode="proposal" if proposed_changes and not diagnostics else "diagnostic",
@@ -226,6 +262,23 @@ def register(mcp: FastMCP) -> None:
                 "template_context": compact_context(snap.get("template_context") or {}),
                 **(metadata or {}),
             },
+        )
+        peak_source = str(snap.get("peak_window", {}).get("source") or "")
+        if peak_source == "watch":
+            analysis_mode = "watch_window"
+            evidence_mode = "sufficient_watch_window"
+        elif snap.get("levels_valid"):
+            analysis_mode = "live_runtime"
+            evidence_mode = "short_live_snapshot"
+        else:
+            analysis_mode = "static_snapshot"
+            evidence_mode = "static_snapshot_only"
+        return enrich_workflow_report_with_analysis(
+            payload,
+            analysis_mode=analysis_mode,
+            evidence_mode=evidence_mode,
+            project_fingerprint=snap.get("project_fingerprint"),
+            source_observations=tuple(snap.get("source_observation_ids") or ()),
         )
 
     def _result(snap):
@@ -334,7 +387,7 @@ def register(mcp: FastMCP) -> None:
         Safety: Read-Only.
         """
         try:
-            snap = md.gather_snapshot(get_bridge())
+            snap = _gather_analysis_snapshot(get_bridge())
         except Exception as e:
             return wr.workflow_report(
                 workflow="mix_review",
@@ -367,8 +420,7 @@ def register(mcp: FastMCP) -> None:
         """
         try:
             bridge = get_bridge()
-            wmax = md.get_watcher().last_max()
-            snap = md.gather_snapshot(bridge, with_params=False, peaks_override=wmax or None)
+            snap = _gather_analysis_snapshot(bridge, with_params=False)
         except Exception as e:
             return wr.workflow_report(
                 workflow="low_end_stereo_review",
@@ -385,7 +437,7 @@ def register(mcp: FastMCP) -> None:
                 ],
                 ok=False,
             )
-        levels_valid = bool(wmax or snap.get("levels_valid"))
+        levels_valid = bool(snap.get("levels_valid"))
         guidance = (
             "Structural pan/stereo checks are available. For reliable hot low-end "
             "and Master-headroom evidence, press PLAY or use watch mode "
@@ -402,7 +454,7 @@ def register(mcp: FastMCP) -> None:
                 "playing": snap.get("playing"),
                 "needs_levels": not levels_valid,
                 "peak_source": "watch (full-song)"
-                if wmax
+                if snap.get("peak_window", {}).get("source") == "watch"
                 else snap.get("peak_window", {}).get("source"),
             }
         )

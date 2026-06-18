@@ -690,6 +690,17 @@ def test_http_mix_review_and_low_end_endpoints(monkeypatch):
         "_run_mix_review",
         lambda state: {"ok": True, "workflow": "mix_review", "state": "live"},
     )
+    monkeypatch.setattr(
+        control_center,
+        "_run_low_end_analysis",
+        lambda state: {
+            "ok": True,
+            "workflow": "low_end_analysis",
+            "title": "Low-End Analysis",
+            "state": "live",
+            "analysis": {"workflow": "low_end_analysis"},
+        },
+    )
     state = _state(port=0)
     handler_cls = control_center._handler_factory(state)
 
@@ -892,54 +903,100 @@ def test_build_mix_review_report_surfaces_playback_limitations_when_stopped():
     }
 
     legacy_report = control_center._build_mix_review_report(snapshot)
-    analysis_report = control_center._generic_analysis_report_from_legacy(legacy_report, "mix_review", "Mix Review")
+    analysis_report = control_center._generic_analysis_report_from_legacy(
+        legacy_report, "mix_review", "Mix Review"
+    )
     report = control_center.analysis_report_to_control_center_legacy(analysis_report, legacy_report)
 
     assert report["ok"] is True
     prerequisites = report.get("analysis", {}).get("prerequisites", [])
     assert any(
-        req["id"] == "requires_playback" and req["status"] in ("missing", "unavailable", "partial", "failed")
+        req["id"] == "requires_playback"
+        and req["status"] in ("missing", "unavailable", "partial", "failed")
         for req in prerequisites
     )
 
 
-def test_low_end_analysis_legacy_report_keeps_ui_shape_and_adds_contract():
-    mix_report = control_center._build_mix_review_report(
-        {
-            "playing": True,
-            "levels_valid": True,
-            "peak_window": {"source": "sustained_1200ms"},
-            "tracks": [
-                {
-                    "index": 0,
-                    "name": "Master",
-                    "vol_db": 0.0,
-                    "peak_db": -2.0,
-                    "peak_max": 0.8,
-                    "pan": 0.0,
-                    "stereo_sep": 0.0,
-                    "plugins": [],
-                    "routes_to": [],
-                },
-                {
-                    "index": 2,
-                    "name": "Sub Bass",
-                    "vol_db": -3.0,
-                    "peak_db": -4.0,
-                    "peak_max": 0.63,
-                    "pan": 0.42,
-                    "stereo_sep": 0.5,
-                    "plugins": [],
-                    "routes_to": [{"dst": 0, "dst_name": "Master"}],
-                },
-            ],
-            "template_context": {},
-            "gather_errors": [],
-        }
+def test_direct_live_snapshot_remains_valid_without_watch_evidence():
+    snapshot = {
+        "playing": True,
+        "levels_valid": True,
+        "peak_window": {"source": "sustained_1200ms"},
+        "live_window": {
+            "freshness": "unavailable",
+            "limitations": [],
+        },
+        "tracks": [
+            {
+                "index": 0,
+                "name": "Master",
+                "vol_db": 0.0,
+                "peak_db": 0.2,
+                "peak_max": 1.02,
+                "pan": 0.0,
+                "stereo_sep": 0.0,
+                "plugins": [],
+                "routes_to": [],
+            },
+        ],
+        "template_context": {},
+        "gather_errors": [],
+    }
+
+    legacy_report = control_center._build_mix_review_report(snapshot)
+    analysis_report = control_center._generic_analysis_report_from_legacy(
+        legacy_report,
+        "mix_review",
+        "Mix Review",
     )
 
-    state = control_center.ControlCenterState(host="127.0.0.1", port=1234, sse_host="127.0.0.1", sse_port=1235)
-    report = control_center._build_low_end_analysis_legacy_report(state, mix_report)
+    assert legacy_report["evidence_mode"] == "short_live_snapshot"
+    assert any(row["rule"] == "clipping" for row in legacy_report["findings"])
+    assert analysis_report.evidence_mode == "short_live_snapshot"
+    assert analysis_report.freshness.status == "fresh"
+
+
+def test_low_end_analysis_legacy_report_keeps_ui_shape_and_adds_contract():
+    snapshot = {
+        "playing": True,
+        "levels_valid": True,
+        "peak_window": {"source": "sustained_1200ms"},
+        "tracks": [
+            {
+                "index": 0,
+                "name": "Master",
+                "vol_db": 0.0,
+                "peak_db": -2.0,
+                "peak_max": 0.8,
+                "pan": 0.0,
+                "stereo_sep": 0.0,
+                "plugins": [],
+                "routes_to": [],
+            },
+            {
+                "index": 2,
+                "name": "Sub Bass",
+                "vol_db": -3.0,
+                "peak_db": -4.0,
+                "peak_max": 0.63,
+                "pan": 0.42,
+                "stereo_sep": 0.5,
+                "plugins": [],
+                "routes_to": [{"dst": 0, "dst_name": "Master"}],
+            },
+        ],
+        "template_context": {},
+        "gather_errors": [],
+    }
+
+    state = control_center.ControlCenterState(
+        host="127.0.0.1",
+        port=1234,
+        sse_host="127.0.0.1",
+        sse_port=1235,
+    )
+    legacy_report = control_center._build_low_end_legacy_report(snapshot)
+    report = control_center._store_low_end_report(state, legacy_report)
 
     assert report["workflow"] == "low_end_analysis"
     assert report["title"] == "Low-End Analysis"
@@ -994,12 +1051,13 @@ def test_build_routing_audit_report_summarizes_graph_and_findings():
         {"i": 10, "name": "Vocal Bus", "routes_to": [{"dst": 0, "dst_name": "Master"}]},
     ]
 
-    report = control_center._build_routing_audit_report(
+    analysis_report, report = control_center._build_routing_audit_report(
         channels=channels,
         routing=routing,
         unused_mixer_tracks=[{"track": 9, "name": "Insert 9"}],
     )
 
+    assert analysis_report.workflow == "routing_audit"
     assert report["ok"] is True
     assert report["summary"]["direct_to_master"] == 1
     assert report["summary"]["unrouted_channels"] == 1
@@ -1022,9 +1080,7 @@ def test_build_routing_audit_report_summarizes_graph_and_findings():
     assert report["analysis"]["contract_version"] == "fls-pilot.analysis-report.v1"
     assert report["analysis"]["workflow"] == "routing_audit"
     assert report["analysis"]["coverage"]["status"] == "fresh"
-    assert report["details"]["analysis_report"]["findings"][0]["rule_id"].startswith(
-        "routing."
-    )
+    assert report["details"]["analysis_report"]["findings"][0]["rule_id"].startswith("routing.")
     canonical_ids = {
         entity["canonical_id"]
         for finding in report["details"]["analysis_report"]["findings"]

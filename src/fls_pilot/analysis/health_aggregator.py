@@ -1,141 +1,213 @@
-"""Project Health backend aggregator."""
+"""Project Health backend aggregation over stored workflow reports."""
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any
 
 from .schema import AnalysisReport
 from .store import ReportStore
 
+WORKFLOWS = (
+    ("project_organizer", "Organizer"),
+    ("mix_review", "Mix Review"),
+    ("routing_audit", "Routing Audit"),
+    ("low_end_analysis", "Low-End Analysis"),
+)
+USABLE_FRESHNESS = {"fresh", "partial"}
 
-def aggregate_project_health(store: ReportStore) -> dict[str, Any]:
-    """Consume the latest available reports to build a backend Project Health aggregate."""
-    workflows = [
-        {"id": "project_organizer", "title": "Organizer"},
-        {"id": "mix_review", "title": "Mix Review"},
-        {"id": "routing_audit", "title": "Routing Audit"},
-        {"id": "low_end_analysis", "title": "Low-End Analysis"},
+
+def aggregate_project_health(
+    store: ReportStore,
+    *,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """Build Project Health without re-running source workflows."""
+    current = now or datetime.now(timezone.utc)
+    sections: list[dict[str, Any]] = []
+    usable_reports: list[AnalysisReport] = []
+    missing_workflows: list[str] = []
+    coverage_available = 0
+    coverage_required = 0
+    fingerprints: set[str] = set()
+
+    reports = {workflow: store.get_latest_report(workflow) for workflow, _title in WORKFLOWS}
+    for report in reports.values():
+        if report and report.project_fingerprint not in {None, "unknown"}:
+            fingerprints.add(str(report.project_fingerprint))
+    mixed_projects = len(fingerprints) > 1
+
+    for workflow, title in WORKFLOWS:
+        report = reports[workflow]
+        if report is None:
+            missing_workflows.append(workflow)
+            coverage_required += 1
+            sections.append(_missing_section(workflow, title))
+            continue
+
+        freshness = effective_freshness(report, now=current)
+        if mixed_projects and report.project_fingerprint not in {None, "unknown"}:
+            freshness = "stale"
+
+        coverage = report.coverage
+        coverage_available += coverage.available
+        coverage_required += coverage.required
+        usable = freshness in USABLE_FRESHNESS and coverage.available > 0
+        if usable:
+            usable_reports.append(report)
+
+        section = {
+            "workflow": workflow,
+            "title": title,
+            "report_id": report.report_id,
+            "project_fingerprint": report.project_fingerprint or "unknown",
+            "freshness": freshness,
+            "health_score": report.health_score,
+            "risk_score": report.risk_score,
+            "coverage": coverage.to_dict(),
+            "confidence_score": report.confidence_score,
+            "evidence_mode": report.evidence_mode,
+        }
+        if freshness != "fresh":
+            section["reason"] = _section_reason(
+                report,
+                freshness=freshness,
+                mixed_projects=mixed_projects,
+            )
+        section["recommended_next_action"] = _next_action(
+            report,
+            workflow=workflow,
+            title=title,
+            freshness=freshness,
+        )
+        sections.append(section)
+
+    all_workflows_usable = len(usable_reports) == len(WORKFLOWS)
+    overall_health = (
+        round(sum(report.health_score for report in usable_reports) / len(usable_reports))
+        if all_workflows_usable
+        else None
+    )
+    overall_risk = (
+        round(sum(report.risk_score for report in usable_reports) / len(usable_reports))
+        if all_workflows_usable
+        else None
+    )
+    overall_confidence = round(
+        sum(
+            report.confidence_score if report in usable_reports else 0
+            for report in reports.values()
+            if report is not None
+        )
+        / len(WORKFLOWS)
+    )
+    overall_coverage = (
+        round((coverage_available / coverage_required) * 100) if coverage_required else 0
+    )
+    next_workflows = [
+        section["recommended_next_action"]
+        for section in sections
+        if section.get("recommended_next_action")
     ]
 
-    sections = []
-    total_risk = 0
-    total_health = 0
-    total_confidence = 0
-    total_coverage_available = 0
-    total_coverage_required = 0
-    missing_workflows = []
-    available_workflows = 0
-
-    for wf in workflows:
-        report = store.get_latest_report(wf["id"])
-        if report is not None:
-            available_workflows += 1
-            risk = report.risk_score
-            health = report.health_score if report.health_score is not None else (100 - risk)
-            confidence = report.confidence_score
-            coverage = report.coverage
-
-            total_risk += risk
-            total_health += health
-            total_confidence += confidence
-            total_coverage_available += coverage.available
-            total_coverage_required += coverage.required
-
-            section = {
-                "workflow": wf["id"],
-                "title": wf["title"],
-                "report_id": report.report_id,
-                "freshness": report.freshness.status,
-                "health_score": health,
-                "risk_score": risk,
-                "coverage": coverage.to_dict(),
-                "confidence_score": confidence,
-            }
-
-            if report.freshness.status in {"stale", "missing", "unavailable", "partial"}:
-                section["reason"] = f"Report is {report.freshness.status}"
-                if report.freshness.details:
-                    section["reason"] += f": {report.freshness.details}"
-                    
-                evidence = getattr(report, "evidence_mode", "static_snapshot_only")
-                if evidence in ("no_level_evidence", "static_snapshot_only"):
-                    section["recommended_next_action"] = {
-                        "type": "run_workflow",
-                        "workflow": wf["id"],
-                        "label": f"Play project and run {wf['title']}",
-                    }
-                elif evidence == "short_live_snapshot":
-                    section["recommended_next_action"] = {
-                        "type": "run_workflow",
-                        "workflow": wf["id"],
-                        "label": f"Capture longer live window for {wf['title']}",
-                    }
-                else:
-                    section["recommended_next_action"] = {
-                        "type": "run_workflow",
-                        "workflow": wf["id"],
-                        "label": f"Run {wf['title']}",
-                    }
-            elif report.next_actions:
-                section["recommended_next_action"] = report.next_actions[0]
-            else:
-                section["recommended_next_action"] = None
-
-            sections.append(section)
-        else:
-            missing_workflows.append(wf["id"])
-            total_coverage_required += 1  # Add basic required evidence
-
-            sections.append({
-                "workflow": wf["id"],
-                "title": wf["title"],
-                "report_id": None,
-                "freshness": "missing",
-                "health_score": None,
-                "risk_score": None,
-                "coverage": {
-                    "required": 1,
-                    "available": 0,
-                    "missing": ["workflow_report"],
-                    "status": "unavailable",
-                    "score": 0,
-                },
-                "confidence_score": 0,
-                "reason": "Report not run in this session",
-                "recommended_next_action": {
-                    "type": "run_workflow",
-                    "workflow": wf["id"],
-                    "label": f"Run {wf['title']}",
-                },
-            })
-
-    # Overall calculation
-    count = len(workflows)
-    if available_workflows > 0:
-        overall_health = round(total_health / available_workflows)
-        overall_risk = round(total_risk / available_workflows)
-        overall_confidence = round(total_confidence / count)  # Missing reduces confidence
-    else:
-        overall_health = None
-        overall_risk = None
-        overall_confidence = 0
-
-    if total_coverage_required > 0:
-        overall_coverage_pct = round((total_coverage_available / total_coverage_required) * 100)
-    else:
-        overall_coverage_pct = 100
-
-    next_workflows = []
-    for section in sections:
-        if section.get("recommended_next_action") and section["recommended_next_action"].get("type") == "run_workflow":
-            next_workflows.append(section["recommended_next_action"])
-
     return {
+        "overall_status": "fresh" if all_workflows_usable else "partial",
         "overall_health_score": overall_health,
         "overall_risk_score": overall_risk,
-        "overall_coverage_pct": overall_coverage_pct,
+        "overall_coverage_pct": overall_coverage,
         "overall_confidence_score": overall_confidence,
         "sections": sections,
         "missing_workflows": missing_workflows,
+        "mixed_project_fingerprints": mixed_projects,
         "next_suggested_workflows": next_workflows,
     }
+
+
+def effective_freshness(
+    report: AnalysisReport,
+    *,
+    now: datetime | None = None,
+) -> str:
+    """Resolve stored freshness against its validity timestamps."""
+    status = report.freshness.status
+    if status not in USABLE_FRESHNESS:
+        return status
+    current = now or datetime.now(timezone.utc)
+    valid_until = _parse_iso(report.freshness.valid_until)
+    if valid_until is not None and current > valid_until:
+        return "stale"
+    return status
+
+
+def _missing_section(workflow: str, title: str) -> dict[str, Any]:
+    return {
+        "workflow": workflow,
+        "title": title,
+        "report_id": None,
+        "project_fingerprint": "unknown",
+        "freshness": "missing",
+        "health_score": None,
+        "risk_score": None,
+        "coverage": {
+            "required": 1,
+            "available": 0,
+            "missing": ["workflow_report"],
+            "optional_available": 0,
+            "status": "unavailable",
+            "score": 0,
+        },
+        "confidence_score": 0,
+        "evidence_mode": "unknown",
+        "reason": "Report not run in this session",
+        "recommended_next_action": {
+            "type": "run_workflow",
+            "workflow": workflow,
+            "label": f"Run {title}",
+        },
+    }
+
+
+def _section_reason(
+    report: AnalysisReport,
+    *,
+    freshness: str,
+    mixed_projects: bool,
+) -> str:
+    if mixed_projects and report.project_fingerprint not in {None, "unknown"}:
+        return "Stored reports belong to different project snapshots"
+    reason = f"Report is {freshness}"
+    if report.freshness.details:
+        reason += f": {report.freshness.details}"
+    return reason
+
+
+def _next_action(
+    report: AnalysisReport,
+    *,
+    workflow: str,
+    title: str,
+    freshness: str,
+) -> dict[str, Any] | None:
+    if freshness == "fresh" and report.next_actions:
+        return dict(report.next_actions[0])
+    if freshness == "fresh":
+        return None
+    if report.evidence_mode in {"no_level_evidence", "static_snapshot_only"}:
+        label = f"Play project and run {title}"
+    elif report.evidence_mode == "short_live_snapshot":
+        label = f"Capture a longer live window for {title}"
+    else:
+        label = f"Run {title}"
+    return {"type": "run_workflow", "workflow": workflow, "label": label}
+
+
+def _parse_iso(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)

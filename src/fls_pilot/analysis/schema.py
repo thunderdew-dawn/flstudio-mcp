@@ -264,9 +264,7 @@ class AnalysisReport:
         object.__setattr__(self, "evidence_mode", str(self.evidence_mode))
         object.__setattr__(self, "risk_score", clamp_score(self.risk_score))
         health = (
-            health_from_risk(self.risk_score)
-            if self.health_score is None
-            else self.health_score
+            health_from_risk(self.risk_score) if self.health_score is None else self.health_score
         )
         object.__setattr__(self, "health_score", clamp_score(health))
         object.__setattr__(self, "confidence_score", clamp_score(self.confidence_score))

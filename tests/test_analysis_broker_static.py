@@ -99,7 +99,8 @@ def test_static_project_snapshot_reuses_fresh_cached_snapshot() -> None:
     call_count = len(bridge.calls)
     second = broker.get_static_project_snapshot(bridge)
 
-    assert len(bridge.calls) == call_count
+    assert len(bridge.calls) == call_count + 1
+    assert bridge.calls[-1][0] == protocol.CMD_GET_PROJECT_STATE
     assert second.observation_id == first.observation_id
     assert second.project_fingerprint == first.project_fingerprint
 
@@ -143,3 +144,30 @@ def test_static_project_snapshot_can_skip_optional_playlist_read() -> None:
     assert snapshot.coverage.status == "fresh"
     assert "playlist_tracks_snapshot" not in snapshot.coverage.missing
     assert all(call[0] != protocol.CMD_PLAYLIST_LIST_TRACKS for call in bridge.calls)
+
+
+def test_cache_refreshes_when_requested_policy_needs_more_data() -> None:
+    bridge = FakeBridge()
+    broker = AnalysisBroker()
+
+    first = broker.get_static_project_snapshot(
+        bridge,
+        StaticSnapshotPolicy(include_patterns=False, include_playlist=False),
+    )
+    second = broker.get_static_project_snapshot(bridge, StaticSnapshotPolicy())
+
+    assert second.observation_id != first.observation_id
+    assert any(call[0] == protocol.CMD_PATTERN_LIST for call in bridge.calls)
+    assert any(call[0] == protocol.CMD_PLAYLIST_LIST_TRACKS for call in bridge.calls)
+
+
+def test_cache_refreshes_when_project_state_changes() -> None:
+    bridge = FakeBridge()
+    broker = AnalysisBroker()
+
+    first = broker.get_static_project_snapshot(bridge)
+    bridge.project_state["title"] = "Different Project"
+    second = broker.get_static_project_snapshot(bridge)
+
+    assert second.observation_id != first.observation_id
+    assert second.project_fingerprint != first.project_fingerprint

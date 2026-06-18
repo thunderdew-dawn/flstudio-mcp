@@ -126,7 +126,14 @@ class AnalysisBroker:
             cached = self.observation_store.latest("static_project_snapshot")
             if cached is not None and isinstance(cached.payload, dict):
                 snapshot = StaticProjectSnapshot.from_dict(cached.payload)
-                return replace(snapshot, observation_id=cached.observation_id)
+                current_state = read_project_state(bridge)
+                current_state_fingerprint = project_fingerprint(current_state)
+                cached_state_fingerprint = snapshot.metadata.get("project_state_fingerprint")
+                if (
+                    _snapshot_satisfies_policy(snapshot, policy)
+                    and cached_state_fingerprint == current_state_fingerprint
+                ):
+                    return replace(snapshot, observation_id=cached.observation_id)
         return self._collect_static_project_snapshot(bridge, policy)
 
     def get_live_meter_window(
@@ -134,17 +141,24 @@ class AnalysisBroker:
         bridge: Any,
         policy: LiveMeterPolicy | None = None,
         watcher_provider: WatcherProvider | None = None,
+        static_snapshot: StaticProjectSnapshot | None = None,
     ) -> LiveMeterWindow:
         policy = policy or LiveMeterPolicy()
-        
-        # Read minimal project state for playing status and fingerprint context
-        project_obs = self._record_project_state(bridge, StaticSnapshotPolicy(ttl_seconds=policy.ttl_seconds))
-        project_state = _payload_dict(project_obs.payload)
-        fingerprint = project_fingerprint(project_state)
-        
+
+        if static_snapshot is not None:
+            project_state = dict(static_snapshot.project_state)
+            fingerprint = static_snapshot.project_fingerprint
+        else:
+            project_obs = self._record_project_state(
+                bridge,
+                StaticSnapshotPolicy(ttl_seconds=policy.ttl_seconds),
+            )
+            project_state = _payload_dict(project_obs.payload)
+            fingerprint = project_fingerprint(project_state)
+
         status = watcher_provider.status() if watcher_provider else None
         last_max = watcher_provider.last_max() if watcher_provider else None
-        
+
         window = normalize_live_meter_window(
             status=status,
             last_max=last_max,
@@ -152,7 +166,7 @@ class AnalysisBroker:
             policy=policy,
             project_fingerprint=fingerprint,
         )
-        
+
         self.observation_store.record(
             kind="live_meter_window",
             payload=window.to_dict(),
@@ -160,7 +174,7 @@ class AnalysisBroker:
             ttl_seconds=policy.ttl_seconds,
             confidence=window.confidence,
             project_fingerprint=fingerprint,
-            invalidates_on=(),
+            invalidates_on=("fl_disconnect", "project_structure_change"),
             errors=window.errors,
         )
         return window
@@ -234,7 +248,8 @@ class AnalysisBroker:
                     "include_patterns": policy.include_patterns,
                     "include_playlist": policy.include_playlist,
                     "force_refresh": policy.force_refresh,
-                }
+                },
+                "project_state_fingerprint": project_fingerprint(project_state),
             },
         )
         snapshot_observation = self.observation_store.record(
@@ -430,3 +445,15 @@ def _int_or_len(value: Any, rows: tuple[dict[str, Any], ...]) -> int:
     except (TypeError, ValueError):
         pass
     return len(rows)
+
+
+def _snapshot_satisfies_policy(
+    snapshot: StaticProjectSnapshot,
+    policy: StaticSnapshotPolicy,
+) -> bool:
+    cached_policy = snapshot.metadata.get("policy")
+    if not isinstance(cached_policy, dict):
+        return False
+    if policy.include_patterns and not bool(cached_policy.get("include_patterns")):
+        return False
+    return not (policy.include_playlist and not bool(cached_policy.get("include_playlist")))

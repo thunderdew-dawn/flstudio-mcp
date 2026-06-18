@@ -219,9 +219,7 @@ class ObservationStore:
         if observation_id is not None:
             return [str(observation_id)]
         candidate_ids = (
-            list(self._by_kind.get(str(kind), []))
-            if kind is not None
-            else list(self._observations)
+            list(self._by_kind.get(str(kind), [])) if kind is not None else list(self._observations)
         )
         if event is None:
             return candidate_ids

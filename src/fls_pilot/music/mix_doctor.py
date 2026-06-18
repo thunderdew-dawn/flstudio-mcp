@@ -133,9 +133,11 @@ def gather_snapshot(
     with_params=True,
     max_tracks=64,
     param_cap=120,
+    peak_samples=15,
     peak_interval_ms=80,
     peaks_override=None,
     live_window=None,
+    static_snapshot=None,
 ):
     """Build a normalised whole-mix snapshot via cheap bridge reads.
 
@@ -161,33 +163,50 @@ def gather_snapshot(
             errors.append(f"{label} -> {type(e).__name__}: {e}")
             return default
 
-    ps = _safe(lambda: bridge.call(protocol.CMD_GET_PROJECT_STATE), "project_state", {}) or {}
+    static_data = (
+        static_snapshot.to_dict()
+        if hasattr(static_snapshot, "to_dict")
+        else dict(static_snapshot or {})
+    )
+    ps = static_data.get("project_state")
+    if not isinstance(ps, dict):
+        ps = _safe(lambda: bridge.call(protocol.CMD_GET_PROJECT_STATE), "project_state", {}) or {}
     playing = bool(ps.get("playing"))
 
-    tracks_raw = (
-        _safe(
-            lambda: fetch_all_pages(bridge, protocol.CMD_MIXER_LIST_TRACKS, "tracks"),
-            "mixer_list_tracks",
-            {"tracks": []},
-        )
-        or {}
-    ).get("tracks", [])
-    routing_raw = (
-        _safe(
-            lambda: fetch_all_pages(bridge, protocol.CMD_MIXER_GET_ROUTING_ALL, "routing"),
-            "mixer_get_routing_all",
-            {"routing": []},
-        )
-        or {}
-    ).get("routing", [])
-    channel_routing_raw = (
-        _safe(
-            lambda: fetch_all_pages(bridge, protocol.CMD_CHANNEL_ROUTING_SUMMARY, "channels"),
-            "channel_routing_summary",
-            {"channels": []},
-        )
-        or {}
-    ).get("channels", [])
+    tracks_raw = static_data.get("mixer_tracks")
+    if not isinstance(tracks_raw, list):
+        tracks_raw = (
+            _safe(
+                lambda: fetch_all_pages(bridge, protocol.CMD_MIXER_LIST_TRACKS, "tracks"),
+                "mixer_list_tracks",
+                {"tracks": []},
+            )
+            or {}
+        ).get("tracks", [])
+    routing_raw = static_data.get("routing")
+    if not isinstance(routing_raw, list):
+        routing_raw = (
+            _safe(
+                lambda: fetch_all_pages(bridge, protocol.CMD_MIXER_GET_ROUTING_ALL, "routing"),
+                "mixer_get_routing_all",
+                {"routing": []},
+            )
+            or {}
+        ).get("routing", [])
+    channel_routing_raw = static_data.get("channels")
+    if not isinstance(channel_routing_raw, list):
+        channel_routing_raw = (
+            _safe(
+                lambda: fetch_all_pages(
+                    bridge,
+                    protocol.CMD_CHANNEL_ROUTING_SUMMARY,
+                    "channels",
+                ),
+                "channel_routing_summary",
+                {"channels": []},
+            )
+            or {}
+        ).get("channels", [])
     route_by = {r.get("i", r.get("index")): (r.get("routes_to") or []) for r in routing_raw}
 
     indices = [t.get("i", t.get("index")) for t in tracks_raw[:max_tracks]]
@@ -277,6 +296,8 @@ def gather_snapshot(
         "template_context": template_context,
         "gather_errors": errors,
         "live_window": live_window.to_dict() if live_window else None,
+        "project_fingerprint": static_data.get("project_fingerprint"),
+        "source_observation_ids": list(static_data.get("source_observation_ids") or []),
     }
 
 
@@ -557,9 +578,11 @@ def rule_missing_compressor(tracks):
                     "low",
                     t["name"],
                     "no dynamics plugin in chain ({})".format(", ".join(names)),
-                    "{} is a naturally dynamic track (vocal/bass/drums/bus) but has no compressor in its chain -- consider adding one (heuristic).".format(
-                        t["name"]
-                    ),
+                    (
+                        "{} is a naturally dynamic track (vocal/bass/drums/bus) "
+                        "but has no compressor in its chain -- consider adding "
+                        "one (heuristic)."
+                    ).format(t["name"]),
                     {
                         "intent": "user_action_required",
                         "args": {},
@@ -730,16 +753,14 @@ def diagnose(snapshot):
     playing = snapshot.get("playing")
     levels_valid = snapshot.get("levels_valid", playing)  # watch capture also counts
     findings, notes = [], []
-    
+
     live_window = snapshot.get("live_window")
-    
-    # Determine explicit evidence mode
+
     if live_window:
         fw = live_window.get("freshness")
         limitations = live_window.get("limitations") or []
         if fw == "unavailable":
-            evidence_mode = "no_level_evidence"
-            levels_valid = False
+            evidence_mode = "short_live_snapshot" if levels_valid else "no_level_evidence"
         elif fw == "fresh" and "short capture window" not in limitations:
             evidence_mode = "sufficient_watch_window"
             levels_valid = True
@@ -747,22 +768,22 @@ def diagnose(snapshot):
             evidence_mode = "recent_live_meter_window"
             levels_valid = True
         elif fw == "partial":
-            evidence_mode = "short_live_snapshot"
-            levels_valid = False
+            evidence_mode = "short_live_snapshot" if levels_valid else "no_level_evidence"
+        elif fw == "stale":
+            evidence_mode = "short_live_snapshot" if levels_valid else "static_snapshot_only"
         else:
-            evidence_mode = "no_level_evidence"
-            levels_valid = False
+            evidence_mode = "short_live_snapshot" if levels_valid else "no_level_evidence"
     else:
-        evidence_mode = "static_snapshot_only" if not levels_valid else "recent_live_meter_window"
-        
+        evidence_mode = "short_live_snapshot" if levels_valid else "static_snapshot_only"
+
     if levels_valid:
         findings += rule_clipping(tracks)
         findings += rule_headroom(tracks)
         findings += _imbalance(tracks, "peak_db", "peak", IMBALANCE_DB)
     else:
         notes.append(
-            "Project STOPPED -- level rules (clipping, headroom, peak "
-            "imbalance) skipped. Press play and re-run, or use watch mode "
+            "No current level evidence -- clipping, headroom, and peak imbalance "
+            "rules were skipped. Press play and re-run, or use watch mode "
             "(fl_mix_watch_start -> play the full song -> fl_mix_watch_stop)."
         )
         findings += _imbalance(tracks, "vol_db", "fader", FADER_IMBALANCE_DB, floor=0.0)
@@ -1349,6 +1370,9 @@ class PeakWatcher:
         self._last_max = {}
         self._reads = 0
         self._started = None
+        self._completed_at = None
+        self._elapsed = 0.0
+        self._project_fingerprint = None
         self._indices = []
 
     def is_running(self):
@@ -1360,9 +1384,13 @@ class PeakWatcher:
         self._stop.clear()
         with self._lock:
             self._max = {i: 0.0 for i in indices}
+            self._last_max = {}
             self._reads = 0
+            self._completed_at = None
+            self._elapsed = 0.0
         self._indices = list(indices)
         self._started = _time.time()
+        self._project_fingerprint = _watch_project_fingerprint(bridge)
         self._thread = threading.Thread(
             target=self._run, args=(bridge, interval_ms / 1000.0, max_seconds), daemon=True
         )
@@ -1395,22 +1423,40 @@ class PeakWatcher:
             self._thread.join(timeout=5.0)
         with self._lock:
             elapsed = (_time.time() - self._started) if self._started else 0.0
-            self._last_max = dict(self._max)  # retain for later tools (gain-stage, ref-match)
+            self._elapsed = elapsed
+            self._completed_at = _time.time()
+            self._last_max = dict(self._max)
             return dict(self._max), self._reads, elapsed
 
     def last_max(self):
-        """Running-max {index: peak_lin} from the most recent completed watch (or {})."""
+        """Return the current or most recently completed watch maxima."""
         with self._lock:
-            return dict(self._last_max)
+            return dict(self._max if self.is_running() else self._last_max)
 
     def status(self):
         with self._lock:
+            running = self.is_running()
+            elapsed = (_time.time() - self._started) if running and self._started else self._elapsed
             return {
-                "running": self.is_running(),
+                "running": running,
                 "reads": self._reads,
-                "elapsed_s": round((_time.time() - self._started), 1) if self._started else 0.0,
+                "elapsed_s": round(elapsed, 1),
                 "tracks": len(self._max),
+                "started_at": self._started,
+                "completed_at": self._completed_at,
+                "project_fingerprint": self._project_fingerprint,
             }
+
+
+def _watch_project_fingerprint(bridge):
+    from .. import protocol
+    from ..analysis.fl_reads import project_fingerprint
+
+    try:
+        state = bridge.call(protocol.CMD_GET_PROJECT_STATE)
+    except Exception:
+        return None
+    return project_fingerprint(state if isinstance(state, dict) else {})
 
 
 _watcher = PeakWatcher()

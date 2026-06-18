@@ -2198,41 +2198,42 @@ function lowEndScoreLabel(score, ok) {
 function renderExplicitLabels(containerSelector, report) {
   const container = document.querySelector(containerSelector);
   if (!container || !report) return;
-  
-  let explicitDiv = container.querySelector('.explicit-labels-group');
+
+  let explicitDiv = container.querySelector(".explicit-labels-group");
   if (!explicitDiv) {
-    explicitDiv = document.createElement('div');
-    explicitDiv.className = 'explicit-labels-group';
-    explicitDiv.style.gridColumn = '1 / -1';
-    explicitDiv.style.display = 'grid';
-    explicitDiv.style.gridTemplateColumns = 'repeat(2, 1fr)';
-    explicitDiv.style.gap = 'var(--space-3)';
+    explicitDiv = document.createElement("div");
+    explicitDiv.className = "explicit-labels-group";
+    explicitDiv.style.gridColumn = "1 / -1";
+    explicitDiv.style.display = "grid";
+    explicitDiv.style.gridTemplateColumns = "repeat(2, 1fr)";
+    explicitDiv.style.gap = "var(--space-3)";
     container.insertBefore(explicitDiv, container.firstChild);
   }
-  
-  explicitDiv.innerHTML = '';
-  
+
+  explicitDiv.innerHTML = "";
+
   const addStat = (label, value) => {
-    const div = document.createElement('div');
-    const dt = document.createElement('dt');
+    const div = document.createElement("div");
+    const dt = document.createElement("dt");
     dt.textContent = label;
-    const dd = document.createElement('dd');
+    const dd = document.createElement("dd");
     dd.textContent = value;
     div.append(dt, dd);
     explicitDiv.append(div);
   };
-  
-  const h = report.health_score ?? report.summary?.health_score;
-  const r = report.risk_score ?? report.summary?.risk_score;
-  const c = report.coverage;
-  const conf = report.confidence_score;
-  
-  if (h != null) addStat('Health', `${Math.round(h)} / 100`);
-  if (r != null) addStat('Risk', `${Math.round(r)} / 100`);
-  if (c != null && c.required) addStat('Coverage', `${c.available} / ${c.required}`);
+
+  const analysis = report.analysis || {};
+  const h = analysis.health_score ?? report.summary?.health_score;
+  const r = analysis.risk_score ?? report.summary?.risk_score;
+  const c = analysis.coverage;
+  const conf = analysis.confidence_score;
+
+  if (h != null) addStat("Health", `${Math.round(h)} / 100`);
+  if (r != null) addStat("Risk", `${Math.round(r)} / 100`);
+  if (c != null && c.required) addStat("Coverage", `${c.available} / ${c.required}`);
   if (conf != null) {
-     const band = conf >= 90 ? "High" : conf >= 50 ? "Medium" : "Low";
-     addStat('Confidence', band);
+    const band = conf >= 75 ? "High" : conf >= 40 ? "Medium" : "Low";
+    addStat("Confidence", band);
   }
 }
 

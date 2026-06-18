@@ -1,11 +1,8 @@
 """Tests for Phase 6 live runtime observations."""
 
-from fls_pilot.analysis.live import (
-    LiveMeterPolicy,
-    LiveMeterWindow,
-    WatcherProvider,
-    normalize_live_meter_window,
-)
+from time import time
+
+from fls_pilot.analysis.live import LiveMeterPolicy, normalize_live_meter_window
 
 
 class FakeWatcher:
@@ -80,3 +77,48 @@ def test_sufficient_watch_window():
     assert window.coverage.available == 1
     assert "short capture window" not in window.limitations
     assert not window.errors
+
+
+def test_completed_watch_expires() -> None:
+    window = normalize_live_meter_window(
+        status={
+            "running": False,
+            "elapsed_s": 30.0,
+            "reads": 100,
+            "tracks": 1,
+            "completed_at": time() - 300,
+            "project_fingerprint": "proj_one",
+        },
+        last_max={1: -2.0},
+        project_state={"playing": False},
+        policy=LiveMeterPolicy(
+            min_capture_seconds=30.0,
+            recent_watch_seconds=120.0,
+        ),
+        project_fingerprint="proj_one",
+    )
+
+    assert window.freshness == "stale"
+    assert window.coverage.available == 0
+    assert "watch window is stale" in window.limitations
+
+
+def test_watch_from_different_project_is_unavailable() -> None:
+    window = normalize_live_meter_window(
+        status={
+            "running": False,
+            "elapsed_s": 30.0,
+            "reads": 100,
+            "tracks": 1,
+            "completed_at": time(),
+            "project_fingerprint": "proj_one",
+        },
+        last_max={1: -2.0},
+        project_state={"playing": False},
+        policy=LiveMeterPolicy(min_capture_seconds=30.0),
+        project_fingerprint="proj_two",
+    )
+
+    assert window.freshness == "unavailable"
+    assert window.track_meter_summaries == {}
+    assert "different project" in " ".join(window.errors)

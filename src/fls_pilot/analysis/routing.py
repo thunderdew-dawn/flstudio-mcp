@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from .canonical import channel_entity_id, mixer_entity_id
@@ -38,13 +39,20 @@ def routing_analysis_report_from_legacy_payload(
         _routing_finding(row, index=index, confidence_score=confidence)
         for index, row in enumerate(findings, start=1)
     )
+    report_created_at, valid_until = _validity_window(created_at or payload.get("generated_at"))
+    source_observations = tuple(details.get("source_observation_ids") or ())
     return AnalysisReport(
         workflow=workflow,
         title=title,
         analysis_mode="static_snapshot",
-        created_at=created_at or str(payload.get("generated_at") or ""),
+        evidence_mode="static_snapshot_only",
+        created_at=report_created_at,
+        project_fingerprint=details.get("project_fingerprint"),
         freshness=Freshness(
             status="fresh" if ok and coverage.status == "fresh" else coverage.status,
+            created_at=report_created_at,
+            valid_until=valid_until,
+            source_observation_ids=source_observations,
             details="Read-only routing matrix and channel target metadata.",
         ),
         coverage=coverage,
@@ -60,13 +68,12 @@ def routing_analysis_report_from_legacy_payload(
         risk_score=risk,
         confidence_score=confidence,
         findings=analysis_findings,
-        assumptions=(
-            "Channel Rack to mixer relationships are inferred from target mixer tracks.",
-        ),
+        assumptions=("Channel Rack to mixer relationships are inferred from target mixer tracks.",),
         limitations=(
             "Routing review is static metadata evidence; it does not prove audible signal flow.",
             "Plugin insertion, external inputs, and UI drag-and-drop routing remain manual.",
         ),
+        source_observations=source_observations,
         next_actions=(
             {
                 "type": "workflow",
@@ -81,6 +88,17 @@ def routing_analysis_report_from_legacy_payload(
             "template_context": details.get("template_context") or payload.get("template_context"),
         },
     )
+
+
+def _validity_window(value: Any, *, ttl_seconds: float = 120.0) -> tuple[str, str]:
+    try:
+        created = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        created = datetime.now(timezone.utc)
+    if created.tzinfo is None:
+        created = created.replace(tzinfo=timezone.utc)
+    created = created.astimezone(timezone.utc)
+    return created.isoformat(), (created + timedelta(seconds=ttl_seconds)).isoformat()
 
 
 def _routing_coverage(
@@ -172,9 +190,7 @@ def _routing_entities(row: dict[str, Any]) -> tuple[EntityRef, ...]:
             mixer_track = _as_int(item.get("track"))
         if mixer_track is not None:
             label = str(
-                item.get("mixer_name")
-                or item.get("target_name")
-                or f"Insert {mixer_track}"
+                item.get("mixer_name") or item.get("target_name") or f"Insert {mixer_track}"
             )
             entities.append(EntityRef("mixer_track", mixer_entity_id(mixer_track), label))
     return tuple(_dedupe_entities(entities))
