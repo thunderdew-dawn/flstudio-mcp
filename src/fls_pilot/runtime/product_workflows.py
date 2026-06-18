@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import hashlib
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
 from .. import protocol
+from ..analysis.audio_features import FeatureExtractor
 from ..analysis.schema import (
     AnalysisReport,
     Coverage,
@@ -18,7 +18,7 @@ from ..analysis.schema import (
 )
 from ..analysis.scoring import confidence_from_coverage, risk_from_severities
 from ..music import preset_library
-from ..tools.audio import analyze_bands, audio_analyze
+from .audio_worker import sha256_file
 from .core import RuntimeCore
 
 _STATIC_TTL_SECONDS = 120
@@ -251,14 +251,19 @@ def _run_jam_to_project(
             "Names are treated as labels, not proof of musical role or arrangement intent.",
         ),
         limitations=(
-            "The workflow does not move Playlist clips, create an arrangement, delete content, or make taste decisions.",
-            "Placeholder names require the producer to confirm the intended role before any rename.",
+            "The workflow does not move Playlist clips, create an arrangement, "
+            "delete content, or make taste decisions.",
+            "Placeholder names require the producer to confirm the intended role "
+            "before any rename.",
         ),
         manual_checks=(
             {
                 "id": "jam.confirm_sections",
                 "title": "Confirm section boundaries and musical roles in the Playlist.",
-                "reason": "The FL API does not provide safe Playlist clip editing for this workflow.",
+                "reason": (
+                    "The FL API does not provide safe Playlist clip editing "
+                    "for this workflow."
+                ),
             },
         ),
         next_actions=(
@@ -378,7 +383,8 @@ def _run_plugin_assistant(
             missing="mixer_track_target",
             manual_title="Choose one mixer track to inspect.",
             limitation=(
-                "The assistant does not scan every mixer track automatically and cannot load plugins."
+                "The assistant does not scan every mixer track automatically "
+                "and cannot load plugins."
             ),
         )
     if not isinstance(track, int) or isinstance(track, bool) or track < 0:
@@ -442,7 +448,11 @@ def _run_preset_assistant(
         for rows in (library.get("presets") or {}).values()
         for name in rows
     ]
-    matches = preset_library.score_presets(names, description) if names and description else names[:15]
+    matches = (
+        preset_library.score_presets(names, description)
+        if names and description
+        else names[:15]
+    )
     available = bool(library.get("found"))
     now = _now()
     return AnalysisReport(
@@ -535,7 +545,7 @@ def build_audio_evidence_report(
     if not path.is_file():
         raise ValueError(f"audio evidence file not found: {path}")
 
-    digest = _sha256(path)
+    digest = sha256_file(path)
     features, unavailable_metrics = _analyze_audio_file(path)
     duration = _as_float(features.get("duration_sec"))
     if evidence_kind in {"stem", "candidate"} and duration > _SHORT_AUDIO_LIMIT_SECONDS:
@@ -588,7 +598,8 @@ def build_audio_evidence_report(
         ),
         limitations=(
             "No FL Studio render was triggered.",
-            "True loudness, phase correlation, mono cancellation, and stem overlap are not claimed.",
+            "True loudness, phase correlation, mono cancellation, and stem "
+            "overlap are not claimed.",
             *(
                 (f"Unavailable metrics: {', '.join(unavailable_metrics)}.",)
                 if unavailable_metrics
@@ -760,50 +771,25 @@ def _freshness(now: datetime, source_ids: tuple[str, ...]) -> Freshness:
     )
 
 
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
 def _analyze_audio_file(path: Path) -> tuple[dict[str, Any], list[str]]:
-    try:
-        return {**audio_analyze(str(path)), **analyze_bands(str(path))}, []
-    except ModuleNotFoundError as exc:
-        if exc.name != "librosa":
-            raise
-    if path.suffix.lower() not in {".wav", ".wave", ".flac", ".aif", ".aiff"}:
-        raise RuntimeError(
-            "Detailed audio evidence for this format requires the optional audio dependencies."
-        )
-    try:
-        import numpy as np
-        import soundfile as sf
-    except ModuleNotFoundError as exc:
-        raise RuntimeError(
-            "Audio evidence requires the optional audio dependencies."
-        ) from exc
-
-    audio, sample_rate = sf.read(str(path), always_2d=False)
-    values = np.asarray(audio, dtype=float)
-    if values.ndim > 1:
-        values = values.mean(axis=1)
-    duration = float(len(values) / sample_rate) if sample_rate else 0.0
-    peak = float(np.max(np.abs(values))) if values.size else 0.0
-    rms = float(np.sqrt(np.mean(values**2))) if values.size else 0.0
+    extracted = FeatureExtractor().extract(path)
+    summary = extracted["summary"]
+    bands = summary["band_energy"]
     features = {
         "path": str(path),
-        "duration_sec": round(duration, 2),
-        "rms_db": round(20 * np.log10(rms), 1) if rms > 0 else None,
-        "peak_db": round(20 * np.log10(peak), 1) if peak > 0 else None,
+        "duration_sec": summary["duration_seconds"],
+        "rms_db": summary["rms_dbfs"],
+        "peak_db": summary["peak_dbfs"],
         "tempo_bpm": None,
         "key": None,
-        "bands_pct": None,
-        "note": "Install the optional audio dependencies for tempo, key, and spectral bands.",
+        "bands_pct": {
+            "low": round(100 * (bands["sub"] + bands["low"]), 1),
+            "mid": round(100 * bands["mid"], 1),
+            "high": round(100 * bands["high"], 1),
+        },
+        "note": "Tempo and key are separate optional MIR features.",
     }
-    return features, ["tempo", "key", "spectral_band_shares"]
+    return features, ["tempo", "key"]
 
 
 def _is_default_name(row: dict[str, Any], prefix: str, index_key: str) -> bool:

@@ -1,5 +1,11 @@
 """Read-only analysis contracts for workflow reports and observations."""
 
+from .audio_features import (
+    FEATURE_EXTRACTOR_VERSION,
+    FeatureExtractor,
+    FeatureExtractorConfig,
+    pairwise_overlap_masks,
+)
 from .audio_schema import (
     AUDIO_ARTIFACT_CONTRACT_VERSION,
     AUDIO_FEATURES_CONTRACT_VERSION,
@@ -73,6 +79,9 @@ __all__ = [
     "Coverage",
     "EntityRef",
     "Finding",
+    "FEATURE_EXTRACTOR_VERSION",
+    "FeatureExtractor",
+    "FeatureExtractorConfig",
     "Freshness",
     "Observation",
     "ObservationStore",
@@ -102,6 +111,7 @@ __all__ = [
     "pattern_entity_id",
     "playlist_count_policy",
     "playlist_slot_entity_id",
+    "pairwise_overlap_masks",
     "plugin_entity_id",
     "project_fingerprint",
     "requirement",

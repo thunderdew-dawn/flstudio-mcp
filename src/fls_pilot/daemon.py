@@ -58,6 +58,8 @@ from .connection import (
     FLPortMissing,
     FLTimeout,
 )
+from .runtime.artifacts import AudioArtifactStore
+from .runtime.audio_worker import AudioAnalysisWorker
 from .runtime.contracts import RuntimeResponse
 from .runtime.core import RuntimeCore
 from .runtime.protocol import validate_runtime_request
@@ -70,7 +72,12 @@ logger = logging.getLogger("fls_pilot.daemon")
 
 _bridge: FLBridge | None = None
 _bridge_lock = threading.Lock()
-_runtime = RuntimeCore()
+_audio_artifact_store = AudioArtifactStore()
+_runtime = RuntimeCore(
+    job_result_validator=_audio_artifact_store.validate_result_ref,
+)
+_audio_worker = AudioAnalysisWorker(_audio_artifact_store)
+_audio_worker.register(_runtime)
 
 
 def _get_bridge() -> FLBridge:
