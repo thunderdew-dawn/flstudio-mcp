@@ -20,7 +20,11 @@ required by the change.
 | Live FL verification | `agent-docs/agents/runtime-usage.md` |
 
 Read `agent-docs/machine/architecture-governance.snapshot.json` only when the Architecture
-Governance Contract requires it. Do not load it for routine edits.
+Governance Contract requires it. Do not load it for routine edits. For coding
+work that matches a governed surface, use
+`agent-docs/machine/architecture/index.snapshot.json` to select only the
+necessary scoped generated analysis slice instead of loading the full static
+analysis snapshot.
 
 If a binding contract conflicts with the requested implementation, stop and
 surface the conflict before changing behavior.
@@ -46,10 +50,14 @@ Before editing an architecture-governed surface:
 
 1. Read `agent-docs/contracts/architecture-governance.md`.
 2. Consult `agent-docs/machine/architecture-governance.snapshot.json`.
-3. Change source, docs, and tests first.
-4. Update the snapshot, or explicitly explain why it remains unchanged.
-5. Report an Architecture Diff.
-6. Stop for human approval when the contract's STOP rule applies.
+3. Use `agent-docs/machine/architecture/index.snapshot.json` to load only the
+   scoped generated slice or slices relevant to the coding task.
+4. Change source, docs, and tests first.
+5. Update the governed snapshot only when governed facts changed.
+6. Update affected scoped generated slices only when generated architecture
+   facts changed.
+7. Report an Architecture Diff.
+8. Stop for human approval when the contract's STOP rule applies.
 
 The STOP rule does not apply to typo fixes, normal README edits, comments,
 small test corrections, or internal refactors with no public-surface, safety,

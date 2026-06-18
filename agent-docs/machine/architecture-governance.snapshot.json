@@ -46,6 +46,12 @@
       "comment_only_change",
       "small_behavior_preserving_test_fix",
       "internal_refactor_without_surface_safety_protocol_or_boundary_impact"
+    ],
+    "generated_snapshot_update_policy": [
+      "Use scoped generated slices for coding-scope context instead of loading the full static analysis by default.",
+      "Update affected scoped slices after coding changes when generated architecture facts changed.",
+      "Regenerate the full static analysis and all slices before beta/stable releases or after broad architecture refactors.",
+      "Update the governed snapshot only when governed facts changed; otherwise state why it is unchanged."
     ]
   },
   "entrypoints": [
@@ -374,6 +380,9 @@
     "analysis": "src/fls_pilot/analysis/",
     "workflows": "src/fls_pilot/workflows/registry.py",
     "capability_evidence": "agent-docs/concepts/api-capability-audit.md",
-    "knowledgebase": "knowledgebase/"
+    "knowledgebase": "knowledgebase/",
+    "governed_snapshot": "agent-docs/machine/architecture-governance.snapshot.json",
+    "full_generated_static_analysis": "agent-docs/machine/architecture-analysis.snapshot.json",
+    "scoped_generated_static_analysis_index": "agent-docs/machine/architecture/index.snapshot.json"
   }
 }

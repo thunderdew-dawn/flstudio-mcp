@@ -1,0 +1,154 @@
+{
+  "schema": "fls-pilot.architecture.mcp-tool-module.slice.v1",
+  "slice_id": "mcp_tools.routing",
+  "title": "MCP tool module: routing",
+  "source_snapshot": "agent-docs/machine/architecture-analysis.snapshot.json",
+  "source_snapshot_sha256": "9fe6631a08edc80c5dd9f6d6d99bd7bf0b5c07706068972c32ad311a5a0af338",
+  "generated_at": "2026-06-18",
+  "load_when": [
+    "MCP tool implementation or registration changes in the routing tool module",
+    "safety annotations, doc safety, destructive hints, or protocol usage change for routing tools"
+  ],
+  "summary": {
+    "module": "routing",
+    "tools_total": 10,
+    "safety_class_counts": {
+      "read-only": 6,
+      "write-safe-required": 4
+    },
+    "destructive_hint_true_count": 0,
+    "first_line": 222
+  },
+  "tools": [
+    {
+      "contract_safety_class": "read-only",
+      "destructive_hint": null,
+      "evidence": "annotation readOnlyHint=True destructiveHint=None; protocol=CMD_MIXER_GET_ROUTING; safetyClass='read-only'; doc_safety=True",
+      "has_safety_doc": true,
+      "line": 222,
+      "name": "fl_get_routing",
+      "path": "src/fls_pilot/tools/routing.py",
+      "read_only_hint": true,
+      "safety_class_annotation": "read-only",
+      "status": "read-only",
+      "title": "Get mixer track routing"
+    },
+    {
+      "contract_safety_class": "read-only",
+      "destructive_hint": null,
+      "evidence": "annotation readOnlyHint=True destructiveHint=None; protocol=CMD_MIXER_GET_ROUTING_ALL; safetyClass='read-only'; doc_safety=True",
+      "has_safety_doc": true,
+      "line": 233,
+      "name": "fl_get_routing_all",
+      "path": "src/fls_pilot/tools/routing.py",
+      "read_only_hint": true,
+      "safety_class_annotation": "read-only",
+      "status": "read-only",
+      "title": "Get full routing matrix"
+    },
+    {
+      "contract_safety_class": "read-only",
+      "destructive_hint": null,
+      "evidence": "annotation readOnlyHint=True destructiveHint=None; protocol=CMD_CHANNEL_ROUTING_SUMMARY; safetyClass='read-only'; doc_safety=True",
+      "has_safety_doc": true,
+      "line": 242,
+      "name": "fl_get_channel_routing",
+      "path": "src/fls_pilot/tools/routing.py",
+      "read_only_hint": true,
+      "safety_class_annotation": "read-only",
+      "status": "read-only",
+      "title": "Get channel->mixer routing"
+    },
+    {
+      "contract_safety_class": "read-only",
+      "destructive_hint": null,
+      "evidence": "annotation readOnlyHint=True destructiveHint=None; protocol=CMD_CHANNEL_ROUTING_SUMMARY,CMD_MIXER_GET_ROUTING_ALL,CMD_PLUGIN_LIST; helper_calls=detect_cleanup; safetyClass='read-only'; doc_safety=True",
+      "has_safety_doc": true,
+      "line": 251,
+      "name": "fl_detect_cleanup_candidates",
+      "path": "src/fls_pilot/tools/routing.py",
+      "read_only_hint": true,
+      "safety_class_annotation": "read-only",
+      "status": "read-only",
+      "title": "Detect cleanup candidates (read-only)"
+    },
+    {
+      "contract_safety_class": "write-safe-required",
+      "destructive_hint": false,
+      "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_MIXER_SET_ROUTE; uses safety layer; safetyClass='write-safe-required'; doc_safety=True",
+      "has_safety_doc": true,
+      "line": 261,
+      "name": "fl_set_route",
+      "path": "src/fls_pilot/tools/routing.py",
+      "read_only_hint": false,
+      "safety_class_annotation": "write-safe-required",
+      "status": "write-safe-required",
+      "title": "Set mixer routing (src -> dst)"
+    },
+    {
+      "contract_safety_class": "write-safe-required",
+      "destructive_hint": false,
+      "evidence": "annotation readOnlyHint=False destructiveHint=False; uses safety layer; helper_calls=_bus_rename_entry,_dry_run_report,_no_write_report,_route_write_entry; safetyClass='write-safe-required'; doc_safety=True",
+      "has_safety_doc": true,
+      "line": 290,
+      "name": "fl_group_tracks",
+      "path": "src/fls_pilot/tools/routing.py",
+      "read_only_hint": false,
+      "safety_class_annotation": "write-safe-required",
+      "status": "write-safe-required",
+      "title": "Group tracks into a bus"
+    },
+    {
+      "contract_safety_class": "read-only",
+      "destructive_hint": null,
+      "evidence": "annotation readOnlyHint=True destructiveHint=None; helper_calls=_routing_review_findings; safetyClass='read-only'; doc_safety=True",
+      "has_safety_doc": true,
+      "line": 399,
+      "name": "fl_review_routing",
+      "path": "src/fls_pilot/tools/routing.py",
+      "read_only_hint": true,
+      "safety_class_annotation": "read-only",
+      "status": "read-only",
+      "title": "Review routing"
+    },
+    {
+      "contract_safety_class": "read-only",
+      "destructive_hint": null,
+      "evidence": "annotation readOnlyHint=True destructiveHint=None; safetyClass='read-only'; doc_safety=True",
+      "has_safety_doc": true,
+      "line": 535,
+      "name": "fl_plan_routing_cleanup",
+      "path": "src/fls_pilot/tools/routing.py",
+      "read_only_hint": true,
+      "safety_class_annotation": "read-only",
+      "status": "read-only",
+      "title": "Plan routing cleanup"
+    },
+    {
+      "contract_safety_class": "write-safe-required",
+      "destructive_hint": false,
+      "evidence": "annotation readOnlyHint=False destructiveHint=False; uses safety layer; helper_calls=_bus_rename_entry,_dry_run_report,_no_write_report,_route_write_entry; safetyClass='write-safe-required'; doc_safety=True",
+      "has_safety_doc": true,
+      "line": 610,
+      "name": "fl_apply_routing_cleanup",
+      "path": "src/fls_pilot/tools/routing.py",
+      "read_only_hint": false,
+      "safety_class_annotation": "write-safe-required",
+      "status": "write-safe-required",
+      "title": "Apply routing cleanup"
+    },
+    {
+      "contract_safety_class": "write-safe-required",
+      "destructive_hint": false,
+      "evidence": "annotation readOnlyHint=False destructiveHint=False; uses safety layer; helper_calls=_bus_rename_entry,_dry_run_report,_no_write_report,_route_write_entry; safetyClass='write-safe-required'; doc_safety=True",
+      "has_safety_doc": true,
+      "line": 709,
+      "name": "fl_apply_bus_layout",
+      "path": "src/fls_pilot/tools/routing.py",
+      "read_only_hint": false,
+      "safety_class_annotation": "write-safe-required",
+      "status": "write-safe-required",
+      "title": "Apply bus layout"
+    }
+  ]
+}

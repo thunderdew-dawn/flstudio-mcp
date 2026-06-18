@@ -1,0 +1,36 @@
+{
+  "schema": "fls-pilot.architecture.mcp-tool-module.slice.v1",
+  "slice_id": "mcp_tools.channel",
+  "title": "MCP tool module: channel",
+  "source_snapshot": "agent-docs/machine/architecture-analysis.snapshot.json",
+  "source_snapshot_sha256": "9fe6631a08edc80c5dd9f6d6d99bd7bf0b5c07706068972c32ad311a5a0af338",
+  "generated_at": "2026-06-18",
+  "load_when": [
+    "MCP tool implementation or registration changes in the channel tool module",
+    "safety annotations, doc safety, destructive hints, or protocol usage change for channel tools"
+  ],
+  "summary": {
+    "module": "channel",
+    "tools_total": 1,
+    "safety_class_counts": {
+      "write-safe-required": 1
+    },
+    "destructive_hint_true_count": 1,
+    "first_line": 35
+  },
+  "tools": [
+    {
+      "contract_safety_class": "write-safe-required",
+      "destructive_hint": true,
+      "evidence": "annotation readOnlyHint=False destructiveHint=True; protocol=CMD_CHANNEL_ROUTING_SUMMARY,CMD_PATTERN_SELECTED; uses safety layer; helper_calls=_bridge_call,_bridge_call_paginated,_classify_channels; safetyClass='write-safe-required'; doc_safety=True",
+      "has_safety_doc": true,
+      "line": 35,
+      "name": "fl_channel",
+      "path": "src/fls_pilot/tools/channel.py",
+      "read_only_hint": false,
+      "safety_class_annotation": "write-safe-required",
+      "status": "write-safe-required",
+      "title": "Channel domain operation"
+    }
+  ]
+}

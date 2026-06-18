@@ -1,0 +1,295 @@
+{
+  "schema": "fls-pilot.architecture.static-analysis.slice.v1",
+  "slice_id": "mcp_surface",
+  "title": "MCP tools, resources, prompts and public tool safety summary",
+  "source_snapshot": "agent-docs/machine/architecture-analysis.snapshot.json",
+  "source_snapshot_sha256": "9fe6631a08edc80c5dd9f6d6d99bd7bf0b5c07706068972c32ad311a5a0af338",
+  "generated_at": "2026-06-18",
+  "note": "Slim generated MCP surface slice. For a concrete tool module, load the matching file under architecture/mcp-tools/.",
+  "load_when": [
+    "MCP tools, resources, or prompts are added, removed, renamed, or changed",
+    "public MCP behavior, safety annotations, or tool registration changes",
+    "FastMCP registration baseline or prompt/resource packaging changes"
+  ],
+  "payload": {
+    "tool_safety_summary": {
+      "external-write": 2,
+      "read-only": 71,
+      "server-state": 4,
+      "transient": 6,
+      "write-safe-required": 84
+    },
+    "tools_total": 167,
+    "tool_module_slices": {
+      "arrange": {
+        "path": "agent-docs/machine/architecture/mcp-tools/arrange.snapshot.json",
+        "tools_total": 4,
+        "safety_class_counts": {
+          "write-safe-required": 4
+        },
+        "destructive_hint_true_count": 0
+      },
+      "audio": {
+        "path": "agent-docs/machine/architecture/mcp-tools/audio.snapshot.json",
+        "tools_total": 2,
+        "safety_class_counts": {
+          "read-only": 2
+        },
+        "destructive_hint_true_count": 0
+      },
+      "batch": {
+        "path": "agent-docs/machine/architecture/mcp-tools/batch.snapshot.json",
+        "tools_total": 1,
+        "safety_class_counts": {
+          "write-safe-required": 1
+        },
+        "destructive_hint_true_count": 0
+      },
+      "bulk": {
+        "path": "agent-docs/machine/architecture/mcp-tools/bulk.snapshot.json",
+        "tools_total": 3,
+        "safety_class_counts": {
+          "write-safe-required": 3
+        },
+        "destructive_hint_true_count": 0
+      },
+      "chains": {
+        "path": "agent-docs/machine/architecture/mcp-tools/chains.snapshot.json",
+        "tools_total": 3,
+        "safety_class_counts": {
+          "read-only": 3
+        },
+        "destructive_hint_true_count": 0
+      },
+      "channel": {
+        "path": "agent-docs/machine/architecture/mcp-tools/channel.snapshot.json",
+        "tools_total": 1,
+        "safety_class_counts": {
+          "write-safe-required": 1
+        },
+        "destructive_hint_true_count": 1
+      },
+      "channels": {
+        "path": "agent-docs/machine/architecture/mcp-tools/channels.snapshot.json",
+        "tools_total": 14,
+        "safety_class_counts": {
+          "read-only": 6,
+          "write-safe-required": 8
+        },
+        "destructive_hint_true_count": 0
+      },
+      "color": {
+        "path": "agent-docs/machine/architecture/mcp-tools/color.snapshot.json",
+        "tools_total": 2,
+        "safety_class_counts": {
+          "write-safe-required": 2
+        },
+        "destructive_hint_true_count": 0
+      },
+      "compose": {
+        "path": "agent-docs/machine/architecture/mcp-tools/compose.snapshot.json",
+        "tools_total": 4,
+        "safety_class_counts": {
+          "write-safe-required": 2,
+          "read-only": 2
+        },
+        "destructive_hint_true_count": 2
+      },
+      "effect": {
+        "path": "agent-docs/machine/architecture/mcp-tools/effect.snapshot.json",
+        "tools_total": 1,
+        "safety_class_counts": {
+          "write-safe-required": 1
+        },
+        "destructive_hint_true_count": 1
+      },
+      "effects": {
+        "path": "agent-docs/machine/architecture/mcp-tools/effects.snapshot.json",
+        "tools_total": 8,
+        "safety_class_counts": {
+          "read-only": 4,
+          "write-safe-required": 4
+        },
+        "destructive_hint_true_count": 0
+      },
+      "export": {
+        "path": "agent-docs/machine/architecture/mcp-tools/export.snapshot.json",
+        "tools_total": 1,
+        "safety_class_counts": {
+          "external-write": 1
+        },
+        "destructive_hint_true_count": 0
+      },
+      "mix_doctor": {
+        "path": "agent-docs/machine/architecture/mcp-tools/mix_doctor.snapshot.json",
+        "tools_total": 8,
+        "safety_class_counts": {
+          "read-only": 7,
+          "write-safe-required": 1
+        },
+        "destructive_hint_true_count": 0
+      },
+      "mixer": {
+        "path": "agent-docs/machine/architecture/mcp-tools/mixer.snapshot.json",
+        "tools_total": 1,
+        "safety_class_counts": {
+          "write-safe-required": 1
+        },
+        "destructive_hint_true_count": 1
+      },
+      "mixer_core": {
+        "path": "agent-docs/machine/architecture/mcp-tools/mixer_core.snapshot.json",
+        "tools_total": 30,
+        "safety_class_counts": {
+          "read-only": 9,
+          "write-safe-required": 16,
+          "server-state": 4,
+          "external-write": 1
+        },
+        "destructive_hint_true_count": 2
+      },
+      "mixing": {
+        "path": "agent-docs/machine/architecture/mcp-tools/mixing.snapshot.json",
+        "tools_total": 5,
+        "safety_class_counts": {
+          "write-safe-required": 4,
+          "read-only": 1
+        },
+        "destructive_hint_true_count": 0
+      },
+      "pattern": {
+        "path": "agent-docs/machine/architecture/mcp-tools/pattern.snapshot.json",
+        "tools_total": 1,
+        "safety_class_counts": {
+          "write-safe-required": 1
+        },
+        "destructive_hint_true_count": 1
+      },
+      "patterns_playlist": {
+        "path": "agent-docs/machine/architecture/mcp-tools/patterns_playlist.snapshot.json",
+        "tools_total": 15,
+        "safety_class_counts": {
+          "read-only": 6,
+          "write-safe-required": 9
+        },
+        "destructive_hint_true_count": 0
+      },
+      "pianoroll": {
+        "path": "agent-docs/machine/architecture/mcp-tools/pianoroll.snapshot.json",
+        "tools_total": 15,
+        "safety_class_counts": {
+          "write-safe-required": 13,
+          "read-only": 2
+        },
+        "destructive_hint_true_count": 3
+      },
+      "playlist": {
+        "path": "agent-docs/machine/architecture/mcp-tools/playlist.snapshot.json",
+        "tools_total": 1,
+        "safety_class_counts": {
+          "write-safe-required": 1
+        },
+        "destructive_hint_true_count": 1
+      },
+      "plugin": {
+        "path": "agent-docs/machine/architecture/mcp-tools/plugin.snapshot.json",
+        "tools_total": 8,
+        "safety_class_counts": {
+          "read-only": 7,
+          "write-safe-required": 1
+        },
+        "destructive_hint_true_count": 0
+      },
+      "plugin_domain": {
+        "path": "agent-docs/machine/architecture/mcp-tools/plugin_domain.snapshot.json",
+        "tools_total": 1,
+        "safety_class_counts": {
+          "write-safe-required": 1
+        },
+        "destructive_hint_true_count": 1
+      },
+      "presets": {
+        "path": "agent-docs/machine/architecture/mcp-tools/presets.snapshot.json",
+        "tools_total": 2,
+        "safety_class_counts": {
+          "read-only": 2
+        },
+        "destructive_hint_true_count": 0
+      },
+      "project_doctor": {
+        "path": "agent-docs/machine/architecture/mcp-tools/project_doctor.snapshot.json",
+        "tools_total": 7,
+        "safety_class_counts": {
+          "read-only": 7
+        },
+        "destructive_hint_true_count": 0
+      },
+      "project_organizer": {
+        "path": "agent-docs/machine/architecture/mcp-tools/project_organizer.snapshot.json",
+        "tools_total": 5,
+        "safety_class_counts": {
+          "read-only": 2,
+          "write-safe-required": 3
+        },
+        "destructive_hint_true_count": 0
+      },
+      "routing": {
+        "path": "agent-docs/machine/architecture/mcp-tools/routing.snapshot.json",
+        "tools_total": 10,
+        "safety_class_counts": {
+          "read-only": 6,
+          "write-safe-required": 4
+        },
+        "destructive_hint_true_count": 0
+      },
+      "transport": {
+        "path": "agent-docs/machine/architecture/mcp-tools/transport.snapshot.json",
+        "tools_total": 14,
+        "safety_class_counts": {
+          "read-only": 5,
+          "write-safe-required": 3,
+          "transient": 6
+        },
+        "destructive_hint_true_count": 2
+      }
+    },
+    "resources": [
+      "fl://agent-briefing",
+      "fl://status",
+      "fl://project",
+      "fl://transport",
+      "fl://channels",
+      "fl://mixer",
+      "fl://patterns",
+      "fls://docs/safety-contract",
+      "fls://docs/api-capability-audit",
+      "fls://docs/default-safe-ux",
+      "fls://docs/runtime-usage",
+      "fls://docs/knowledgebase-protocol",
+      "fls://docs/tool-policy",
+      "fls://capabilities/supported",
+      "fls://capabilities/not-possible",
+      "fls://capabilities/api-limits",
+      "fls://capabilities/write-safety"
+    ],
+    "prompts": [
+      "api-probe.md",
+      "audio-to-midi.md",
+      "bug-triage.md",
+      "composition-scale-writer.md",
+      "implementation-slice.md",
+      "mix-review.md",
+      "plugin-chain-planner.md",
+      "project-organizer.md",
+      "project-preflight.md",
+      "release.md",
+      "routing-review.md"
+    ],
+    "source_files": {
+      "server_registration": "src/fls_pilot/server.py",
+      "tool_modules": "src/fls_pilot/tools/*.py",
+      "resources": "src/fls_pilot/tools/resources.py",
+      "prompts": "src/fls_pilot/prompts.py"
+    }
+  }
+}

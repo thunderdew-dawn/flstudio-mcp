@@ -1,0 +1,114 @@
+{
+  "schema": "fls-pilot.architecture.mcp-tool-module.slice.v1",
+  "slice_id": "mcp_tools.project_doctor",
+  "title": "MCP tool module: project_doctor",
+  "source_snapshot": "agent-docs/machine/architecture-analysis.snapshot.json",
+  "source_snapshot_sha256": "9fe6631a08edc80c5dd9f6d6d99bd7bf0b5c07706068972c32ad311a5a0af338",
+  "generated_at": "2026-06-18",
+  "load_when": [
+    "MCP tool implementation or registration changes in the project_doctor tool module",
+    "safety annotations, doc safety, destructive hints, or protocol usage change for project_doctor tools"
+  ],
+  "summary": {
+    "module": "project_doctor",
+    "tools_total": 7,
+    "safety_class_counts": {
+      "read-only": 7
+    },
+    "destructive_hint_true_count": 0,
+    "first_line": 94
+  },
+  "tools": [
+    {
+      "contract_safety_class": "read-only",
+      "destructive_hint": null,
+      "evidence": "annotation readOnlyHint=True destructiveHint=None; protocol=CMD_CHANNEL_GET,CMD_CHANNEL_LIST,CMD_CHANNEL_ROUTING_SUMMARY,CMD_GET_PROJECT_STATE,CMD_MIXER_GET_ROUTING_ALL,CMD_MIXER_LIST_TRACKS,CMD_PATTERN_LIST,CMD_PLAYLIST_LIST_TRACKS; helper_calls=_diagnostic_from_finding,_find_duplicate_names; safetyClass='read-only'; doc_safety=True",
+      "has_safety_doc": true,
+      "line": 94,
+      "name": "fl_project_health_report",
+      "path": "src/fls_pilot/tools/project_doctor.py",
+      "read_only_hint": true,
+      "safety_class_annotation": "read-only",
+      "status": "read-only",
+      "title": "Project health report"
+    },
+    {
+      "contract_safety_class": "read-only",
+      "destructive_hint": null,
+      "evidence": "annotation readOnlyHint=True destructiveHint=None; protocol=CMD_CHANNEL_GET,CMD_CHANNEL_LIST,CMD_CHANNEL_ROUTING_SUMMARY,CMD_GET_PROJECT_STATE,CMD_MIXER_GET_ROUTING_ALL,CMD_MIXER_LIST_TRACKS,CMD_PATTERN_LIST,CMD_PLAYLIST_LIST_TRACKS; helper_calls=fl_project_health_report; safetyClass='read-only'; doc_safety=True",
+      "has_safety_doc": true,
+      "line": 211,
+      "name": "fl_export_readiness_report",
+      "path": "src/fls_pilot/tools/project_doctor.py",
+      "read_only_hint": true,
+      "safety_class_annotation": "read-only",
+      "status": "read-only",
+      "title": "Export readiness report"
+    },
+    {
+      "contract_safety_class": "read-only",
+      "destructive_hint": null,
+      "evidence": "annotation readOnlyHint=True destructiveHint=None; protocol=CMD_CHANNEL_GET,CMD_CHANNEL_LIST,CMD_CHANNEL_ROUTING_SUMMARY,CMD_GET_PROJECT_STATE,CMD_MIXER_GET_ROUTING_ALL,CMD_MIXER_LIST_TRACKS,CMD_PATTERN_LIST,CMD_PLAYLIST_LIST_TRACKS; helper_calls=_find_duplicate_names,_proposal_from_action,_suggest_pattern_name,fl_export_readiness_report,fl_project_health_report; safetyClass='read-only'; doc_safety=True",
+      "has_safety_doc": true,
+      "line": 237,
+      "name": "fl_project_dry_run_fix_plan",
+      "path": "src/fls_pilot/tools/project_doctor.py",
+      "read_only_hint": true,
+      "safety_class_annotation": "read-only",
+      "status": "read-only",
+      "title": "Project dry-run fix plan"
+    },
+    {
+      "contract_safety_class": "read-only",
+      "destructive_hint": null,
+      "evidence": "annotation readOnlyHint=True destructiveHint=None; protocol=CMD_CHANNEL_ROUTING_SUMMARY,CMD_MIXER_GET_ROUTING_ALL,CMD_MIXER_LIST_TRACKS,CMD_PATTERN_LIST; safetyClass='read-only'; doc_safety=True",
+      "has_safety_doc": true,
+      "line": 360,
+      "name": "fl_project_health_overview",
+      "path": "src/fls_pilot/tools/project_doctor.py",
+      "read_only_hint": true,
+      "safety_class_annotation": "read-only",
+      "status": "read-only",
+      "title": "Project health overview"
+    },
+    {
+      "contract_safety_class": "read-only",
+      "destructive_hint": null,
+      "evidence": "annotation readOnlyHint=True destructiveHint=None; protocol=CMD_CHANNEL_ROUTING_SUMMARY,CMD_MIXER_GET_ROUTING_ALL,CMD_MIXER_LIST_TRACKS; helper_calls=_manual_check; safetyClass='read-only'; doc_safety=True",
+      "has_safety_doc": true,
+      "line": 430,
+      "name": "fl_check_project_preflight",
+      "path": "src/fls_pilot/tools/project_doctor.py",
+      "read_only_hint": true,
+      "safety_class_annotation": "read-only",
+      "status": "read-only",
+      "title": "Project preflight check"
+    },
+    {
+      "contract_safety_class": "read-only",
+      "destructive_hint": null,
+      "evidence": "annotation readOnlyHint=True destructiveHint=None; protocol=CMD_CHANNEL_ROUTING_SUMMARY,CMD_MIXER_GET_ROUTING_ALL,CMD_MIXER_LIST_TRACKS,CMD_PATTERN_LIST; helper_calls=fl_check_project_preflight,fl_project_health_overview; safetyClass='read-only'; doc_safety=True",
+      "has_safety_doc": true,
+      "line": 604,
+      "name": "fl_start_guided_cleanup",
+      "path": "src/fls_pilot/tools/project_doctor.py",
+      "read_only_hint": true,
+      "safety_class_annotation": "read-only",
+      "status": "read-only",
+      "title": "Start guided cleanup assistant"
+    },
+    {
+      "contract_safety_class": "read-only",
+      "destructive_hint": null,
+      "evidence": "annotation readOnlyHint=True destructiveHint=None; protocol=CMD_CHANNEL_ROUTING_SUMMARY,CMD_MIXER_GET_ROUTING_ALL,CMD_MIXER_LIST_TRACKS,CMD_PATTERN_LIST; helper_calls=fl_check_project_preflight,fl_project_health_overview; safetyClass='read-only'; doc_safety=True",
+      "has_safety_doc": true,
+      "line": 652,
+      "name": "fl_get_guided_cleanup_context",
+      "path": "src/fls_pilot/tools/project_doctor.py",
+      "read_only_hint": true,
+      "safety_class_annotation": "read-only",
+      "status": "read-only",
+      "title": "Get guided cleanup context"
+    }
+  ]
+}

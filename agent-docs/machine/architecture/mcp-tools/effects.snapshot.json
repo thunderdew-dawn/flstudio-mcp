@@ -1,0 +1,128 @@
+{
+  "schema": "fls-pilot.architecture.mcp-tool-module.slice.v1",
+  "slice_id": "mcp_tools.effects",
+  "title": "MCP tool module: effects",
+  "source_snapshot": "agent-docs/machine/architecture-analysis.snapshot.json",
+  "source_snapshot_sha256": "9fe6631a08edc80c5dd9f6d6d99bd7bf0b5c07706068972c32ad311a5a0af338",
+  "generated_at": "2026-06-18",
+  "load_when": [
+    "MCP tool implementation or registration changes in the effects tool module",
+    "safety annotations, doc safety, destructive hints, or protocol usage change for effects tools"
+  ],
+  "summary": {
+    "module": "effects",
+    "tools_total": 8,
+    "safety_class_counts": {
+      "read-only": 4,
+      "write-safe-required": 4
+    },
+    "destructive_hint_true_count": 0,
+    "first_line": 44
+  },
+  "tools": [
+    {
+      "contract_safety_class": "read-only",
+      "destructive_hint": null,
+      "evidence": "annotation readOnlyHint=True destructiveHint=None; protocol=CMD_MIXER_GET_SLOT; safetyClass='read-only'; doc_safety=True",
+      "has_safety_doc": true,
+      "line": 44,
+      "name": "fl_effect_get_slot",
+      "path": "src/fls_pilot/tools/effects.py",
+      "read_only_hint": true,
+      "safety_class_annotation": "read-only",
+      "status": "read-only",
+      "title": "Get effect slot details"
+    },
+    {
+      "contract_safety_class": "read-only",
+      "destructive_hint": null,
+      "evidence": "annotation readOnlyHint=True destructiveHint=None; protocol=CMD_MIXER_GET_SLOT; safetyClass='read-only'; doc_safety=True",
+      "has_safety_doc": true,
+      "line": 64,
+      "name": "fl_effect_list_slots",
+      "path": "src/fls_pilot/tools/effects.py",
+      "read_only_hint": true,
+      "safety_class_annotation": "read-only",
+      "status": "read-only",
+      "title": "List effect slots on a track"
+    },
+    {
+      "contract_safety_class": "write-safe-required",
+      "destructive_hint": false,
+      "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_MIXER_SET_SLOT_MIX; uses safety layer; safetyClass='write-safe-required'; doc_safety=True",
+      "has_safety_doc": true,
+      "line": 91,
+      "name": "fl_effect_set_slot_mix",
+      "path": "src/fls_pilot/tools/effects.py",
+      "read_only_hint": false,
+      "safety_class_annotation": "write-safe-required",
+      "status": "write-safe-required",
+      "title": "Set effect slot mix"
+    },
+    {
+      "contract_safety_class": "read-only",
+      "destructive_hint": null,
+      "evidence": "annotation readOnlyHint=True destructiveHint=None; protocol=CMD_MIXER_GET_TRACK_SLOTS; safetyClass='read-only'; doc_safety=True",
+      "has_safety_doc": true,
+      "line": 117,
+      "name": "fl_effect_get_track_slots_enabled",
+      "path": "src/fls_pilot/tools/effects.py",
+      "read_only_hint": true,
+      "safety_class_annotation": "read-only",
+      "status": "read-only",
+      "title": "Get track effect-slots enabled state"
+    },
+    {
+      "contract_safety_class": "write-safe-required",
+      "destructive_hint": false,
+      "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_MIXER_SET_TRACK_SLOTS; uses safety layer; safetyClass='write-safe-required'; doc_safety=True",
+      "has_safety_doc": true,
+      "line": 136,
+      "name": "fl_effect_set_track_slots_enabled",
+      "path": "src/fls_pilot/tools/effects.py",
+      "read_only_hint": false,
+      "safety_class_annotation": "write-safe-required",
+      "status": "write-safe-required",
+      "title": "Enable or bypass all track effect slots"
+    },
+    {
+      "contract_safety_class": "write-safe-required",
+      "destructive_hint": false,
+      "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_MIXER_SET_SLOT_ENABLED; uses safety layer; safetyClass='write-safe-required'; doc_safety=True",
+      "has_safety_doc": true,
+      "line": 162,
+      "name": "fl_effect_set_slot_enabled",
+      "path": "src/fls_pilot/tools/effects.py",
+      "read_only_hint": false,
+      "safety_class_annotation": "write-safe-required",
+      "status": "write-safe-required",
+      "title": "Enable or bypass one effect slot"
+    },
+    {
+      "contract_safety_class": "read-only",
+      "destructive_hint": null,
+      "evidence": "annotation readOnlyHint=True destructiveHint=None; protocol=CMD_MIXER_GET_EQ; safetyClass='read-only'; doc_safety=True",
+      "has_safety_doc": true,
+      "line": 189,
+      "name": "fl_eq_get",
+      "path": "src/fls_pilot/tools/effects.py",
+      "read_only_hint": true,
+      "safety_class_annotation": "read-only",
+      "status": "read-only",
+      "title": "Get native mixer EQ"
+    },
+    {
+      "contract_safety_class": "write-safe-required",
+      "destructive_hint": false,
+      "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_MIXER_SET_EQ; uses safety layer; helper_calls=_band_before; safetyClass='write-safe-required'; doc_safety=True",
+      "has_safety_doc": true,
+      "line": 206,
+      "name": "fl_eq_set_band",
+      "path": "src/fls_pilot/tools/effects.py",
+      "read_only_hint": false,
+      "safety_class_annotation": "write-safe-required",
+      "status": "write-safe-required",
+      "title": "Set one native EQ band"
+    }
+  ]
+}

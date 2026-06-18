@@ -1,0 +1,1014 @@
+{
+  "schema": "fls-pilot.architecture.static-analysis.slice.v1",
+  "slice_id": "import_graph",
+  "title": "Top internal import graph and observed external imports",
+  "source_snapshot": "agent-docs/machine/architecture-analysis.snapshot.json",
+  "source_snapshot_sha256": "9fe6631a08edc80c5dd9f6d6d99bd7bf0b5c07706068972c32ad311a5a0af338",
+  "generated_at": "2026-06-18",
+  "note": "Generated scoped slice of the full static architecture analysis. Load this file only when the coding task matches its scope.",
+  "load_when": [
+    "dependency direction, module extraction, package split, import-cycle, or large refactor tasks",
+    "developer needs a generated dependency overview before changing module boundaries"
+  ],
+  "payload": {
+    "import_graph_top": [
+      {
+        "from": "fls_pilot.server",
+        "to": "fls_pilot",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.server",
+        "to": "fls_pilot.connection",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.server",
+        "to": "fls_pilot.protocol",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.server",
+        "to": "fls_pilot.runtime_config",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.server",
+        "to": "fls_pilot.tools",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.control_center",
+        "to": "fls_pilot",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.control_center",
+        "to": "fls_pilot.analysis",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.control_center",
+        "to": "fls_pilot.analysis.live",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.control_center",
+        "to": "fls_pilot.connection",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.control_center",
+        "to": "fls_pilot.music",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.control_center",
+        "to": "fls_pilot.runtime.client",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.control_center",
+        "to": "fls_pilot.runtime_config",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.control_center",
+        "to": "fls_pilot.status",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.control_center",
+        "to": "fls_pilot.workflows.registry",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.__init__",
+        "to": "fls_pilot.connection",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.__init__",
+        "to": "fls_pilot.protocol",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.prompts",
+        "to": "fls_pilot.tools.workflow_context",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.operations",
+        "to": "fls_pilot",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.connection",
+        "to": "fls_pilot",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.connection",
+        "to": "fls_pilot.pianoroll",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.connection",
+        "to": "fls_pilot.protocol",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.pianoroll",
+        "to": "fls_pilot.pyscript_gen",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.pianoroll",
+        "to": "fls_pilot.pyscript_trigger",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.safety",
+        "to": "fls_pilot",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.safety",
+        "to": "fls_pilot.connection",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.safety",
+        "to": "fls_pilot.protocol",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.safety",
+        "to": "fls_pilot.runtime.invalidation",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.doctor",
+        "to": "fls_pilot",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.doctor",
+        "to": "fls_pilot.runtime_config",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.doctor",
+        "to": "fls_pilot.server",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.daemon",
+        "to": "fls_pilot",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.daemon",
+        "to": "fls_pilot.analysis.broker",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.daemon",
+        "to": "fls_pilot.analysis.live",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.daemon",
+        "to": "fls_pilot.analysis.schema",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.daemon",
+        "to": "fls_pilot.connection",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.daemon",
+        "to": "fls_pilot.pianoroll",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.daemon",
+        "to": "fls_pilot.runtime.contracts",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.daemon",
+        "to": "fls_pilot.runtime.core",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.daemon",
+        "to": "fls_pilot.runtime.protocol",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.daemon",
+        "to": "fls_pilot.runtime.workflow_runner",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.daemon",
+        "to": "fls_pilot.runtime_config",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.daemon",
+        "to": "fls_pilot.workflows.registry",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.status",
+        "to": "fls_pilot",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.music.mix_doctor",
+        "to": "fls_pilot",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.music.mix_doctor",
+        "to": "fls_pilot.analysis.fl_reads",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.music.mix_doctor",
+        "to": "fls_pilot.connection",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.music.mix_doctor",
+        "to": "fls_pilot.music.levels",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.music.levels",
+        "to": "fls_pilot",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.tools.effects",
+        "to": "fls_pilot",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.tools.effects",
+        "to": "fls_pilot.connection",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.tools.effects",
+        "to": "fls_pilot.tools.registration",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.tools.effects",
+        "to": "fls_pilot.tools.targets",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.tools.mixer_core",
+        "to": "fls_pilot",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.tools.mixer_core",
+        "to": "fls_pilot.connection",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.tools.mixer_core",
+        "to": "fls_pilot.music",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.tools.mixer_core",
+        "to": "fls_pilot.tools.registration",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.tools.mixer_core",
+        "to": "fls_pilot.tools.targets",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.tools.chains",
+        "to": "fls_pilot",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.tools.chains",
+        "to": "fls_pilot.connection",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.tools.chains",
+        "to": "fls_pilot.music",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.tools.color",
+        "to": "fls_pilot",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.tools.color",
+        "to": "fls_pilot.connection",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.tools.color",
+        "to": "fls_pilot.tools.bulk",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.tools.targets",
+        "to": "fls_pilot",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.tools.compose",
+        "to": "fls_pilot",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.tools.compose",
+        "to": "fls_pilot.connection",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.tools.compose",
+        "to": "fls_pilot.music",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.tools.compose",
+        "to": "fls_pilot.music.scales",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.tools.transport",
+        "to": "fls_pilot",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.tools.transport",
+        "to": "fls_pilot.connection",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.tools.transport",
+        "to": "fls_pilot.tools.registration",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.tools.bulk",
+        "to": "fls_pilot",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.tools.bulk",
+        "to": "fls_pilot.connection",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.tools.bulk",
+        "to": "fls_pilot.music.mix_doctor",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.tools.presets",
+        "to": "fls_pilot.music",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.tools.batch",
+        "to": "fls_pilot",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.tools.batch",
+        "to": "fls_pilot.connection",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.tools.channel",
+        "to": "fls_pilot",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.tools.channel",
+        "to": "fls_pilot.connection",
+        "count": 1
+      },
+      {
+        "from": "fls_pilot.tools.__init__",
+        "to": "fls_pilot.tools",
+        "count": 1
+      }
+    ],
+    "external_imports_observed": {
+      "fastmcp": 45,
+      "pydantic": 26,
+      "pytest": 21,
+      "numpy": 5,
+      "soundfile": 4,
+      "test_runtime_core": 3,
+      "mido": 3,
+      "ast": 3,
+      "mcp": 3,
+      "audit_tool_safety": 2,
+      "anyio": 2,
+      "jsonschema": 1,
+      "tomllib": 1,
+      "ctypes": 1,
+      "pyautogui": 1,
+      "ipaddress": 1,
+      "secrets": 1,
+      "librosa": 1,
+      "torch": 1,
+      "torchcrepe": 1
+    },
+    "repository_stats_subset": {
+      "package_map": [
+        {
+          "area": "fl_controller",
+          "python_files": 1,
+          "loc": 1827
+        },
+        {
+          "area": "scripts",
+          "python_files": 39,
+          "loc": 5921
+        },
+        {
+          "area": "src/fls_pilot/__init__.py",
+          "python_files": 1,
+          "loc": 36
+        },
+        {
+          "area": "src/fls_pilot/analysis",
+          "python_files": 14,
+          "loc": 2574
+        },
+        {
+          "area": "src/fls_pilot/connection.py",
+          "python_files": 1,
+          "loc": 477
+        },
+        {
+          "area": "src/fls_pilot/context",
+          "python_files": 3,
+          "loc": 3
+        },
+        {
+          "area": "src/fls_pilot/control_center.py",
+          "python_files": 1,
+          "loc": 4083
+        },
+        {
+          "area": "src/fls_pilot/control_center_static",
+          "python_files": 1,
+          "loc": 1
+        },
+        {
+          "area": "src/fls_pilot/daemon.py",
+          "python_files": 1,
+          "loc": 340
+        },
+        {
+          "area": "src/fls_pilot/doctor.py",
+          "python_files": 1,
+          "loc": 1053
+        },
+        {
+          "area": "src/fls_pilot/kb_policy.py",
+          "python_files": 1,
+          "loc": 83
+        },
+        {
+          "area": "src/fls_pilot/music",
+          "python_files": 12,
+          "loc": 2539
+        },
+        {
+          "area": "src/fls_pilot/operations.py",
+          "python_files": 1,
+          "loc": 1357
+        },
+        {
+          "area": "src/fls_pilot/pianoroll.py",
+          "python_files": 1,
+          "loc": 124
+        },
+        {
+          "area": "src/fls_pilot/project_templates.py",
+          "python_files": 1,
+          "loc": 574
+        },
+        {
+          "area": "src/fls_pilot/prompts.py",
+          "python_files": 1,
+          "loc": 138
+        },
+        {
+          "area": "src/fls_pilot/protocol.py",
+          "python_files": 1,
+          "loc": 179
+        },
+        {
+          "area": "src/fls_pilot/pyscript_gen.py",
+          "python_files": 1,
+          "loc": 351
+        },
+        {
+          "area": "src/fls_pilot/pyscript_trigger.py",
+          "python_files": 1,
+          "loc": 94
+        },
+        {
+          "area": "src/fls_pilot/runtime",
+          "python_files": 10,
+          "loc": 1452
+        },
+        {
+          "area": "src/fls_pilot/runtime_config.py",
+          "python_files": 1,
+          "loc": 37
+        },
+        {
+          "area": "src/fls_pilot/safety.py",
+          "python_files": 1,
+          "loc": 633
+        },
+        {
+          "area": "src/fls_pilot/server.py",
+          "python_files": 1,
+          "loc": 173
+        },
+        {
+          "area": "src/fls_pilot/status.py",
+          "python_files": 1,
+          "loc": 482
+        },
+        {
+          "area": "src/fls_pilot/tools",
+          "python_files": 34,
+          "loc": 10515
+        },
+        {
+          "area": "src/fls_pilot/utils",
+          "python_files": 1,
+          "loc": 2
+        },
+        {
+          "area": "src/fls_pilot/workflow_report.py",
+          "python_files": 1,
+          "loc": 266
+        },
+        {
+          "area": "src/fls_pilot/workflows",
+          "python_files": 2,
+          "loc": 436
+        },
+        {
+          "area": "tests",
+          "python_files": 88,
+          "loc": 13205
+        }
+      ],
+      "top_python_modules_by_loc": [
+        {
+          "path": "src/fls_pilot/control_center.py",
+          "module": "fls_pilot.control_center",
+          "loc": 4083,
+          "functions": 161,
+          "classes": [
+            "ManagedProcess",
+            "ControlCenterState",
+            "ControlCenterHandler"
+          ],
+          "imports": [
+            "__future__",
+            "anyio",
+            "argparse",
+            "collections",
+            "contextlib",
+            "dataclasses",
+            "datetime",
+            "fls_pilot",
+            "fls_pilot.analysis",
+            "fls_pilot.analysis.live",
+            "fls_pilot.connection",
+            "fls_pilot.music",
+            "fls_pilot.runtime.client",
+            "fls_pilot.runtime_config",
+            "fls_pilot.status",
+            "fls_pilot.workflows.registry",
+            "http",
+            "http.server",
+            "importlib",
+            "ipaddress",
+            "json",
+            "os",
+            "pathlib",
+            "platform",
+            "socket",
+            "subprocess",
+            "sys",
+            "threading",
+            "time",
+            "typing",
+            "webbrowser"
+          ]
+        },
+        {
+          "path": "fl_controller/FLStudioPilot/device_FLStudioPilot.py",
+          "module": null,
+          "loc": 1827,
+          "functions": 134,
+          "classes": [
+            "_ClientError"
+          ],
+          "imports": [
+            "arrangement",
+            "base64",
+            "channels",
+            "contextlib",
+            "device",
+            "general",
+            "json",
+            "math",
+            "midi",
+            "mixer",
+            "patterns",
+            "playlist",
+            "plugins",
+            "time",
+            "transport",
+            "ui",
+            "utils"
+          ]
+        },
+        {
+          "path": "tests/test_control_center_static.py",
+          "module": null,
+          "loc": 1643,
+          "functions": 8,
+          "classes": [],
+          "imports": [
+            "__future__",
+            "pathlib",
+            "pytest",
+            "shutil",
+            "subprocess"
+          ]
+        },
+        {
+          "path": "src/fls_pilot/operations.py",
+          "module": "fls_pilot.operations",
+          "loc": 1357,
+          "functions": 124,
+          "classes": [
+            "OperationValidationError",
+            "OperationCommand",
+            "PreparedOperation",
+            "OperationSpec",
+            "OperationRegistry"
+          ],
+          "imports": [
+            "__future__",
+            "collections.abc",
+            "dataclasses",
+            "fls_pilot",
+            "math",
+            "typing"
+          ]
+        },
+        {
+          "path": "src/fls_pilot/music/mix_doctor.py",
+          "module": "fls_pilot.music.mix_doctor",
+          "loc": 1299,
+          "functions": 42,
+          "classes": [
+            "PeakWatcher"
+          ],
+          "imports": [
+            "__future__",
+            "fls_pilot",
+            "fls_pilot.analysis.fl_reads",
+            "fls_pilot.connection",
+            "fls_pilot.music.levels",
+            "math",
+            "re",
+            "threading",
+            "time"
+          ]
+        },
+        {
+          "path": "src/fls_pilot/doctor.py",
+          "module": "fls_pilot.doctor",
+          "loc": 1053,
+          "functions": 31,
+          "classes": [
+            "Finding",
+            "MCPServerConfig",
+            "TCPDaemonConfig"
+          ],
+          "imports": [
+            "__future__",
+            "anyio",
+            "argparse",
+            "collections.abc",
+            "contextlib",
+            "dataclasses",
+            "datetime",
+            "fls_pilot",
+            "fls_pilot.runtime_config",
+            "fls_pilot.server",
+            "importlib.util",
+            "json",
+            "mcp",
+            "mcp.client.sse",
+            "mcp.client.stdio",
+            "os",
+            "platform",
+            "socket",
+            "subprocess",
+            "sys",
+            "time",
+            "typing"
+          ]
+        },
+        {
+          "path": "tests/test_control_center.py",
+          "module": null,
+          "loc": 969,
+          "functions": 58,
+          "classes": [
+            "FakeTCPBridge",
+            "FakeRuntimeClient",
+            "OneShotHandler",
+            "OneShotHandler",
+            "OneShotHandler",
+            "OneShotHandler"
+          ],
+          "imports": [
+            "__future__",
+            "fls_pilot",
+            "io",
+            "json",
+            "pytest",
+            "subprocess",
+            "unittest"
+          ]
+        },
+        {
+          "path": "src/fls_pilot/tools/pianoroll.py",
+          "module": "fls_pilot.tools.pianoroll",
+          "loc": 878,
+          "functions": 27,
+          "classes": [
+            "PianoRollNote"
+          ],
+          "imports": [
+            "__future__",
+            "fastmcp",
+            "fls_pilot",
+            "fls_pilot.connection",
+            "fls_pilot.music.scales",
+            "fls_pilot.pyscript_gen",
+            "fls_pilot.tools.registration",
+            "pydantic",
+            "typing"
+          ]
+        },
+        {
+          "path": "src/fls_pilot/tools/mix_doctor.py",
+          "module": "fls_pilot.tools.mix_doctor",
+          "loc": 828,
+          "functions": 18,
+          "classes": [],
+          "imports": [
+            "__future__",
+            "fastmcp",
+            "fls_pilot",
+            "fls_pilot.analysis",
+            "fls_pilot.analysis.live",
+            "fls_pilot.connection",
+            "fls_pilot.music",
+            "fls_pilot.project_templates",
+            "fls_pilot.tools.audio",
+            "math",
+            "os",
+            "pydantic",
+            "typing"
+          ]
+        },
+        {
+          "path": "src/fls_pilot/runtime/product_workflows.py",
+          "module": "fls_pilot.runtime.product_workflows",
+          "loc": 787,
+          "functions": 21,
+          "classes": [],
+          "imports": [
+            "__future__",
+            "datetime",
+            "fls_pilot",
+            "fls_pilot.analysis.schema",
+            "fls_pilot.analysis.scoring",
+            "fls_pilot.music",
+            "fls_pilot.runtime.core",
+            "fls_pilot.tools.audio",
+            "hashlib",
+            "numpy",
+            "pathlib",
+            "soundfile",
+            "typing"
+          ]
+        },
+        {
+          "path": "src/fls_pilot/tools/routing.py",
+          "module": "fls_pilot.tools.routing",
+          "loc": 742,
+          "functions": 19,
+          "classes": [],
+          "imports": [
+            "__future__",
+            "fastmcp",
+            "fls_pilot",
+            "fls_pilot.analysis",
+            "fls_pilot.connection",
+            "fls_pilot.tools.registration",
+            "fls_pilot.tools.targets",
+            "pydantic",
+            "typing"
+          ]
+        },
+        {
+          "path": "scripts/normalize_template_dump.py",
+          "module": null,
+          "loc": 718,
+          "functions": 34,
+          "classes": [],
+          "imports": [
+            "__future__",
+            "argparse",
+            "collections",
+            "collections.abc",
+            "json",
+            "pathlib",
+            "re",
+            "sys",
+            "typing"
+          ]
+        },
+        {
+          "path": "src/fls_pilot/tools/project_organizer.py",
+          "module": "fls_pilot.tools.project_organizer",
+          "loc": 707,
+          "functions": 18,
+          "classes": [],
+          "imports": [
+            "__future__",
+            "fastmcp",
+            "fls_pilot",
+            "fls_pilot.analysis",
+            "fls_pilot.connection",
+            "fls_pilot.tools.channels",
+            "fls_pilot.tools.color",
+            "fls_pilot.tools.routing",
+            "pydantic",
+            "typing"
+          ]
+        },
+        {
+          "path": "tests/test_operation_registry.py",
+          "module": null,
+          "loc": 661,
+          "functions": 22,
+          "classes": [],
+          "imports": [
+            "__future__",
+            "fls_pilot",
+            "pathlib",
+            "pytest",
+            "sys"
+          ]
+        },
+        {
+          "path": "src/fls_pilot/safety.py",
+          "module": "fls_pilot.safety",
+          "loc": 633,
+          "functions": 39,
+          "classes": [
+            "ChangeLog",
+            "GroupWriteError"
+          ],
+          "imports": [
+            "__future__",
+            "collections",
+            "collections.abc",
+            "fls_pilot",
+            "fls_pilot.connection",
+            "fls_pilot.protocol",
+            "fls_pilot.runtime.invalidation",
+            "json",
+            "pathlib",
+            "threading",
+            "time",
+            "uuid"
+          ]
+        },
+        {
+          "path": "src/fls_pilot/tools/project_doctor.py",
+          "module": "fls_pilot.tools.project_doctor",
+          "loc": 621,
+          "functions": 14,
+          "classes": [],
+          "imports": [
+            "__future__",
+            "fastmcp",
+            "fls_pilot",
+            "fls_pilot.connection",
+            "fls_pilot.music"
+          ]
+        },
+        {
+          "path": "src/fls_pilot/project_templates.py",
+          "module": "fls_pilot.project_templates",
+          "loc": 574,
+          "functions": 32,
+          "classes": [],
+          "imports": [
+            "__future__",
+            "collections.abc",
+            "functools",
+            "json",
+            "pathlib",
+            "re",
+            "typing"
+          ]
+        },
+        {
+          "path": "src/fls_pilot/tools/mixing.py",
+          "module": "fls_pilot.tools.mixing",
+          "loc": 570,
+          "functions": 15,
+          "classes": [],
+          "imports": [
+            "__future__",
+            "fastmcp",
+            "fls_pilot",
+            "fls_pilot.connection",
+            "fls_pilot.music",
+            "fls_pilot.music.eq_curves",
+            "pydantic",
+            "typing"
+          ]
+        },
+        {
+          "path": "src/fls_pilot/tools/channels.py",
+          "module": "fls_pilot.tools.channels",
+          "loc": 525,
+          "functions": 21,
+          "classes": [],
+          "imports": [
+            "__future__",
+            "fastmcp",
+            "fls_pilot",
+            "fls_pilot.connection",
+            "fls_pilot.tools.registration",
+            "fls_pilot.tools.targets",
+            "pydantic",
+            "typing"
+          ]
+        },
+        {
+          "path": "src/fls_pilot/tools/mixer_core.py",
+          "module": "fls_pilot.tools.mixer_core",
+          "loc": 520,
+          "functions": 31,
+          "classes": [],
+          "imports": [
+            "__future__",
+            "fastmcp",
+            "fls_pilot",
+            "fls_pilot.connection",
+            "fls_pilot.music",
+            "fls_pilot.tools.registration",
+            "fls_pilot.tools.targets",
+            "pydantic",
+            "typing"
+          ]
+        }
+      ]
+    }
+  }
+}

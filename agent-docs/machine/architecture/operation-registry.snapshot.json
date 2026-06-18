@@ -1,0 +1,562 @@
+{
+  "schema": "fls-pilot.architecture.static-analysis.slice.v1",
+  "slice_id": "operation_registry",
+  "title": "Declarative operation registry, safety classes and write orchestration inventory",
+  "source_snapshot": "agent-docs/machine/architecture-analysis.snapshot.json",
+  "source_snapshot_sha256": "9fe6631a08edc80c5dd9f6d6d99bd7bf0b5c07706068972c32ad311a5a0af338",
+  "generated_at": "2026-06-18",
+  "note": "Generated scoped slice of the full static architecture analysis. Load this file only when the coding task matches its scope.",
+  "load_when": [
+    "operation registry entries, command mapping, snapshot/readback/restore builder, or batch eligibility change",
+    "persistent write path changes or new reversible operation is introduced",
+    "safety class assignment is added, removed, or changed"
+  ],
+  "payload": {
+    "operation_registry": {
+      "summary": {
+        "total": 65,
+        "by_safety_class": {
+          "read-only": 25,
+          "write-safe-required": 34,
+          "transient": 6
+        },
+        "by_domain": {
+          "channel": 13,
+          "effect": 5,
+          "eq": 2,
+          "mixer": 13,
+          "pattern": 9,
+          "playlist": 7,
+          "plugin": 4,
+          "transport": 12
+        }
+      },
+      "operations": [
+        {
+          "domain": "channel",
+          "action": "get",
+          "safety_class": "read-only",
+          "batch_eligible": true,
+          "batch_category": "read_only",
+          "requires_write_contract": false
+        },
+        {
+          "domain": "channel",
+          "action": "get_selected",
+          "safety_class": "read-only",
+          "batch_eligible": true,
+          "batch_category": "read_only",
+          "requires_write_contract": false
+        },
+        {
+          "domain": "channel",
+          "action": "get_steps",
+          "safety_class": "read-only",
+          "batch_eligible": true,
+          "batch_category": "read_only",
+          "requires_write_contract": false
+        },
+        {
+          "domain": "channel",
+          "action": "list",
+          "safety_class": "read-only",
+          "batch_eligible": true,
+          "batch_category": "read_only",
+          "requires_write_contract": false
+        },
+        {
+          "domain": "channel",
+          "action": "select",
+          "safety_class": "write-safe-required",
+          "batch_eligible": true,
+          "batch_category": "persistent_write",
+          "requires_write_contract": true
+        },
+        {
+          "domain": "channel",
+          "action": "set_color",
+          "safety_class": "write-safe-required",
+          "batch_eligible": true,
+          "batch_category": "persistent_write",
+          "requires_write_contract": true
+        },
+        {
+          "domain": "channel",
+          "action": "set_mixer_target",
+          "safety_class": "write-safe-required",
+          "batch_eligible": true,
+          "batch_category": "persistent_write",
+          "requires_write_contract": true
+        },
+        {
+          "domain": "channel",
+          "action": "set_mute",
+          "safety_class": "write-safe-required",
+          "batch_eligible": true,
+          "batch_category": "persistent_write",
+          "requires_write_contract": true
+        },
+        {
+          "domain": "channel",
+          "action": "set_name",
+          "safety_class": "write-safe-required",
+          "batch_eligible": true,
+          "batch_category": "persistent_write",
+          "requires_write_contract": true
+        },
+        {
+          "domain": "channel",
+          "action": "set_pan",
+          "safety_class": "write-safe-required",
+          "batch_eligible": true,
+          "batch_category": "persistent_write",
+          "requires_write_contract": true
+        },
+        {
+          "domain": "channel",
+          "action": "set_solo",
+          "safety_class": "write-safe-required",
+          "batch_eligible": true,
+          "batch_category": "persistent_write",
+          "requires_write_contract": true
+        },
+        {
+          "domain": "channel",
+          "action": "set_steps",
+          "safety_class": "write-safe-required",
+          "batch_eligible": true,
+          "batch_category": "persistent_write",
+          "requires_write_contract": true
+        },
+        {
+          "domain": "channel",
+          "action": "set_volume",
+          "safety_class": "write-safe-required",
+          "batch_eligible": true,
+          "batch_category": "persistent_write",
+          "requires_write_contract": true
+        },
+        {
+          "domain": "effect",
+          "action": "get_slot",
+          "safety_class": "read-only",
+          "batch_eligible": true,
+          "batch_category": "read_only",
+          "requires_write_contract": false
+        },
+        {
+          "domain": "effect",
+          "action": "get_track_slots_enabled",
+          "safety_class": "read-only",
+          "batch_eligible": true,
+          "batch_category": "read_only",
+          "requires_write_contract": false
+        },
+        {
+          "domain": "effect",
+          "action": "set_slot_enabled",
+          "safety_class": "write-safe-required",
+          "batch_eligible": true,
+          "batch_category": "persistent_write",
+          "requires_write_contract": true
+        },
+        {
+          "domain": "effect",
+          "action": "set_slot_mix",
+          "safety_class": "write-safe-required",
+          "batch_eligible": true,
+          "batch_category": "persistent_write",
+          "requires_write_contract": true
+        },
+        {
+          "domain": "effect",
+          "action": "set_track_slots_enabled",
+          "safety_class": "write-safe-required",
+          "batch_eligible": true,
+          "batch_category": "persistent_write",
+          "requires_write_contract": true
+        },
+        {
+          "domain": "eq",
+          "action": "get",
+          "safety_class": "read-only",
+          "batch_eligible": true,
+          "batch_category": "read_only",
+          "requires_write_contract": false
+        },
+        {
+          "domain": "eq",
+          "action": "set_band",
+          "safety_class": "write-safe-required",
+          "batch_eligible": true,
+          "batch_category": "persistent_write",
+          "requires_write_contract": true
+        },
+        {
+          "domain": "mixer",
+          "action": "get",
+          "safety_class": "read-only",
+          "batch_eligible": true,
+          "batch_category": "read_only",
+          "requires_write_contract": false
+        },
+        {
+          "domain": "mixer",
+          "action": "get_route",
+          "safety_class": "read-only",
+          "batch_eligible": true,
+          "batch_category": "read_only",
+          "requires_write_contract": false
+        },
+        {
+          "domain": "mixer",
+          "action": "get_selected",
+          "safety_class": "read-only",
+          "batch_eligible": true,
+          "batch_category": "read_only",
+          "requires_write_contract": false
+        },
+        {
+          "domain": "mixer",
+          "action": "list",
+          "safety_class": "read-only",
+          "batch_eligible": true,
+          "batch_category": "read_only",
+          "requires_write_contract": false
+        },
+        {
+          "domain": "mixer",
+          "action": "select",
+          "safety_class": "write-safe-required",
+          "batch_eligible": true,
+          "batch_category": "persistent_write",
+          "requires_write_contract": true
+        },
+        {
+          "domain": "mixer",
+          "action": "set_color",
+          "safety_class": "write-safe-required",
+          "batch_eligible": true,
+          "batch_category": "persistent_write",
+          "requires_write_contract": true
+        },
+        {
+          "domain": "mixer",
+          "action": "set_mute",
+          "safety_class": "write-safe-required",
+          "batch_eligible": true,
+          "batch_category": "persistent_write",
+          "requires_write_contract": true
+        },
+        {
+          "domain": "mixer",
+          "action": "set_name",
+          "safety_class": "write-safe-required",
+          "batch_eligible": true,
+          "batch_category": "persistent_write",
+          "requires_write_contract": true
+        },
+        {
+          "domain": "mixer",
+          "action": "set_pan",
+          "safety_class": "write-safe-required",
+          "batch_eligible": true,
+          "batch_category": "persistent_write",
+          "requires_write_contract": true
+        },
+        {
+          "domain": "mixer",
+          "action": "set_route",
+          "safety_class": "write-safe-required",
+          "batch_eligible": true,
+          "batch_category": "persistent_write",
+          "requires_write_contract": true
+        },
+        {
+          "domain": "mixer",
+          "action": "set_solo",
+          "safety_class": "write-safe-required",
+          "batch_eligible": true,
+          "batch_category": "persistent_write",
+          "requires_write_contract": true
+        },
+        {
+          "domain": "mixer",
+          "action": "set_stereo_separation",
+          "safety_class": "write-safe-required",
+          "batch_eligible": true,
+          "batch_category": "persistent_write",
+          "requires_write_contract": true
+        },
+        {
+          "domain": "mixer",
+          "action": "set_volume",
+          "safety_class": "write-safe-required",
+          "batch_eligible": true,
+          "batch_category": "persistent_write",
+          "requires_write_contract": true
+        },
+        {
+          "domain": "pattern",
+          "action": "find_empty",
+          "safety_class": "read-only",
+          "batch_eligible": true,
+          "batch_category": "read_only",
+          "requires_write_contract": false
+        },
+        {
+          "domain": "pattern",
+          "action": "get",
+          "safety_class": "read-only",
+          "batch_eligible": true,
+          "batch_category": "read_only",
+          "requires_write_contract": false
+        },
+        {
+          "domain": "pattern",
+          "action": "get_length",
+          "safety_class": "read-only",
+          "batch_eligible": true,
+          "batch_category": "read_only",
+          "requires_write_contract": false
+        },
+        {
+          "domain": "pattern",
+          "action": "get_selected",
+          "safety_class": "read-only",
+          "batch_eligible": true,
+          "batch_category": "read_only",
+          "requires_write_contract": false
+        },
+        {
+          "domain": "pattern",
+          "action": "list",
+          "safety_class": "read-only",
+          "batch_eligible": true,
+          "batch_category": "read_only",
+          "requires_write_contract": false
+        },
+        {
+          "domain": "pattern",
+          "action": "rename",
+          "safety_class": "write-safe-required",
+          "batch_eligible": true,
+          "batch_category": "persistent_write",
+          "requires_write_contract": true
+        },
+        {
+          "domain": "pattern",
+          "action": "select",
+          "safety_class": "write-safe-required",
+          "batch_eligible": true,
+          "batch_category": "persistent_write",
+          "requires_write_contract": true
+        },
+        {
+          "domain": "pattern",
+          "action": "set_color",
+          "safety_class": "write-safe-required",
+          "batch_eligible": true,
+          "batch_category": "persistent_write",
+          "requires_write_contract": true
+        },
+        {
+          "domain": "pattern",
+          "action": "set_length",
+          "safety_class": "write-safe-required",
+          "batch_eligible": true,
+          "batch_category": "persistent_write",
+          "requires_write_contract": true
+        },
+        {
+          "domain": "playlist",
+          "action": "get",
+          "safety_class": "read-only",
+          "batch_eligible": true,
+          "batch_category": "read_only",
+          "requires_write_contract": false
+        },
+        {
+          "domain": "playlist",
+          "action": "list",
+          "safety_class": "read-only",
+          "batch_eligible": true,
+          "batch_category": "read_only",
+          "requires_write_contract": false
+        },
+        {
+          "domain": "playlist",
+          "action": "select",
+          "safety_class": "write-safe-required",
+          "batch_eligible": true,
+          "batch_category": "persistent_write",
+          "requires_write_contract": true
+        },
+        {
+          "domain": "playlist",
+          "action": "set_color",
+          "safety_class": "write-safe-required",
+          "batch_eligible": true,
+          "batch_category": "persistent_write",
+          "requires_write_contract": true
+        },
+        {
+          "domain": "playlist",
+          "action": "set_mute",
+          "safety_class": "write-safe-required",
+          "batch_eligible": true,
+          "batch_category": "persistent_write",
+          "requires_write_contract": true
+        },
+        {
+          "domain": "playlist",
+          "action": "set_name",
+          "safety_class": "write-safe-required",
+          "batch_eligible": true,
+          "batch_category": "persistent_write",
+          "requires_write_contract": true
+        },
+        {
+          "domain": "playlist",
+          "action": "set_solo",
+          "safety_class": "write-safe-required",
+          "batch_eligible": true,
+          "batch_category": "persistent_write",
+          "requires_write_contract": true
+        },
+        {
+          "domain": "plugin",
+          "action": "get_param",
+          "safety_class": "read-only",
+          "batch_eligible": true,
+          "batch_category": "read_only",
+          "requires_write_contract": false
+        },
+        {
+          "domain": "plugin",
+          "action": "list",
+          "safety_class": "read-only",
+          "batch_eligible": true,
+          "batch_category": "read_only",
+          "requires_write_contract": false
+        },
+        {
+          "domain": "plugin",
+          "action": "list_params",
+          "safety_class": "read-only",
+          "batch_eligible": true,
+          "batch_category": "read_only",
+          "requires_write_contract": false
+        },
+        {
+          "domain": "plugin",
+          "action": "set_param",
+          "safety_class": "write-safe-required",
+          "batch_eligible": true,
+          "batch_category": "persistent_write",
+          "requires_write_contract": true
+        },
+        {
+          "domain": "transport",
+          "action": "get_play_state",
+          "safety_class": "read-only",
+          "batch_eligible": true,
+          "batch_category": "read_only",
+          "requires_write_contract": false
+        },
+        {
+          "domain": "transport",
+          "action": "get_song_position",
+          "safety_class": "read-only",
+          "batch_eligible": true,
+          "batch_category": "read_only",
+          "requires_write_contract": false
+        },
+        {
+          "domain": "transport",
+          "action": "get_tempo",
+          "safety_class": "read-only",
+          "batch_eligible": true,
+          "batch_category": "read_only",
+          "requires_write_contract": false
+        },
+        {
+          "domain": "transport",
+          "action": "get_time_signature",
+          "safety_class": "read-only",
+          "batch_eligible": true,
+          "batch_category": "read_only",
+          "requires_write_contract": false
+        },
+        {
+          "domain": "transport",
+          "action": "pause",
+          "safety_class": "transient",
+          "batch_eligible": false,
+          "batch_category": "transient",
+          "requires_write_contract": false
+        },
+        {
+          "domain": "transport",
+          "action": "play",
+          "safety_class": "transient",
+          "batch_eligible": false,
+          "batch_category": "transient",
+          "requires_write_contract": false
+        },
+        {
+          "domain": "transport",
+          "action": "record",
+          "safety_class": "transient",
+          "batch_eligible": false,
+          "batch_category": "transient",
+          "requires_write_contract": false
+        },
+        {
+          "domain": "transport",
+          "action": "set_song_position",
+          "safety_class": "transient",
+          "batch_eligible": false,
+          "batch_category": "transient",
+          "requires_write_contract": false
+        },
+        {
+          "domain": "transport",
+          "action": "set_tempo",
+          "safety_class": "write-safe-required",
+          "batch_eligible": true,
+          "batch_category": "persistent_write",
+          "requires_write_contract": true
+        },
+        {
+          "domain": "transport",
+          "action": "set_time_signature",
+          "safety_class": "write-safe-required",
+          "batch_eligible": true,
+          "batch_category": "persistent_write",
+          "requires_write_contract": true
+        },
+        {
+          "domain": "transport",
+          "action": "stop",
+          "safety_class": "transient",
+          "batch_eligible": false,
+          "batch_category": "transient",
+          "requires_write_contract": false
+        },
+        {
+          "domain": "transport",
+          "action": "toggle_play",
+          "safety_class": "transient",
+          "batch_eligible": false,
+          "batch_category": "transient",
+          "requires_write_contract": false
+        }
+      ]
+    },
+    "source_files": {
+      "registry": "src/fls_pilot/operations.py",
+      "safety": "src/fls_pilot/safety.py"
+    }
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "schema": "fls-pilot.architecture.mcp-tool-module.slice.v1",
+  "slice_id": "mcp_tools.export",
+  "title": "MCP tool module: export",
+  "source_snapshot": "agent-docs/machine/architecture-analysis.snapshot.json",
+  "source_snapshot_sha256": "9fe6631a08edc80c5dd9f6d6d99bd7bf0b5c07706068972c32ad311a5a0af338",
+  "generated_at": "2026-06-18",
+  "load_when": [
+    "MCP tool implementation or registration changes in the export tool module",
+    "safety annotations, doc safety, destructive hints, or protocol usage change for export tools"
+  ],
+  "summary": {
+    "module": "export",
+    "tools_total": 1,
+    "safety_class_counts": {
+      "external-write": 1
+    },
+    "destructive_hint_true_count": 0,
+    "first_line": 48
+  },
+  "tools": [
+    {
+      "contract_safety_class": "external-write",
+      "destructive_hint": false,
+      "evidence": "annotation readOnlyHint=False destructiveHint=False; safetyClass='external-write'; doc_safety=True",
+      "has_safety_doc": true,
+      "line": 48,
+      "name": "fl_export_midi",
+      "path": "src/fls_pilot/tools/export.py",
+      "read_only_hint": false,
+      "safety_class_annotation": "external-write",
+      "status": "external-write",
+      "title": "Export arrangement to .mid"
+    }
+  ]
+}

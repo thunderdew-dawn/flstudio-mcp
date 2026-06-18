@@ -1,0 +1,740 @@
+{
+  "schema": "fls-pilot.architecture.static-analysis.slice.v1",
+  "slice_id": "controller_surface",
+  "title": "Protocol commands, FL controller handlers and MIDI SysEx bridge boundary",
+  "source_snapshot": "agent-docs/machine/architecture-analysis.snapshot.json",
+  "source_snapshot_sha256": "9fe6631a08edc80c5dd9f6d6d99bd7bf0b5c07706068972c32ad311a5a0af338",
+  "generated_at": "2026-06-18",
+  "note": "Generated scoped slice of the full static architecture analysis. Load this file only when the coding task matches its scope.",
+  "load_when": [
+    "protocol commands, wire format, MIDI SysEx payload, or controller handlers change",
+    "bridge/controller command mapping or pagination behavior changes",
+    "FL controller script exposes new handler capability or removes one"
+  ],
+  "payload": {
+    "communication_protocol": {
+      "primary": "MIDI SysEx JSON bridge",
+      "why": "FL controller scripts are sandboxed; always-on controller script cannot use files/network/subprocess, so virtual MIDI is the trusted boundary.",
+      "ports": {
+        "server_to_fl": "FLStudioPilot RX",
+        "fl_to_server": "FLStudioPilot TX",
+        "routing": "both FL MIDI devices must share the same FL port number, docs use 42"
+      },
+      "sysex_body": {
+        "manufacturer_id": "0x7D private use",
+        "magic": "MCP",
+        "direction_values": {
+          "0x01": "request",
+          "0x02": "response",
+          "0x03": "heartbeat"
+        },
+        "request_id": "8 ASCII [a-z0-9]",
+        "payload": "base64 encoded UTF-8 JSON"
+      },
+      "protocol_version": 2,
+      "heartbeat_seconds": 0.5,
+      "stale_threshold_seconds": 3.0,
+      "safe_payload_strategy": "controller paginates list responses to about 600 JSON bytes because larger SysEx payloads can be dropped"
+    },
+    "controller_surface": {
+      "protocol_commands_defined": [
+        {
+          "constant": "CMD_PING",
+          "command": "ping"
+        },
+        {
+          "constant": "CMD_GET_TEMPO",
+          "command": "get_tempo"
+        },
+        {
+          "constant": "CMD_SET_TEMPO",
+          "command": "set_tempo"
+        },
+        {
+          "constant": "CMD_GENERAL_UNDO",
+          "command": "general_undo"
+        },
+        {
+          "constant": "CMD_PLAY",
+          "command": "play"
+        },
+        {
+          "constant": "CMD_STOP",
+          "command": "stop"
+        },
+        {
+          "constant": "CMD_PAUSE",
+          "command": "pause"
+        },
+        {
+          "constant": "CMD_TOGGLE_PLAY",
+          "command": "toggle_play"
+        },
+        {
+          "constant": "CMD_RECORD",
+          "command": "record"
+        },
+        {
+          "constant": "CMD_GET_PLAY_STATE",
+          "command": "get_play_state"
+        },
+        {
+          "constant": "CMD_GET_SONG_POS",
+          "command": "get_song_position"
+        },
+        {
+          "constant": "CMD_SET_SONG_POS",
+          "command": "set_song_position"
+        },
+        {
+          "constant": "CMD_GET_PROJECT_STATE",
+          "command": "get_project_state"
+        },
+        {
+          "constant": "CMD_MIXER_LIST_TRACKS",
+          "command": "mixer_list_tracks"
+        },
+        {
+          "constant": "CMD_MIXER_GET_TRACK",
+          "command": "mixer_get_track"
+        },
+        {
+          "constant": "CMD_MIXER_SET_VOLUME",
+          "command": "mixer_set_volume"
+        },
+        {
+          "constant": "CMD_MIXER_SET_PAN",
+          "command": "mixer_set_pan"
+        },
+        {
+          "constant": "CMD_MIXER_SET_MUTE",
+          "command": "mixer_set_mute"
+        },
+        {
+          "constant": "CMD_MIXER_SET_SOLO",
+          "command": "mixer_set_solo"
+        },
+        {
+          "constant": "CMD_MIXER_SET_NAME",
+          "command": "mixer_set_name"
+        },
+        {
+          "constant": "CMD_MIXER_SELECTED",
+          "command": "mixer_selected"
+        },
+        {
+          "constant": "CMD_MIXER_SELECT_TRACK",
+          "command": "mixer_select_track"
+        },
+        {
+          "constant": "CMD_MIXER_SET_STEREO_SEP",
+          "command": "mixer_set_stereo_sep"
+        },
+        {
+          "constant": "CMD_CHANNEL_LIST",
+          "command": "channel_list"
+        },
+        {
+          "constant": "CMD_CHANNEL_GET",
+          "command": "channel_get"
+        },
+        {
+          "constant": "CMD_CHANNEL_SET_VOLUME",
+          "command": "channel_set_volume"
+        },
+        {
+          "constant": "CMD_CHANNEL_SET_PAN",
+          "command": "channel_set_pan"
+        },
+        {
+          "constant": "CMD_CHANNEL_SET_MUTE",
+          "command": "channel_set_mute"
+        },
+        {
+          "constant": "CMD_CHANNEL_SET_SOLO",
+          "command": "channel_set_solo"
+        },
+        {
+          "constant": "CMD_CHANNEL_SELECT",
+          "command": "channel_select"
+        },
+        {
+          "constant": "CMD_CHANNEL_SELECTED",
+          "command": "channel_selected"
+        },
+        {
+          "constant": "CMD_CHANNEL_SET_NAME",
+          "command": "channel_set_name"
+        },
+        {
+          "constant": "CMD_CHANNEL_SET_TARGET",
+          "command": "channel_set_target"
+        },
+        {
+          "constant": "CMD_PATTERN_LIST",
+          "command": "pattern_list"
+        },
+        {
+          "constant": "CMD_PATTERN_SELECT",
+          "command": "pattern_select"
+        },
+        {
+          "constant": "CMD_PATTERN_RENAME",
+          "command": "pattern_rename"
+        },
+        {
+          "constant": "CMD_PATTERN_GET_LENGTH",
+          "command": "pattern_get_length"
+        },
+        {
+          "constant": "CMD_PLUGIN_LIST",
+          "command": "plugin_list"
+        },
+        {
+          "constant": "CMD_PLUGIN_GET_PARAMS",
+          "command": "plugin_get_params"
+        },
+        {
+          "constant": "CMD_PLUGIN_LIST_PARAMS",
+          "command": "plugin_list_params"
+        },
+        {
+          "constant": "CMD_PLUGIN_GET_PARAM",
+          "command": "plugin_get_param"
+        },
+        {
+          "constant": "CMD_PLUGIN_SET_PARAM",
+          "command": "plugin_set_param"
+        },
+        {
+          "constant": "CMD_MIXER_GET_ROUTING",
+          "command": "mixer_get_routing"
+        },
+        {
+          "constant": "CMD_MIXER_GET_ROUTING_ALL",
+          "command": "mixer_get_routing_all"
+        },
+        {
+          "constant": "CMD_MIXER_GET_FREE_TRACK",
+          "command": "mixer_get_free_track"
+        },
+        {
+          "constant": "CMD_CHANNEL_ROUTING_SUMMARY",
+          "command": "channel_routing_summary"
+        },
+        {
+          "constant": "CMD_MIXER_SET_ROUTE",
+          "command": "mixer_set_route"
+        },
+        {
+          "constant": "CMD_MIXER_GET_PEAKS",
+          "command": "mixer_get_peaks"
+        },
+        {
+          "constant": "CMD_MIXER_SET_COLOR",
+          "command": "mixer_set_color"
+        },
+        {
+          "constant": "CMD_MIXER_GET_COLOR",
+          "command": "mixer_get_color"
+        },
+        {
+          "constant": "CMD_CHANNEL_SET_COLOR",
+          "command": "channel_set_color"
+        },
+        {
+          "constant": "CMD_CHANNEL_GET_COLOR",
+          "command": "channel_get_color"
+        },
+        {
+          "constant": "CMD_PLUGIN_PRESET",
+          "command": "plugin_preset"
+        },
+        {
+          "constant": "CMD_PLUGIN_GET_PRESET_NAME",
+          "command": "plugin_get_preset_name"
+        },
+        {
+          "constant": "CMD_API_PROBE",
+          "command": "api_probe"
+        },
+        {
+          "constant": "CMD_ARRANGE_NEW_PATTERN",
+          "command": "arrange_new_pattern"
+        },
+        {
+          "constant": "CMD_ARRANGE_CLONE_PATTERN",
+          "command": "arrange_clone_pattern"
+        },
+        {
+          "constant": "CMD_ARRANGE_ADD_MARKER",
+          "command": "arrange_add_marker"
+        },
+        {
+          "constant": "CMD_ENSURE_PIANO_ROLL",
+          "command": "ensure_piano_roll"
+        },
+        {
+          "constant": "CMD_CHANNEL_GET_STEPS",
+          "command": "channel_get_steps"
+        },
+        {
+          "constant": "CMD_PATTERN_GET",
+          "command": "pattern_get"
+        },
+        {
+          "constant": "CMD_PATTERN_SELECTED",
+          "command": "pattern_selected"
+        },
+        {
+          "constant": "CMD_PATTERN_SET_COLOR",
+          "command": "pattern_set_color"
+        },
+        {
+          "constant": "CMD_PATTERN_SET_LENGTH",
+          "command": "pattern_set_length"
+        },
+        {
+          "constant": "CMD_PATTERN_FIND_EMPTY",
+          "command": "pattern_find_empty"
+        },
+        {
+          "constant": "CMD_PLAYLIST_GET_TRACK",
+          "command": "playlist_get_track"
+        },
+        {
+          "constant": "CMD_PLAYLIST_LIST_TRACKS",
+          "command": "playlist_list_tracks"
+        },
+        {
+          "constant": "CMD_PLAYLIST_SET_MUTE",
+          "command": "playlist_set_mute"
+        },
+        {
+          "constant": "CMD_PLAYLIST_SET_SOLO",
+          "command": "playlist_set_solo"
+        },
+        {
+          "constant": "CMD_PLAYLIST_SET_NAME",
+          "command": "playlist_set_name"
+        },
+        {
+          "constant": "CMD_PLAYLIST_SET_COLOR",
+          "command": "playlist_set_color"
+        },
+        {
+          "constant": "CMD_PLAYLIST_SELECT_TRACK",
+          "command": "playlist_select_track"
+        },
+        {
+          "constant": "CMD_MIXER_GET_SLOT",
+          "command": "mixer_get_slot"
+        },
+        {
+          "constant": "CMD_MIXER_SET_SLOT_MIX",
+          "command": "mixer_set_slot_mix"
+        },
+        {
+          "constant": "CMD_MIXER_GET_TRACK_SLOTS",
+          "command": "mixer_get_track_slots"
+        },
+        {
+          "constant": "CMD_MIXER_SET_TRACK_SLOTS",
+          "command": "mixer_set_track_slots"
+        },
+        {
+          "constant": "CMD_MIXER_SET_SLOT_ENABLED",
+          "command": "mixer_set_slot_enabled"
+        },
+        {
+          "constant": "CMD_MIXER_GET_EQ",
+          "command": "mixer_get_eq"
+        },
+        {
+          "constant": "CMD_MIXER_SET_EQ",
+          "command": "mixer_set_eq"
+        },
+        {
+          "constant": "CMD_MIXER_PROBE_EQ_TYPE",
+          "command": "mixer_probe_eq_type"
+        },
+        {
+          "constant": "CMD_GET_TIME_SIG",
+          "command": "get_time_sig"
+        },
+        {
+          "constant": "CMD_SET_TIME_SIG",
+          "command": "set_time_sig"
+        },
+        {
+          "constant": "CMD_CHANNEL_SET_STEPS",
+          "command": "channel_set_steps"
+        }
+      ],
+      "controller_handlers": [
+        {
+          "command": "ping",
+          "handler": "_h_ping"
+        },
+        {
+          "command": "bridge_eval",
+          "handler": "lambda"
+        },
+        {
+          "command": "get_tempo",
+          "handler": "_h_get_tempo"
+        },
+        {
+          "command": "set_tempo",
+          "handler": "_h_set_tempo"
+        },
+        {
+          "command": "general_undo",
+          "handler": "_h_general_undo"
+        },
+        {
+          "command": "play",
+          "handler": "_h_play"
+        },
+        {
+          "command": "stop",
+          "handler": "_h_stop"
+        },
+        {
+          "command": "pause",
+          "handler": "_h_pause"
+        },
+        {
+          "command": "toggle_play",
+          "handler": "_h_toggle_play"
+        },
+        {
+          "command": "record",
+          "handler": "_h_record"
+        },
+        {
+          "command": "get_play_state",
+          "handler": "_h_get_play_state"
+        },
+        {
+          "command": "get_song_position",
+          "handler": "_h_get_song_pos"
+        },
+        {
+          "command": "set_song_position",
+          "handler": "_h_set_song_pos"
+        },
+        {
+          "command": "get_project_state",
+          "handler": "_h_get_project_state"
+        },
+        {
+          "command": "mixer_list_tracks",
+          "handler": "_h_mixer_list_tracks"
+        },
+        {
+          "command": "mixer_get_track",
+          "handler": "_h_mixer_get_track"
+        },
+        {
+          "command": "mixer_selected",
+          "handler": "_h_mixer_selected"
+        },
+        {
+          "command": "mixer_select_track",
+          "handler": "_h_mixer_select_track"
+        },
+        {
+          "command": "channel_list",
+          "handler": "_h_channel_list"
+        },
+        {
+          "command": "channel_get",
+          "handler": "_h_channel_get"
+        },
+        {
+          "command": "mixer_set_volume",
+          "handler": "_h_mixer_set_volume"
+        },
+        {
+          "command": "mixer_set_pan",
+          "handler": "_h_mixer_set_pan"
+        },
+        {
+          "command": "mixer_set_stereo_sep",
+          "handler": "_h_mixer_set_stereo_sep"
+        },
+        {
+          "command": "mixer_get_stereo_sep",
+          "handler": "_h_mixer_get_stereo_sep"
+        },
+        {
+          "command": "mixer_set_mute",
+          "handler": "_h_mixer_set_mute"
+        },
+        {
+          "command": "mixer_set_solo",
+          "handler": "_h_mixer_set_solo"
+        },
+        {
+          "command": "mixer_set_name",
+          "handler": "_h_mixer_set_name"
+        },
+        {
+          "command": "channel_set_volume",
+          "handler": "_h_channel_set_volume"
+        },
+        {
+          "command": "channel_set_pan",
+          "handler": "_h_channel_set_pan"
+        },
+        {
+          "command": "channel_set_mute",
+          "handler": "_h_channel_set_mute"
+        },
+        {
+          "command": "channel_set_solo",
+          "handler": "_h_channel_set_solo"
+        },
+        {
+          "command": "channel_set_name",
+          "handler": "_h_channel_set_name"
+        },
+        {
+          "command": "channel_set_target",
+          "handler": "_h_channel_set_target"
+        },
+        {
+          "command": "plugin_list",
+          "handler": "_h_plugin_list"
+        },
+        {
+          "command": "plugin_get_params",
+          "handler": "_h_plugin_get_params"
+        },
+        {
+          "command": "plugin_get_param",
+          "handler": "_h_plugin_get_param"
+        },
+        {
+          "command": "plugin_set_param",
+          "handler": "_h_plugin_set_param"
+        },
+        {
+          "command": "mixer_get_routing",
+          "handler": "_h_mixer_get_routing"
+        },
+        {
+          "command": "mixer_get_routing_all",
+          "handler": "_h_mixer_get_routing_all"
+        },
+        {
+          "command": "mixer_get_free_track",
+          "handler": "_h_mixer_get_free_track"
+        },
+        {
+          "command": "channel_routing_summary",
+          "handler": "_h_channel_routing_summary"
+        },
+        {
+          "command": "mixer_set_route",
+          "handler": "_h_mixer_set_route"
+        },
+        {
+          "command": "mixer_get_peaks",
+          "handler": "_h_mixer_get_peaks"
+        },
+        {
+          "command": "mixer_get_all_peaks",
+          "handler": "_h_mixer_get_all_peaks"
+        },
+        {
+          "command": "mixer_set_color",
+          "handler": "_h_mixer_set_color"
+        },
+        {
+          "command": "mixer_get_color",
+          "handler": "_h_mixer_get_color"
+        },
+        {
+          "command": "channel_set_color",
+          "handler": "_h_channel_set_color"
+        },
+        {
+          "command": "channel_get_color",
+          "handler": "_h_channel_get_color"
+        },
+        {
+          "command": "plugin_preset",
+          "handler": "_h_plugin_preset"
+        },
+        {
+          "command": "plugin_get_preset_name",
+          "handler": "_h_plugin_get_preset_name"
+        },
+        {
+          "command": "api_probe",
+          "handler": "_h_api_probe"
+        },
+        {
+          "command": "arrange_new_pattern",
+          "handler": "_h_arrange_new_pattern"
+        },
+        {
+          "command": "arrange_clone_pattern",
+          "handler": "_h_arrange_clone_pattern"
+        },
+        {
+          "command": "arrange_add_marker",
+          "handler": "_h_arrange_add_marker"
+        },
+        {
+          "command": "channel_select",
+          "handler": "_h_channel_select"
+        },
+        {
+          "command": "channel_selected",
+          "handler": "_h_channel_selected"
+        },
+        {
+          "command": "ensure_piano_roll",
+          "handler": "_h_ensure_piano_roll"
+        },
+        {
+          "command": "pattern_list",
+          "handler": "_h_pattern_list"
+        },
+        {
+          "command": "pattern_select",
+          "handler": "_h_pattern_select"
+        },
+        {
+          "command": "pattern_rename",
+          "handler": "_h_pattern_rename"
+        },
+        {
+          "command": "pattern_get_length",
+          "handler": "_h_pattern_get_length"
+        },
+        {
+          "command": "pattern_set_color",
+          "handler": "_h_pattern_set_color"
+        },
+        {
+          "command": "pattern_set_length",
+          "handler": "_h_pattern_set_length"
+        },
+        {
+          "command": "pattern_find_empty",
+          "handler": "_h_pattern_find_empty"
+        },
+        {
+          "command": "channel_get_steps",
+          "handler": "_h_channel_get_steps"
+        },
+        {
+          "command": "pattern_get",
+          "handler": "_h_pattern_get"
+        },
+        {
+          "command": "pattern_selected",
+          "handler": "_h_pattern_selected"
+        },
+        {
+          "command": "playlist_get_track",
+          "handler": "_h_playlist_get_track"
+        },
+        {
+          "command": "playlist_list_tracks",
+          "handler": "_h_playlist_list_tracks"
+        },
+        {
+          "command": "playlist_set_mute",
+          "handler": "_h_playlist_set_mute"
+        },
+        {
+          "command": "playlist_set_solo",
+          "handler": "_h_playlist_set_solo"
+        },
+        {
+          "command": "playlist_set_name",
+          "handler": "_h_playlist_set_name"
+        },
+        {
+          "command": "playlist_set_color",
+          "handler": "_h_playlist_set_color"
+        },
+        {
+          "command": "playlist_select_track",
+          "handler": "_h_playlist_select_track"
+        },
+        {
+          "command": "mixer_get_slot",
+          "handler": "_h_mixer_get_slot"
+        },
+        {
+          "command": "mixer_set_slot_mix",
+          "handler": "_h_mixer_set_slot_mix"
+        },
+        {
+          "command": "mixer_get_track_slots",
+          "handler": "_h_mixer_get_track_slots"
+        },
+        {
+          "command": "mixer_set_track_slots",
+          "handler": "_h_mixer_set_track_slots"
+        },
+        {
+          "command": "mixer_set_slot_enabled",
+          "handler": "_h_mixer_set_slot_enabled"
+        },
+        {
+          "command": "mixer_get_eq",
+          "handler": "_h_mixer_get_eq"
+        },
+        {
+          "command": "mixer_set_eq",
+          "handler": "_h_mixer_set_eq"
+        },
+        {
+          "command": "mixer_probe_eq_type",
+          "handler": "_h_mixer_probe_eq_type"
+        },
+        {
+          "command": "mixer_probe_eq_gain",
+          "handler": "_h_mixer_probe_eq_gain"
+        },
+        {
+          "command": "mixer_probe_eq_freq",
+          "handler": "_h_mixer_probe_eq_freq"
+        },
+        {
+          "command": "mixer_probe_eq_q",
+          "handler": "_h_mixer_probe_eq_q"
+        },
+        {
+          "command": "mixer_format_event_value",
+          "handler": "_h_mixer_format_event_value"
+        },
+        {
+          "command": "get_time_sig",
+          "handler": "_h_get_time_sig"
+        },
+        {
+          "command": "set_time_sig",
+          "handler": "_h_set_time_sig"
+        },
+        {
+          "command": "channel_set_steps",
+          "handler": "_h_channel_set_steps"
+        }
+      ],
+      "handler_count": 89
+    },
+    "source_files": {
+      "protocol": "src/fls_pilot/protocol.py",
+      "controller": "fl_controller/FLStudioPilot/device_FLStudioPilot.py",
+      "bridge": "src/fls_pilot/connection.py"
+    }
+  }
+}

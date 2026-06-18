@@ -1,0 +1,77 @@
+{
+  "schema": "fls-pilot.architecture.static-analysis.slice.v1",
+  "slice_id": "data_state",
+  "title": "Knowledgebase, packaged context, templates, report stores and other data/state locations",
+  "source_snapshot": "agent-docs/machine/architecture-analysis.snapshot.json",
+  "source_snapshot_sha256": "9fe6631a08edc80c5dd9f6d6d99bd7bf0b5c07706068972c32ad311a5a0af338",
+  "generated_at": "2026-06-18",
+  "note": "Generated scoped slice of the full static architecture analysis. Load this file only when the coding task matches its scope.",
+  "load_when": [
+    "knowledgebase, packaged MCP context docs/prompts, report storage, templates, audio/export scratch paths, or project state paths change",
+    "data ownership, cache, state invalidation, or source-of-truth changes"
+  ],
+  "payload": {
+    "data_and_state": [
+      {
+        "name": "Knowledgebase",
+        "paths": [
+          "knowledgebase/**/*.md",
+          "knowledgebase/**/*.json"
+        ],
+        "purpose": "Human and structured policy/calibration/template source of truth"
+      },
+      {
+        "name": "MCP context docs/prompts",
+        "paths": [
+          "src/fls_pilot/context/docs",
+          "src/fls_pilot/context/prompts"
+        ],
+        "purpose": "Packaged agent resources/prompts"
+      },
+      {
+        "name": "Change log",
+        "paths": [
+          "~/.fls-pilot/changelog.jsonl"
+        ],
+        "purpose": "Rollback and audit history for persistent writes"
+      },
+      {
+        "name": "Control Center static assets",
+        "paths": [
+          "src/fls_pilot/control_center_static"
+        ],
+        "purpose": "Browser UI"
+      },
+      {
+        "name": "Piano Roll bridge files",
+        "paths": [
+          "fl_pyscripts/*.pyscript",
+          "generated .pyscript paths"
+        ],
+        "purpose": "Manual/user-triggered Piano Roll changes"
+      }
+    ],
+    "external_imports_observed": {
+      "fastmcp": 45,
+      "pydantic": 26,
+      "pytest": 21,
+      "numpy": 5,
+      "soundfile": 4,
+      "test_runtime_core": 3,
+      "mido": 3,
+      "ast": 3,
+      "mcp": 3,
+      "audit_tool_safety": 2,
+      "anyio": 2,
+      "jsonschema": 1,
+      "tomllib": 1,
+      "ctypes": 1,
+      "pyautogui": 1,
+      "ipaddress": 1,
+      "secrets": 1,
+      "librosa": 1,
+      "torch": 1,
+      "torchcrepe": 1
+    }
+  }
+}

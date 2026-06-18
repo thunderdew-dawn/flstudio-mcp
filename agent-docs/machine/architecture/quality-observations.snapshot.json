@@ -1,0 +1,49 @@
+{
+  "schema": "fls-pilot.architecture.static-analysis.slice.v1",
+  "slice_id": "quality_observations",
+  "title": "Generated static quality observations and notable architecture risks",
+  "source_snapshot": "agent-docs/machine/architecture-analysis.snapshot.json",
+  "source_snapshot_sha256": "9fe6631a08edc80c5dd9f6d6d99bd7bf0b5c07706068972c32ad311a5a0af338",
+  "generated_at": "2026-06-18",
+  "note": "Generated scoped slice of the full static architecture analysis. Load this file only when the coding task matches its scope.",
+  "load_when": [
+    "architecture audit, senior review, release readiness, or drift check tasks",
+    "quality/risk findings are being triaged or converted into issues"
+  ],
+  "payload": {
+    "quality_observations": [
+      "Strong separation between MCP tool surface, protocol bridge, safety contract, runtime analysis, and FL controller script.",
+      "Operation registry makes persistent writes declarative and auditable with restore builders.",
+      "Runtime protocol rejects raw command/code/script fields for daemon RPC.",
+      "Knowledgebase and policy files reduce guessed DAW/plugin ranges.",
+      "Controller script is large and central; consider splitting if FL sandbox packaging allows it, or generate a command inventory test from protocol.py to avoid handler drift.",
+      "server.json version (3.0.0b3) differs from pyproject/README version (3.0.0b4)."
+    ],
+    "notable_risk_findings": [
+      {
+        "id": "controller_bridge_eval",
+        "severity": "high",
+        "path": "fl_controller/FLStudioPilot/device_FLStudioPilot.py",
+        "line": 2170,
+        "finding": "Controller handler map contains bridge_eval using Python eval(expr). It is not defined in protocol.py command constants and is not exposed by normal MCP tools, but if reachable over the bridge it is a raw execution escape hatch and conflicts with the documented no-raw-escape-hatch safety posture."
+      }
+    ],
+    "analysis_scope": {
+      "source_archive": "/mnt/data/fls-pilot.zip",
+      "root": "fls-pilot",
+      "mode": "static source analysis; no live FL Studio runtime; no full pytest suite",
+      "validation_performed": [
+        "safe ZIP extraction",
+        "AST parse of Python files",
+        "python compileall on src/fl_controller/scripts/tests",
+        "repository safety audit script",
+        "anti-vibe audit script"
+      ],
+      "validation_limitations": [
+        "FastMCP/mido/FL Studio runtime dependencies were not exercised end-to-end",
+        "FL Studio controller API behavior not live-verified",
+        "runtime health/ports not probed"
+      ]
+    }
+  }
+}

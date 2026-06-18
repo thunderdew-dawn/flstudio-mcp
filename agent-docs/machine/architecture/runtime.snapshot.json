@@ -1,0 +1,537 @@
+{
+  "schema": "fls-pilot.architecture.static-analysis.slice.v1",
+  "slice_id": "runtime",
+  "title": "Runtime host, daemon RPC, report store, workflow execution and transport assumptions",
+  "source_snapshot": "agent-docs/machine/architecture-analysis.snapshot.json",
+  "source_snapshot_sha256": "9fe6631a08edc80c5dd9f6d6d99bd7bf0b5c07706068972c32ad311a5a0af338",
+  "generated_at": "2026-06-18",
+  "note": "Generated scoped slice of the full static architecture analysis. Load this file only when the coding task matches its scope.",
+  "load_when": [
+    "daemon, RuntimeCore, runtime RPC, report store, or workflow execution changes",
+    "bridge/session runtime ownership, freshness, invalidation, or observation state changes",
+    "Control Center talks to daemon/runtime APIs differently"
+  ],
+  "payload": {
+    "communication_protocol": {
+      "primary": "MIDI SysEx JSON bridge",
+      "why": "FL controller scripts are sandboxed; always-on controller script cannot use files/network/subprocess, so virtual MIDI is the trusted boundary.",
+      "ports": {
+        "server_to_fl": "FLStudioPilot RX",
+        "fl_to_server": "FLStudioPilot TX",
+        "routing": "both FL MIDI devices must share the same FL port number, docs use 42"
+      },
+      "sysex_body": {
+        "manufacturer_id": "0x7D private use",
+        "magic": "MCP",
+        "direction_values": {
+          "0x01": "request",
+          "0x02": "response",
+          "0x03": "heartbeat"
+        },
+        "request_id": "8 ASCII [a-z0-9]",
+        "payload": "base64 encoded UTF-8 JSON"
+      },
+      "protocol_version": 2,
+      "heartbeat_seconds": 0.5,
+      "stale_threshold_seconds": 3.0,
+      "safe_payload_strategy": "controller paginates list responses to about 600 JSON bytes because larger SysEx payloads can be dropped"
+    },
+    "runtime": {
+      "operations": [
+        "analysis.health.get",
+        "analysis.live_meter.normalize",
+        "analysis.report.add",
+        "analysis.report.latest",
+        "analysis.report.list",
+        "analysis.workflow.run",
+        "project.current",
+        "project.snapshot.get",
+        "project.snapshot.refresh",
+        "runtime.capabilities",
+        "runtime.invalidate",
+        "runtime.session",
+        "runtime.status",
+        "workflow.catalog",
+        "workflow.declaration.get"
+      ],
+      "workflows": [
+        {
+          "id": "setup_runtime",
+          "title": "Setup & Runtime Doctor",
+          "kind": "runtime_readiness",
+          "status": "active",
+          "enabled": true,
+          "analysis_report_required": false,
+          "health_inclusion_policy": "runtime_prerequisite_only",
+          "requirements": null,
+          "parent_workflow_id": null,
+          "panel_id": null,
+          "group": "Project Review",
+          "endpoint": null,
+          "action_label": null,
+          "safety_note": "",
+          "supported_next_actions": [],
+          "manual_only_actions": [],
+          "forbidden_actions": [],
+          "metadata": {}
+        },
+        {
+          "id": "project_health",
+          "title": "Health",
+          "kind": "aggregator",
+          "status": "active",
+          "enabled": true,
+          "analysis_report_required": false,
+          "health_inclusion_policy": "primary_aggregator",
+          "requirements": null,
+          "parent_workflow_id": null,
+          "panel_id": "producer_health",
+          "group": "Project Review",
+          "endpoint": "/api/workflows/project-health",
+          "action_label": "Run Health Scan",
+          "safety_note": "Read-only overview across current Runtime workflow reports.",
+          "supported_next_actions": [],
+          "manual_only_actions": [],
+          "forbidden_actions": [],
+          "metadata": {}
+        },
+        {
+          "id": "mix_review",
+          "title": "Mix Review",
+          "kind": "analysis_workflow",
+          "status": "active",
+          "enabled": true,
+          "analysis_report_required": true,
+          "health_inclusion_policy": "included_when_current_report_available",
+          "requirements": null,
+          "parent_workflow_id": null,
+          "panel_id": "producer_mix_review",
+          "group": "Project Review",
+          "endpoint": "/api/workflows/mix-review",
+          "action_label": "Run Mix Review",
+          "safety_note": "Read-only mixer review. No project changes are made.",
+          "supported_next_actions": [],
+          "manual_only_actions": [],
+          "forbidden_actions": [],
+          "metadata": {}
+        },
+        {
+          "id": "routing_audit",
+          "title": "Routing Audit",
+          "kind": "analysis_workflow",
+          "status": "active",
+          "enabled": true,
+          "analysis_report_required": true,
+          "health_inclusion_policy": "included_when_current_report_available",
+          "requirements": null,
+          "parent_workflow_id": null,
+          "panel_id": "producer_routing",
+          "group": "Project Review",
+          "endpoint": "/api/workflows/routing-audit",
+          "action_label": "Run Routing Audit",
+          "safety_note": "Read-only routing audit. Cleanup remains proposal-first.",
+          "supported_next_actions": [],
+          "manual_only_actions": [],
+          "forbidden_actions": [],
+          "metadata": {}
+        },
+        {
+          "id": "low_end_analysis",
+          "title": "Low-End Safety Check",
+          "kind": "analysis_workflow",
+          "status": "active",
+          "enabled": true,
+          "analysis_report_required": true,
+          "health_inclusion_policy": "included_when_current_report_available",
+          "requirements": null,
+          "parent_workflow_id": null,
+          "panel_id": "producer_low_end",
+          "group": "Project Review",
+          "endpoint": "/api/workflows/low-end-analysis",
+          "action_label": "Run Low-End Safety Check",
+          "safety_note": "Metadata-based read-only low-end safety review.",
+          "supported_next_actions": [],
+          "manual_only_actions": [],
+          "forbidden_actions": [],
+          "metadata": {}
+        },
+        {
+          "id": "project_organizer",
+          "title": "Organizer",
+          "kind": "analysis_workflow",
+          "status": "active",
+          "enabled": true,
+          "analysis_report_required": true,
+          "health_inclusion_policy": "included_when_current_report_available",
+          "requirements": null,
+          "parent_workflow_id": null,
+          "panel_id": "producer_organizer",
+          "group": "Project Review",
+          "endpoint": "/api/workflows/project-organizer",
+          "action_label": "Run Organizer",
+          "safety_note": "Read-only scan. Cleanup requires an approved safe-write tool.",
+          "supported_next_actions": [],
+          "manual_only_actions": [],
+          "forbidden_actions": [],
+          "metadata": {}
+        },
+        {
+          "id": "preflight",
+          "title": "Preflight",
+          "kind": "analysis_workflow",
+          "status": "active",
+          "enabled": true,
+          "analysis_report_required": true,
+          "health_inclusion_policy": "included_when_enabled_and_current_report_available",
+          "requirements": {
+            "workflow_id": "preflight",
+            "required": [
+              {
+                "id": "fl_session_alive",
+                "observation_kind": "fl_session_alive",
+                "required": true,
+                "evidence_mode": "static_snapshot",
+                "invalidates_on": [],
+                "ttl_seconds": 2
+              },
+              {
+                "id": "static_project_snapshot",
+                "observation_kind": "static_project_snapshot",
+                "required": true,
+                "evidence_mode": "static_snapshot",
+                "invalidates_on": [],
+                "ttl_seconds": 60
+              }
+            ],
+            "optional": [
+              {
+                "id": "live_meter_window",
+                "observation_kind": "live_meter_window",
+                "required": false,
+                "evidence_mode": "live_runtime",
+                "invalidates_on": [],
+                "ttl_seconds": 2
+              }
+            ]
+          },
+          "parent_workflow_id": null,
+          "panel_id": "producer_preflight",
+          "group": "Project Review",
+          "endpoint": "/api/workflows/preflight",
+          "action_label": "Run Preflight",
+          "safety_note": "Read-only export-readiness review. Render, save, export, and mastering remain manual.",
+          "supported_next_actions": [
+            "run_mix_review",
+            "review_safe_proposals"
+          ],
+          "manual_only_actions": [
+            "render",
+            "save",
+            "export",
+            "mastering",
+            "audio_clip_stretch_mode",
+            "audio_clip_normalize"
+          ],
+          "forbidden_actions": [
+            "automatic_render",
+            "automatic_save_as"
+          ],
+          "metadata": {}
+        },
+        {
+          "id": "jam_2_project",
+          "title": "Structure Jammed Project",
+          "kind": "organizer_subworkflow",
+          "status": "planned",
+          "enabled": false,
+          "analysis_report_required": true,
+          "health_inclusion_policy": "excluded",
+          "requirements": {
+            "workflow_id": "jam_2_project",
+            "required": [
+              {
+                "id": "fl_session_alive",
+                "observation_kind": "fl_session_alive",
+                "required": true,
+                "evidence_mode": "static_snapshot",
+                "invalidates_on": [],
+                "ttl_seconds": 2
+              },
+              {
+                "id": "static_project_snapshot",
+                "observation_kind": "static_project_snapshot",
+                "required": true,
+                "evidence_mode": "static_snapshot",
+                "invalidates_on": [],
+                "ttl_seconds": 60
+              },
+              {
+                "id": "patterns_snapshot",
+                "observation_kind": "patterns_snapshot",
+                "required": true,
+                "evidence_mode": "static_snapshot",
+                "invalidates_on": [],
+                "ttl_seconds": 60
+              },
+              {
+                "id": "playlist_tracks_snapshot",
+                "observation_kind": "playlist_tracks_snapshot",
+                "required": true,
+                "evidence_mode": "static_snapshot",
+                "invalidates_on": [],
+                "ttl_seconds": 60
+              }
+            ],
+            "optional": []
+          },
+          "parent_workflow_id": "project_organizer",
+          "panel_id": "producer_jam_2_project",
+          "group": "Roadmap",
+          "endpoint": null,
+          "action_label": null,
+          "safety_note": "Planned for v3.1+. No Control Center action is available in v3.0.",
+          "supported_next_actions": [
+            "run_project_organizer",
+            "review_safe_proposals"
+          ],
+          "manual_only_actions": [
+            "confirm_sections",
+            "confirm_musical_roles"
+          ],
+          "forbidden_actions": [
+            "playlist_clip_editing",
+            "automatic_arrangement",
+            "destructive_cleanup"
+          ],
+          "metadata": {}
+        },
+        {
+          "id": "sidechain_routing_check",
+          "title": "Sidechain Routing Check",
+          "kind": "analysis_workflow",
+          "status": "planned",
+          "enabled": false,
+          "analysis_report_required": true,
+          "health_inclusion_policy": "excluded",
+          "requirements": {
+            "workflow_id": "sidechain_routing_check",
+            "required": [
+              {
+                "id": "fl_session_alive",
+                "observation_kind": "fl_session_alive",
+                "required": true,
+                "evidence_mode": "static_snapshot",
+                "invalidates_on": [],
+                "ttl_seconds": 2
+              },
+              {
+                "id": "routing_snapshot",
+                "observation_kind": "routing_snapshot",
+                "required": true,
+                "evidence_mode": "static_snapshot",
+                "invalidates_on": [],
+                "ttl_seconds": 60
+              }
+            ],
+            "optional": []
+          },
+          "parent_workflow_id": null,
+          "panel_id": "producer_sidechaining",
+          "group": "Roadmap",
+          "endpoint": null,
+          "action_label": null,
+          "safety_note": "Planned after v3.0. Plugin detector settings remain a manual check.",
+          "supported_next_actions": [
+            "inspect_loaded_plugin"
+          ],
+          "manual_only_actions": [
+            "verify_plugin_sidechain_input"
+          ],
+          "forbidden_actions": [
+            "plugin_loading",
+            "unknown_parameter_writes"
+          ],
+          "metadata": {}
+        },
+        {
+          "id": "plugin_assistant",
+          "title": "Plugin Assistant",
+          "kind": "assistant_workflow",
+          "status": "planned",
+          "enabled": false,
+          "analysis_report_required": true,
+          "health_inclusion_policy": "excluded",
+          "requirements": {
+            "workflow_id": "plugin_assistant",
+            "required": [
+              {
+                "id": "fl_session_alive",
+                "observation_kind": "fl_session_alive",
+                "required": true,
+                "evidence_mode": "static_snapshot",
+                "invalidates_on": [],
+                "ttl_seconds": 2
+              },
+              {
+                "id": "mixer_track_target",
+                "observation_kind": "mixer_track_target",
+                "required": true,
+                "evidence_mode": "manual_check",
+                "invalidates_on": []
+              }
+            ],
+            "optional": []
+          },
+          "parent_workflow_id": null,
+          "panel_id": "producer_plugin_assistant",
+          "group": "Roadmap",
+          "endpoint": null,
+          "action_label": null,
+          "safety_note": "Planned after v3.0. Plugin loading and unknown parameter writes remain manual.",
+          "supported_next_actions": [
+            "list_loaded_plugins",
+            "inspect_named_parameters"
+          ],
+          "manual_only_actions": [
+            "choose_mixer_track",
+            "load_plugin"
+          ],
+          "forbidden_actions": [
+            "plugin_loading",
+            "plugin_insertion"
+          ],
+          "metadata": {}
+        },
+        {
+          "id": "preset_assistant",
+          "title": "Preset Assistant",
+          "kind": "assistant_workflow",
+          "status": "planned",
+          "enabled": false,
+          "analysis_report_required": true,
+          "health_inclusion_policy": "excluded",
+          "requirements": {
+            "workflow_id": "preset_assistant",
+            "required": [
+              {
+                "id": "local_preset_library",
+                "observation_kind": "local_preset_library",
+                "required": true,
+                "evidence_mode": "static_snapshot",
+                "invalidates_on": []
+              }
+            ],
+            "optional": []
+          },
+          "parent_workflow_id": null,
+          "panel_id": "producer_preset_assistant",
+          "group": "Roadmap",
+          "endpoint": null,
+          "action_label": null,
+          "safety_note": "Planned after v3.0. Preset loading remains manual.",
+          "supported_next_actions": [
+            "list_preset_names",
+            "suggest_by_name"
+          ],
+          "manual_only_actions": [
+            "load_preset",
+            "audition_preset"
+          ],
+          "forbidden_actions": [
+            "automatic_preset_loading"
+          ],
+          "metadata": {}
+        },
+        {
+          "id": "audio_evidence",
+          "title": "Audio Evidence",
+          "kind": "evidence_worker",
+          "status": "planned",
+          "enabled": false,
+          "analysis_report_required": true,
+          "health_inclusion_policy": "excluded",
+          "requirements": {
+            "workflow_id": "audio_evidence",
+            "required": [
+              {
+                "id": "rendered_audio_features",
+                "observation_kind": "rendered_audio_features",
+                "required": true,
+                "evidence_mode": "rendered_audio",
+                "invalidates_on": [
+                  "file_hash_change"
+                ]
+              }
+            ],
+            "optional": []
+          },
+          "parent_workflow_id": null,
+          "panel_id": null,
+          "group": "Project Review",
+          "endpoint": null,
+          "action_label": null,
+          "safety_note": "",
+          "supported_next_actions": [
+            "link_evidence_to_workflow"
+          ],
+          "manual_only_actions": [
+            "select_audio_file",
+            "render_audio_in_fl_studio"
+          ],
+          "forbidden_actions": [
+            "automatic_render",
+            "full_mixer_stem_batch"
+          ],
+          "metadata": {
+            "accepted_evidence_kinds": [
+              "rendered_master",
+              "stem",
+              "candidate"
+            ],
+            "short_file_limit_seconds": 180
+          }
+        }
+      ],
+      "core_state": [
+        "RuntimeSession",
+        "ProjectContext",
+        "ObservationStore",
+        "AnalysisBroker",
+        "ReportStore",
+        "WorkflowRegistry"
+      ],
+      "rpc_transport": "line-delimited JSON over local TCP to daemon, validated by runtime.protocol"
+    },
+    "runtime_architecture_nodes": [
+      {
+        "id": "bridge",
+        "label": "Bridge Client",
+        "type": "module",
+        "paths": [
+          "src/fls_pilot/connection.py",
+          "src/fls_pilot/protocol.py"
+        ],
+        "responsibility": "MIDI SysEx or TCP bridge, request correlation, heartbeat tracking, pagination/retry."
+      },
+      {
+        "id": "daemon",
+        "label": "TCP Daemon + Runtime Host",
+        "type": "process",
+        "paths": [
+          "src/fls_pilot/daemon.py",
+          "src/fls_pilot/runtime/*.py"
+        ],
+        "responsibility": "Long-lived local RPC service with canonical runtime state, snapshots, reports, workflow execution."
+      },
+      {
+        "id": "virtual_midi",
+        "label": "Virtual MIDI Loopback",
+        "type": "transport",
+        "paths": [
+          "loopMIDI/IAC Driver ports: FLStudioPilot RX/TX"
+        ],
+        "responsibility": "Bidirectional MIDI device layer carrying private-use SysEx payloads."
+      }
+    ]
+  }
+}

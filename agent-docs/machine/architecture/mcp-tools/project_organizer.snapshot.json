@@ -1,0 +1,89 @@
+{
+  "schema": "fls-pilot.architecture.mcp-tool-module.slice.v1",
+  "slice_id": "mcp_tools.project_organizer",
+  "title": "MCP tool module: project_organizer",
+  "source_snapshot": "agent-docs/machine/architecture-analysis.snapshot.json",
+  "source_snapshot_sha256": "9fe6631a08edc80c5dd9f6d6d99bd7bf0b5c07706068972c32ad311a5a0af338",
+  "generated_at": "2026-06-18",
+  "load_when": [
+    "MCP tool implementation or registration changes in the project_organizer tool module",
+    "safety annotations, doc safety, destructive hints, or protocol usage change for project_organizer tools"
+  ],
+  "summary": {
+    "module": "project_organizer",
+    "tools_total": 5,
+    "safety_class_counts": {
+      "read-only": 2,
+      "write-safe-required": 3
+    },
+    "destructive_hint_true_count": 0,
+    "first_line": 264
+  },
+  "tools": [
+    {
+      "contract_safety_class": "read-only",
+      "destructive_hint": null,
+      "evidence": "annotation readOnlyHint=True destructiveHint=None; helper_calls=_channel_index,_looks_default_channel_name; safetyClass='read-only'; doc_safety=True",
+      "has_safety_doc": true,
+      "line": 264,
+      "name": "fl_analyze_project_organization",
+      "path": "src/fls_pilot/tools/project_organizer.py",
+      "read_only_hint": true,
+      "safety_class_annotation": "read-only",
+      "status": "read-only",
+      "title": "Analyze Project Organization"
+    },
+    {
+      "contract_safety_class": "read-only",
+      "destructive_hint": null,
+      "evidence": "annotation readOnlyHint=True destructiveHint=None; helper_calls=_channel_index,_looks_default_channel_name,_proposal_for_channel_routing,_proposal_for_rename,_suggest_channel_name; safetyClass='read-only'; doc_safety=True",
+      "has_safety_doc": true,
+      "line": 356,
+      "name": "fl_plan_project_cleanup",
+      "path": "src/fls_pilot/tools/project_organizer.py",
+      "read_only_hint": true,
+      "safety_class_annotation": "read-only",
+      "status": "read-only",
+      "title": "Plan Project Cleanup"
+    },
+    {
+      "contract_safety_class": "write-safe-required",
+      "destructive_hint": false,
+      "evidence": "annotation readOnlyHint=False destructiveHint=False; uses safety layer; helper_calls=_apply_report,_channel_rename_entry,_color_write_entry,_mixer_color_entry,_proposal_for_channel_routing,_proposal_for_color,_proposal_for_rename; safetyClass='write-safe-required'; doc_safety=True",
+      "has_safety_doc": true,
+      "line": 465,
+      "name": "fl_apply_project_cleanup_step",
+      "path": "src/fls_pilot/tools/project_organizer.py",
+      "read_only_hint": false,
+      "safety_class_annotation": "write-safe-required",
+      "status": "write-safe-required",
+      "title": "Apply Project Cleanup Step"
+    },
+    {
+      "contract_safety_class": "write-safe-required",
+      "destructive_hint": false,
+      "evidence": "annotation readOnlyHint=False destructiveHint=False; uses safety layer; helper_calls=_apply_report,_channel_rename_entry,_cleanup_proposal,_proposal_for_rename; safetyClass='write-safe-required'; doc_safety=True",
+      "has_safety_doc": true,
+      "line": 622,
+      "name": "fl_apply_naming_standard",
+      "path": "src/fls_pilot/tools/project_organizer.py",
+      "read_only_hint": false,
+      "safety_class_annotation": "write-safe-required",
+      "status": "write-safe-required",
+      "title": "Apply Naming Standard"
+    },
+    {
+      "contract_safety_class": "write-safe-required",
+      "destructive_hint": false,
+      "evidence": "annotation readOnlyHint=False destructiveHint=False; uses safety layer; helper_calls=_apply_report,_cleanup_proposal,_color_write_entry,_mixer_color_entry,_proposal_for_color; safetyClass='write-safe-required'; doc_safety=True",
+      "has_safety_doc": true,
+      "line": 699,
+      "name": "fl_apply_color_standard",
+      "path": "src/fls_pilot/tools/project_organizer.py",
+      "read_only_hint": false,
+      "safety_class_annotation": "write-safe-required",
+      "status": "write-safe-required",
+      "title": "Apply Color Standard"
+    }
+  ]
+}

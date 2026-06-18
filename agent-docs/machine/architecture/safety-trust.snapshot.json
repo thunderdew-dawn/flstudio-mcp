@@ -1,0 +1,208 @@
+{
+  "schema": "fls-pilot.architecture.static-analysis.slice.v1",
+  "slice_id": "safety_trust",
+  "title": "Safety classes, persistent-write contract, forbidden capabilities and trust boundaries",
+  "source_snapshot": "agent-docs/machine/architecture-analysis.snapshot.json",
+  "source_snapshot_sha256": "9fe6631a08edc80c5dd9f6d6d99bd7bf0b5c07706068972c32ad311a5a0af338",
+  "generated_at": "2026-06-18",
+  "note": "Generated scoped slice of the full static architecture analysis. Load this file only when the coding task matches its scope.",
+  "load_when": [
+    "safety classes, approval gates, rollback, readback, persistent write contract, or forbidden/manual-only capability changes",
+    "trust boundary changes across MCP, daemon, bridge, MIDI, generated scripts, FL controller, or user-provided files",
+    "security/safety audit work needs the generated risk baseline"
+  ],
+  "payload": {
+    "safety_model": {
+      "classes": [
+        "read-only",
+        "transient",
+        "server-state",
+        "external-write",
+        "write-safe-required",
+        "forbidden"
+      ],
+      "default_write_contract": [
+        "scan/read-only first",
+        "one reversible proposal",
+        "explicit approval before persistent write",
+        "scoped snapshot",
+        "smallest practical write",
+        "readback where supported",
+        "changelog entry",
+        "rollback path",
+        "stop after verified change"
+      ],
+      "forbidden_or_out_of_scope": [
+        "raw FL API escape hatches",
+        "plugin loading/insertion",
+        "playlist clip placement/movement/deletion",
+        "pattern/clip deletion",
+        "project open/new/save-as/render automation",
+        "broad UI automation",
+        "full-FLP restore claims"
+      ],
+      "notable_risk_findings": [
+        {
+          "id": "controller_bridge_eval",
+          "severity": "high",
+          "path": "fl_controller/FLStudioPilot/device_FLStudioPilot.py",
+          "line": 2170,
+          "finding": "Controller handler map contains bridge_eval using Python eval(expr). It is not defined in protocol.py command constants and is not exposed by normal MCP tools, but if reachable over the bridge it is a raw execution escape hatch and conflicts with the documented no-raw-escape-hatch safety posture."
+        }
+      ]
+    },
+    "trust_boundary_edges": [
+      {
+        "from": "ai_clients",
+        "to": "mcp_server",
+        "label": "MCP stdio/SSE"
+      },
+      {
+        "from": "tool_surface",
+        "to": "bridge",
+        "label": "read-only/transient bridge calls"
+      },
+      {
+        "from": "daemon",
+        "to": "bridge",
+        "label": "central bridge ownership"
+      },
+      {
+        "from": "bridge",
+        "to": "virtual_midi",
+        "label": "SysEx request/response/heartbeat"
+      },
+      {
+        "from": "virtual_midi",
+        "to": "fl_controller",
+        "label": "FL MIDI engine routes by port"
+      },
+      {
+        "from": "fl_controller",
+        "to": "fl_api",
+        "label": "controller-script API calls"
+      },
+      {
+        "from": "pyscript_bridge",
+        "to": "fl_api",
+        "label": "user-triggered script execution"
+      }
+    ],
+    "safety_architecture_nodes": [
+      {
+        "id": "ai_clients",
+        "label": "MCP/AI Clients",
+        "type": "external",
+        "paths": [
+          "Claude Desktop",
+          "ChatGPT Desktop/SSE",
+          "Cursor",
+          "other MCP hosts"
+        ],
+        "responsibility": "User-facing AI host calls MCP tools/resources/prompts."
+      },
+      {
+        "id": "mcp_server",
+        "label": "FastMCP Server",
+        "type": "process",
+        "paths": [
+          "src/fls_pilot/server.py"
+        ],
+        "responsibility": "Registers tool modules, resources and prompts; exposes stdio or SSE MCP transports."
+      },
+      {
+        "id": "tool_surface",
+        "label": "MCP Tool Surface",
+        "type": "module_cluster",
+        "paths": [
+          "src/fls_pilot/tools/*.py"
+        ],
+        "responsibility": "Domain tools for transport, mixer, channel, pattern, playlist, effects, plugins, routing, mix review, project health, KB, audio, MIDI export."
+      },
+      {
+        "id": "operation_registry",
+        "label": "Operation Registry",
+        "type": "module",
+        "paths": [
+          "src/fls_pilot/operations.py"
+        ],
+        "responsibility": "Declarative safety classes, validation, command mapping, snapshots/readback/restore builders."
+      },
+      {
+        "id": "safety_layer",
+        "label": "Safety & Rollback Layer",
+        "type": "module",
+        "paths": [
+          "src/fls_pilot/safety.py"
+        ],
+        "responsibility": "Persistent-write contract: scoped snapshot, dry-run, readback verification, changelog, rollback units."
+      },
+      {
+        "id": "bridge",
+        "label": "Bridge Client",
+        "type": "module",
+        "paths": [
+          "src/fls_pilot/connection.py",
+          "src/fls_pilot/protocol.py"
+        ],
+        "responsibility": "MIDI SysEx or TCP bridge, request correlation, heartbeat tracking, pagination/retry."
+      },
+      {
+        "id": "daemon",
+        "label": "TCP Daemon + Runtime Host",
+        "type": "process",
+        "paths": [
+          "src/fls_pilot/daemon.py",
+          "src/fls_pilot/runtime/*.py"
+        ],
+        "responsibility": "Long-lived local RPC service with canonical runtime state, snapshots, reports, workflow execution."
+      },
+      {
+        "id": "pyscript_bridge",
+        "label": "Piano Roll .pyscript Bridge",
+        "type": "bridge",
+        "paths": [
+          "src/fls_pilot/pyscript_gen.py",
+          "src/fls_pilot/pyscript_trigger.py",
+          "fl_pyscripts/*.pyscript"
+        ],
+        "responsibility": "Generates/triggers FL Piano Roll scripts for note-writing operations where controller API is insufficient."
+      },
+      {
+        "id": "virtual_midi",
+        "label": "Virtual MIDI Loopback",
+        "type": "transport",
+        "paths": [
+          "loopMIDI/IAC Driver ports: FLStudioPilot RX/TX"
+        ],
+        "responsibility": "Bidirectional MIDI device layer carrying private-use SysEx payloads."
+      },
+      {
+        "id": "fl_controller",
+        "label": "FLStudioPilot Controller Script",
+        "type": "fl_script",
+        "paths": [
+          "fl_controller/FLStudioPilot/device_FLStudioPilot.py"
+        ],
+        "responsibility": "Always-on FL controller script; decodes SysEx commands, calls FL Studio API modules, sends responses and heartbeat."
+      },
+      {
+        "id": "fl_api",
+        "label": "FL Studio API",
+        "type": "external",
+        "paths": [
+          "channels",
+          "mixer",
+          "patterns",
+          "playlist",
+          "plugins",
+          "transport",
+          "general",
+          "device",
+          "ui"
+        ],
+        "responsibility": "Host DAW scripting APIs. Sandbox limitations define supported capabilities."
+      }
+    ]
+  }
+}

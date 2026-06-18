@@ -38,6 +38,7 @@ work, also read:
 
 - [Architecture Governance](../contracts/architecture-governance.md)
 - `agent-docs/machine/architecture-governance.snapshot.json`
+- `agent-docs/machine/architecture/index.snapshot.json` to choose task-scoped generated slices when needed
 
 ### GitHub Operations
 

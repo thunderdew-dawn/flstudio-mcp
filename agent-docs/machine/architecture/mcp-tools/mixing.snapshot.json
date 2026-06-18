@@ -1,0 +1,89 @@
+{
+  "schema": "fls-pilot.architecture.mcp-tool-module.slice.v1",
+  "slice_id": "mcp_tools.mixing",
+  "title": "MCP tool module: mixing",
+  "source_snapshot": "agent-docs/machine/architecture-analysis.snapshot.json",
+  "source_snapshot_sha256": "9fe6631a08edc80c5dd9f6d6d99bd7bf0b5c07706068972c32ad311a5a0af338",
+  "generated_at": "2026-06-18",
+  "load_when": [
+    "MCP tool implementation or registration changes in the mixing tool module",
+    "safety annotations, doc safety, destructive hints, or protocol usage change for mixing tools"
+  ],
+  "summary": {
+    "module": "mixing",
+    "tools_total": 5,
+    "safety_class_counts": {
+      "write-safe-required": 4,
+      "read-only": 1
+    },
+    "destructive_hint_true_count": 0,
+    "first_line": 198
+  },
+  "tools": [
+    {
+      "contract_safety_class": "write-safe-required",
+      "destructive_hint": false,
+      "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_PLUGIN_GET_PARAM,CMD_PLUGIN_LIST,CMD_PLUGIN_SET_PARAM; uses safety layer; helper_calls=_param_write,_plugin_name_at,_scan_bands; safetyClass='write-safe-required'; doc_safety=True",
+      "has_safety_doc": true,
+      "line": 198,
+      "name": "fl_apply_eq_intent",
+      "path": "src/fls_pilot/tools/mixing.py",
+      "read_only_hint": false,
+      "safety_class_annotation": "write-safe-required",
+      "status": "write-safe-required",
+      "title": "Apply an EQ mixing intent"
+    },
+    {
+      "contract_safety_class": "write-safe-required",
+      "destructive_hint": false,
+      "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_PLUGIN_GET_PARAMS,CMD_PLUGIN_LIST,CMD_PLUGIN_SET_PARAM; uses safety layer; helper_calls=_finish,_lerp,_named_params,_param_write,_plugin_name_at,add; safetyClass='write-safe-required'; doc_safety=True",
+      "has_safety_doc": true,
+      "line": 318,
+      "name": "fl_apply_reverb_intent",
+      "path": "src/fls_pilot/tools/mixing.py",
+      "read_only_hint": false,
+      "safety_class_annotation": "write-safe-required",
+      "status": "write-safe-required",
+      "title": "Apply a reverb intent"
+    },
+    {
+      "contract_safety_class": "write-safe-required",
+      "destructive_hint": false,
+      "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_PLUGIN_GET_PARAMS,CMD_PLUGIN_LIST,CMD_PLUGIN_SET_PARAM; uses safety layer; helper_calls=_finish,_lerp,_named_params,_param_write,_plugin_name_at,add; safetyClass='write-safe-required'; doc_safety=True",
+      "has_safety_doc": true,
+      "line": 404,
+      "name": "fl_apply_delay_intent",
+      "path": "src/fls_pilot/tools/mixing.py",
+      "read_only_hint": false,
+      "safety_class_annotation": "write-safe-required",
+      "status": "write-safe-required",
+      "title": "Apply a delay intent"
+    },
+    {
+      "contract_safety_class": "read-only",
+      "destructive_hint": null,
+      "evidence": "annotation readOnlyHint=True destructiveHint=None; safetyClass='read-only'; doc_safety=True",
+      "has_safety_doc": true,
+      "line": 497,
+      "name": "fl_get_track_level",
+      "path": "src/fls_pilot/tools/mixing.py",
+      "read_only_hint": true,
+      "safety_class_annotation": "read-only",
+      "status": "read-only",
+      "title": "Get track level (dB)"
+    },
+    {
+      "contract_safety_class": "write-safe-required",
+      "destructive_hint": false,
+      "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_MIXER_GET_TRACK,CMD_PLUGIN_GET_PARAMS,CMD_PLUGIN_LIST,CMD_PLUGIN_SET_PARAM; uses safety layer; helper_calls=_comp_target,_finish,_named_params,_param_write,_plugin_name_at; safetyClass='write-safe-required'; doc_safety=True",
+      "has_safety_doc": true,
+      "line": 510,
+      "name": "fl_apply_compression_intent",
+      "path": "src/fls_pilot/tools/mixing.py",
+      "read_only_hint": false,
+      "safety_class_annotation": "write-safe-required",
+      "status": "write-safe-required",
+      "title": "Apply a compression intent"
+    }
+  ]
+}

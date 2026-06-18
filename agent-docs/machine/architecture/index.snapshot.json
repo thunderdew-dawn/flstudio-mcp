@@ -1,0 +1,164 @@
+{
+  "schema": "fls-pilot.architecture.static-analysis.index.v1",
+  "generated_at": "2026-06-18",
+  "source_snapshot": "agent-docs/machine/architecture-analysis.snapshot.json",
+  "source_snapshot_sha256": "9fe6631a08edc80c5dd9f6d6d99bd7bf0b5c07706068972c32ad311a5a0af338",
+  "governed_snapshot": "agent-docs/machine/architecture-governance.snapshot.json",
+  "default_agent_rule": "Start with the governed snapshot. Load scoped generated slices only when the coding task matches load_when.",
+  "full_snapshot_rule": "Do not load the full architecture-analysis.snapshot.json by default. Prefer the scoped files under agent-docs/machine/architecture/.",
+  "slices": {
+    "project": {
+      "path": "agent-docs/machine/architecture/project.snapshot.json",
+      "purpose": "Project/repository inventory and top-level architecture graph",
+      "load_when": [
+        "package metadata, dependency declarations, repository layout, or broad architecture overview changes",
+        "dependency/refactor tasks need a compact project inventory",
+        "release preparation needs a generated static baseline"
+      ]
+    },
+    "entrypoints": {
+      "path": "agent-docs/machine/architecture/entrypoints.snapshot.json",
+      "purpose": "CLI/package entrypoints, Control Center/daemon/doctor startup and FL controller lifecycle",
+      "load_when": [
+        "console script, package entrypoint, daemon, status, doctor, or Control Center startup behavior changes",
+        "FL controller script lifecycle entrypoints change",
+        "packaging or installer work needs externally visible command mapping"
+      ]
+    },
+    "mcp_surface": {
+      "path": "agent-docs/machine/architecture/mcp-surface.snapshot.json",
+      "purpose": "MCP tools, resources, prompts and public tool safety summary",
+      "load_when": [
+        "MCP tools, resources, or prompts are added, removed, renamed, or changed",
+        "public MCP behavior, safety annotations, or tool registration changes",
+        "FastMCP registration baseline or prompt/resource packaging changes"
+      ]
+    },
+    "runtime": {
+      "path": "agent-docs/machine/architecture/runtime.snapshot.json",
+      "purpose": "Runtime host, daemon RPC, report store and workflow execution state",
+      "load_when": [
+        "daemon, RuntimeCore, runtime RPC, report store, or workflow execution changes",
+        "bridge/session runtime ownership, freshness, invalidation, or observation state changes",
+        "Control Center talks to daemon/runtime APIs differently"
+      ]
+    },
+    "controller_surface": {
+      "path": "agent-docs/machine/architecture/controller-surface.snapshot.json",
+      "purpose": "Protocol commands, controller handlers and SysEx bridge boundary",
+      "load_when": [
+        "protocol commands, wire format, MIDI SysEx payload, or controller handlers change",
+        "bridge/controller command mapping or pagination behavior changes",
+        "FL controller script exposes new handler capability or removes one"
+      ]
+    },
+    "operation_registry": {
+      "path": "agent-docs/machine/architecture/operation-registry.snapshot.json",
+      "purpose": "Declarative operations, safety classes, readback/snapshot/restore metadata",
+      "load_when": [
+        "operation registry entries, command mapping, snapshot/readback/restore builder, or batch eligibility change",
+        "persistent write path changes or new reversible operation is introduced",
+        "safety class assignment is added, removed, or changed"
+      ]
+    },
+    "analysis_workflows": {
+      "path": "agent-docs/machine/architecture/analysis-workflows.snapshot.json",
+      "purpose": "Workflow registry, reports, evidence, scoring, freshness and Control Center panels",
+      "load_when": [
+        "workflow registry, report schema, scoring, evidence, freshness, prerequisites, or health aggregation changes",
+        "Control Center project-review workflow panel ownership or endpoint changes",
+        "analysis depth levels, audio analysis prerequisites, or report confidence semantics change"
+      ]
+    },
+    "safety_trust": {
+      "path": "agent-docs/machine/architecture/safety-trust.snapshot.json",
+      "purpose": "Safety model, forbidden capabilities and trust boundaries",
+      "load_when": [
+        "safety classes, approval gates, rollback, readback, persistent write contract, or forbidden/manual-only capability changes",
+        "trust boundary changes across MCP, daemon, bridge, MIDI, generated scripts, FL controller, or user-provided files",
+        "security/safety audit work needs the generated risk baseline"
+      ]
+    },
+    "data_state": {
+      "path": "agent-docs/machine/architecture/data-state.snapshot.json",
+      "purpose": "Knowledgebase, packaged context, templates and state/data locations",
+      "load_when": [
+        "knowledgebase, packaged MCP context docs/prompts, report storage, templates, audio/export scratch paths, or project state paths change",
+        "data ownership, cache, state invalidation, or source-of-truth changes"
+      ]
+    },
+    "import_graph": {
+      "path": "agent-docs/machine/architecture/import-graph.snapshot.json",
+      "purpose": "Top import graph and observed external dependencies",
+      "load_when": [
+        "dependency direction, module extraction, package split, import-cycle, or large refactor tasks",
+        "developer needs a generated dependency overview before changing module boundaries"
+      ]
+    },
+    "quality_observations": {
+      "path": "agent-docs/machine/architecture/quality-observations.snapshot.json",
+      "purpose": "Quality observations and notable risk findings",
+      "load_when": [
+        "architecture audit, senior review, release readiness, or drift check tasks",
+        "quality/risk findings are being triaged or converted into issues"
+      ]
+    },
+    "mcp_tool_modules": {
+      "path": "agent-docs/machine/architecture/mcp-tools/index.snapshot.json",
+      "purpose": "Module-specific generated inventories for MCP tool changes; load only the affected tool module slice.",
+      "load_when": [
+        "a coding task touches one concrete tool module under src/fls_pilot/tools/",
+        "MCP safety/doc annotations need review for a specific tool module",
+        "full MCP surface audit needs all module slices"
+      ]
+    }
+  },
+  "recommended_scope_sets": {
+    "mcp_tool_or_prompt_change": [
+      "agent-docs/machine/architecture-governance.snapshot.json",
+      "agent-docs/machine/architecture/index.snapshot.json",
+      "agent-docs/machine/architecture/mcp-surface.snapshot.json",
+      "agent-docs/machine/architecture/mcp-tools/<affected-module>.snapshot.json when a specific tool module changes",
+      "agent-docs/machine/architecture/safety-trust.snapshot.json"
+    ],
+    "runtime_or_daemon_change": [
+      "agent-docs/machine/architecture-governance.snapshot.json",
+      "agent-docs/machine/architecture/index.snapshot.json",
+      "agent-docs/machine/architecture/runtime.snapshot.json",
+      "agent-docs/machine/architecture/controller-surface.snapshot.json",
+      "agent-docs/machine/architecture/safety-trust.snapshot.json"
+    ],
+    "workflow_or_control_center_review_change": [
+      "agent-docs/machine/architecture-governance.snapshot.json",
+      "agent-docs/machine/architecture/index.snapshot.json",
+      "agent-docs/machine/architecture/analysis-workflows.snapshot.json",
+      "agent-docs/machine/architecture/operation-registry.snapshot.json",
+      "agent-docs/machine/architecture/safety-trust.snapshot.json"
+    ],
+    "operation_registry_or_write_safety_change": [
+      "agent-docs/machine/architecture-governance.snapshot.json",
+      "agent-docs/machine/architecture/index.snapshot.json",
+      "agent-docs/machine/architecture/operation-registry.snapshot.json",
+      "agent-docs/machine/architecture/safety-trust.snapshot.json",
+      "agent-docs/machine/architecture/controller-surface.snapshot.json"
+    ],
+    "dependency_refactor_or_module_boundary_change": [
+      "agent-docs/machine/architecture-governance.snapshot.json",
+      "agent-docs/machine/architecture/index.snapshot.json",
+      "agent-docs/machine/architecture/project.snapshot.json",
+      "agent-docs/machine/architecture/import-graph.snapshot.json"
+    ],
+    "release_or_architecture_audit": [
+      "agent-docs/machine/architecture-governance.snapshot.json",
+      "agent-docs/machine/architecture/index.snapshot.json",
+      "agent-docs/machine/architecture/quality-observations.snapshot.json",
+      "agent-docs/machine/architecture/project.snapshot.json"
+    ]
+  },
+  "update_rule": [
+    "After coding changes, update only the affected scoped generated snapshot slices when generated architecture facts changed.",
+    "Update architecture-governance.snapshot.json only when governed facts changed.",
+    "If no governed or generated architecture facts changed, state this explicitly in the handoff or PR.",
+    "Regenerate the full static analysis and all slices before beta/stable releases or after broad architecture refactors."
+  ]
+}

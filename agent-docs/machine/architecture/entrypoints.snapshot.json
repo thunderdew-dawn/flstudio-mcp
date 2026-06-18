@@ -1,0 +1,37 @@
+{
+  "schema": "fls-pilot.architecture.static-analysis.slice.v1",
+  "slice_id": "entrypoints",
+  "title": "Console, server, daemon, doctor, Control Center and FL controller entrypoints",
+  "source_snapshot": "agent-docs/machine/architecture-analysis.snapshot.json",
+  "source_snapshot_sha256": "9fe6631a08edc80c5dd9f6d6d99bd7bf0b5c07706068972c32ad311a5a0af338",
+  "generated_at": "2026-06-18",
+  "note": "Generated scoped slice of the full static architecture analysis. Load this file only when the coding task matches its scope.",
+  "load_when": [
+    "console script, package entrypoint, daemon, status, doctor, or Control Center startup behavior changes",
+    "FL controller script lifecycle entrypoints change",
+    "packaging or installer work needs externally visible command mapping"
+  ],
+  "payload": {
+    "project_scripts": {
+      "fls-pilot": "fls_pilot.server:main",
+      "fls-pilot-control-center": "fls_pilot.control_center:main",
+      "fls-pilot-daemon": "fls_pilot.daemon:main",
+      "fls-pilot-status": "fls_pilot.status:main",
+      "fls-pilot-doctor": "fls_pilot.doctor:main"
+    },
+    "entrypoints": {
+      "console_scripts": {
+        "fls-pilot": "fls_pilot.server:main",
+        "fls-pilot-control-center": "fls_pilot.control_center:main",
+        "fls-pilot-daemon": "fls_pilot.daemon:main",
+        "fls-pilot-status": "fls_pilot.status:main",
+        "fls-pilot-doctor": "fls_pilot.doctor:main"
+      },
+      "mcp_server": "src/fls_pilot/server.py:build_server/main",
+      "control_center": "src/fls_pilot/control_center.py:main",
+      "daemon": "src/fls_pilot/daemon.py:main",
+      "doctor": "src/fls_pilot/doctor.py:main",
+      "fl_controller": "fl_controller/FLStudioPilot/device_FLStudioPilot.py:OnInit/OnIdle/OnMidiMsg/OnSysEx"
+    }
+  }
+}

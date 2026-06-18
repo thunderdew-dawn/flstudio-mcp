@@ -3,6 +3,10 @@
 This document is the human-readable orientation. The governed machine snapshot
 is `agent-docs/machine/architecture-governance.snapshot.json`; consult it only under the
 [Architecture Governance Contract](../contracts/architecture-governance.md).
+Generated static analysis is split by coding scope under
+`agent-docs/machine/architecture/`; start with
+`agent-docs/machine/architecture/index.snapshot.json` when a task needs
+generated architecture context.
 
 ## System Flow
 
@@ -148,3 +152,9 @@ human-approval STOP rule.
 - Analysis contract: `agent-docs/concepts/analysis-workflow-contract.md`
 - Architecture governance:
   `agent-docs/contracts/architecture-governance.md`
+- Governed machine snapshot:
+  `agent-docs/machine/architecture-governance.snapshot.json`
+- Scoped generated architecture snapshot index:
+  `agent-docs/machine/architecture/index.snapshot.json`
+- Full generated static analysis, for audits/releases/drift only:
+  `agent-docs/machine/architecture-analysis.snapshot.json`

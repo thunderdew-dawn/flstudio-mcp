@@ -1,0 +1,75 @@
+{
+  "schema": "fls-pilot.architecture.mcp-tool-module.slice.v1",
+  "slice_id": "mcp_tools.arrange",
+  "title": "MCP tool module: arrange",
+  "source_snapshot": "agent-docs/machine/architecture-analysis.snapshot.json",
+  "source_snapshot_sha256": "9fe6631a08edc80c5dd9f6d6d99bd7bf0b5c07706068972c32ad311a5a0af338",
+  "generated_at": "2026-06-18",
+  "load_when": [
+    "MCP tool implementation or registration changes in the arrange tool module",
+    "safety annotations, doc safety, destructive hints, or protocol usage change for arrange tools"
+  ],
+  "summary": {
+    "module": "arrange",
+    "tools_total": 4,
+    "safety_class_counts": {
+      "write-safe-required": 4
+    },
+    "destructive_hint_true_count": 0,
+    "first_line": 33
+  },
+  "tools": [
+    {
+      "contract_safety_class": "write-safe-required",
+      "destructive_hint": false,
+      "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_ARRANGE_NEW_PATTERN,CMD_GENERAL_UNDO; uses safety layer; safetyClass='write-safe-required'; doc_safety=True",
+      "has_safety_doc": true,
+      "line": 33,
+      "name": "fl_arrange_new_pattern",
+      "path": "src/fls_pilot/tools/arrange.py",
+      "read_only_hint": false,
+      "safety_class_annotation": "write-safe-required",
+      "status": "write-safe-required",
+      "title": "New named pattern (selects it)"
+    },
+    {
+      "contract_safety_class": "write-safe-required",
+      "destructive_hint": false,
+      "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_CHANNEL_SELECT; uses safety layer; safetyClass='write-safe-required'; doc_safety=True",
+      "has_safety_doc": true,
+      "line": 50,
+      "name": "fl_arrange_select_channel",
+      "path": "src/fls_pilot/tools/arrange.py",
+      "read_only_hint": false,
+      "safety_class_annotation": "write-safe-required",
+      "status": "write-safe-required",
+      "title": "Select channel (note-bridge target)"
+    },
+    {
+      "contract_safety_class": "write-safe-required",
+      "destructive_hint": false,
+      "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_ARRANGE_CLONE_PATTERN,CMD_GENERAL_UNDO; uses safety layer; safetyClass='write-safe-required'; doc_safety=True",
+      "has_safety_doc": true,
+      "line": 70,
+      "name": "fl_arrange_clone_pattern",
+      "path": "src/fls_pilot/tools/arrange.py",
+      "read_only_hint": false,
+      "safety_class_annotation": "write-safe-required",
+      "status": "write-safe-required",
+      "title": "Clone a pattern (copies notes)"
+    },
+    {
+      "contract_safety_class": "write-safe-required",
+      "destructive_hint": false,
+      "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_ARRANGE_ADD_MARKER,CMD_GENERAL_UNDO; uses safety layer; safetyClass='write-safe-required'; doc_safety=True",
+      "has_safety_doc": true,
+      "line": 88,
+      "name": "fl_arrange_add_marker",
+      "path": "src/fls_pilot/tools/arrange.py",
+      "read_only_hint": false,
+      "safety_class_annotation": "write-safe-required",
+      "status": "write-safe-required",
+      "title": "Add a section marker at a bar"
+    }
+  ]
+}

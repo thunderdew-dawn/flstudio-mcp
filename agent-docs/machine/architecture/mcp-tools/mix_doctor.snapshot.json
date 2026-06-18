@@ -1,0 +1,128 @@
+{
+  "schema": "fls-pilot.architecture.mcp-tool-module.slice.v1",
+  "slice_id": "mcp_tools.mix_doctor",
+  "title": "MCP tool module: mix_doctor",
+  "source_snapshot": "agent-docs/machine/architecture-analysis.snapshot.json",
+  "source_snapshot_sha256": "9fe6631a08edc80c5dd9f6d6d99bd7bf0b5c07706068972c32ad311a5a0af338",
+  "generated_at": "2026-06-18",
+  "load_when": [
+    "MCP tool implementation or registration changes in the mix_doctor tool module",
+    "safety annotations, doc safety, destructive hints, or protocol usage change for mix_doctor tools"
+  ],
+  "summary": {
+    "module": "mix_doctor",
+    "tools_total": 8,
+    "safety_class_counts": {
+      "read-only": 7,
+      "write-safe-required": 1
+    },
+    "destructive_hint_true_count": 0,
+    "first_line": 374
+  },
+  "tools": [
+    {
+      "contract_safety_class": "read-only",
+      "destructive_hint": null,
+      "evidence": "annotation readOnlyHint=True destructiveHint=None; helper_calls=_gather_analysis_snapshot,_result; safetyClass='read-only'; doc_safety=True",
+      "has_safety_doc": true,
+      "line": 374,
+      "name": "fl_review_mix",
+      "path": "src/fls_pilot/tools/mix_doctor.py",
+      "read_only_hint": true,
+      "safety_class_annotation": "read-only",
+      "status": "read-only",
+      "title": "Review mix"
+    },
+    {
+      "contract_safety_class": "read-only",
+      "destructive_hint": null,
+      "evidence": "annotation readOnlyHint=True destructiveHint=None; helper_calls=_gather_analysis_snapshot,_low_end_stereo_result; safetyClass='read-only'; doc_safety=True",
+      "has_safety_doc": true,
+      "line": 410,
+      "name": "fl_review_low_end_stereo",
+      "path": "src/fls_pilot/tools/mix_doctor.py",
+      "read_only_hint": true,
+      "safety_class_annotation": "read-only",
+      "status": "read-only",
+      "title": "Review low-end and stereo safety"
+    },
+    {
+      "contract_safety_class": "write-safe-required",
+      "destructive_hint": false,
+      "evidence": "annotation readOnlyHint=False destructiveHint=False; uses safety layer; safetyClass='write-safe-required'; doc_safety=True",
+      "has_safety_doc": true,
+      "line": 470,
+      "name": "fl_apply_mix_adjustment",
+      "path": "src/fls_pilot/tools/mix_doctor.py",
+      "read_only_hint": false,
+      "safety_class_annotation": "write-safe-required",
+      "status": "write-safe-required",
+      "title": "Apply mix adjustment (gated)"
+    },
+    {
+      "contract_safety_class": "read-only",
+      "destructive_hint": null,
+      "evidence": "annotation readOnlyHint=True destructiveHint=None; protocol=CMD_MIXER_LIST_TRACKS; safetyClass='read-only'; doc_safety=True",
+      "has_safety_doc": true,
+      "line": 619,
+      "name": "fl_mix_watch_start",
+      "path": "src/fls_pilot/tools/mix_doctor.py",
+      "read_only_hint": true,
+      "safety_class_annotation": "read-only",
+      "status": "read-only",
+      "title": "Start full-song peak watch (Mix Review)"
+    },
+    {
+      "contract_safety_class": "read-only",
+      "destructive_hint": null,
+      "evidence": "annotation readOnlyHint=True destructiveHint=None; safetyClass='read-only'; doc_safety=True",
+      "has_safety_doc": true,
+      "line": 655,
+      "name": "fl_mix_watch_status",
+      "path": "src/fls_pilot/tools/mix_doctor.py",
+      "read_only_hint": true,
+      "safety_class_annotation": "read-only",
+      "status": "read-only",
+      "title": "Peak watch status (Mix Review)"
+    },
+    {
+      "contract_safety_class": "read-only",
+      "destructive_hint": null,
+      "evidence": "annotation readOnlyHint=True destructiveHint=None; helper_calls=_result; safetyClass='read-only'; doc_safety=True",
+      "has_safety_doc": true,
+      "line": 663,
+      "name": "fl_mix_watch_stop",
+      "path": "src/fls_pilot/tools/mix_doctor.py",
+      "read_only_hint": true,
+      "safety_class_annotation": "read-only",
+      "status": "read-only",
+      "title": "Stop peak watch + review mix"
+    },
+    {
+      "contract_safety_class": "read-only",
+      "destructive_hint": null,
+      "evidence": "annotation readOnlyHint=True destructiveHint=None; helper_calls=_proposal_from_plan; safetyClass='read-only'; doc_safety=True",
+      "has_safety_doc": true,
+      "line": 726,
+      "name": "fl_gain_stage",
+      "path": "src/fls_pilot/tools/mix_doctor.py",
+      "read_only_hint": true,
+      "safety_class_annotation": "read-only",
+      "status": "read-only",
+      "title": "Review gain staging"
+    },
+    {
+      "contract_safety_class": "read-only",
+      "destructive_hint": null,
+      "evidence": "annotation readOnlyHint=True destructiveHint=None; safetyClass='read-only'; doc_safety=True",
+      "has_safety_doc": true,
+      "line": 800,
+      "name": "fl_reference_match",
+      "path": "src/fls_pilot/tools/mix_doctor.py",
+      "read_only_hint": true,
+      "safety_class_annotation": "read-only",
+      "status": "read-only",
+      "title": "Reference match (level/balance)"
+    }
+  ]
+}

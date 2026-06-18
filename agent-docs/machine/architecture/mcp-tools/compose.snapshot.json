@@ -1,0 +1,76 @@
+{
+  "schema": "fls-pilot.architecture.mcp-tool-module.slice.v1",
+  "slice_id": "mcp_tools.compose",
+  "title": "MCP tool module: compose",
+  "source_snapshot": "agent-docs/machine/architecture-analysis.snapshot.json",
+  "source_snapshot_sha256": "9fe6631a08edc80c5dd9f6d6d99bd7bf0b5c07706068972c32ad311a5a0af338",
+  "generated_at": "2026-06-18",
+  "load_when": [
+    "MCP tool implementation or registration changes in the compose tool module",
+    "safety annotations, doc safety, destructive hints, or protocol usage change for compose tools"
+  ],
+  "summary": {
+    "module": "compose",
+    "tools_total": 4,
+    "safety_class_counts": {
+      "write-safe-required": 2,
+      "read-only": 2
+    },
+    "destructive_hint_true_count": 2,
+    "first_line": 72
+  },
+  "tools": [
+    {
+      "contract_safety_class": "write-safe-required",
+      "destructive_hint": true,
+      "evidence": "annotation readOnlyHint=False destructiveHint=True; protocol=CMD_CHANNEL_SELECT,CMD_CHANNEL_SELECTED; uses safety layer; uses piano-roll apply_notes; helper_calls=_write; safetyClass='write-safe-required'; doc_safety=True",
+      "has_safety_doc": true,
+      "line": 72,
+      "name": "fl_write_raga_melody",
+      "path": "src/fls_pilot/tools/compose.py",
+      "read_only_hint": false,
+      "safety_class_annotation": "write-safe-required",
+      "status": "write-safe-required",
+      "title": "Write a raga/scale MELODY"
+    },
+    {
+      "contract_safety_class": "write-safe-required",
+      "destructive_hint": true,
+      "evidence": "annotation readOnlyHint=False destructiveHint=True; protocol=CMD_CHANNEL_SELECT,CMD_CHANNEL_SELECTED; uses safety layer; uses piano-roll apply_notes; helper_calls=_write; safetyClass='write-safe-required'; doc_safety=True",
+      "has_safety_doc": true,
+      "line": 107,
+      "name": "fl_write_raga_chords",
+      "path": "src/fls_pilot/tools/compose.py",
+      "read_only_hint": false,
+      "safety_class_annotation": "write-safe-required",
+      "status": "write-safe-required",
+      "title": "Write raga/scale CHORDS"
+    },
+    {
+      "contract_safety_class": "read-only",
+      "destructive_hint": null,
+      "evidence": "annotation readOnlyHint=True destructiveHint=None; safetyClass='read-only'; doc_safety=True",
+      "has_safety_doc": true,
+      "line": 143,
+      "name": "fl_scale_list",
+      "path": "src/fls_pilot/tools/compose.py",
+      "read_only_hint": true,
+      "safety_class_annotation": "read-only",
+      "status": "read-only",
+      "title": "List all scales and ragas"
+    },
+    {
+      "contract_safety_class": "read-only",
+      "destructive_hint": null,
+      "evidence": "annotation readOnlyHint=True destructiveHint=None; safetyClass='read-only'; doc_safety=True",
+      "has_safety_doc": true,
+      "line": 160,
+      "name": "fl_scale_get",
+      "path": "src/fls_pilot/tools/compose.py",
+      "read_only_hint": true,
+      "safety_class_annotation": "read-only",
+      "status": "read-only",
+      "title": "Get details of a scale or raga"
+    }
+  ]
+}

@@ -1,0 +1,62 @@
+{
+  "schema": "fls-pilot.architecture.mcp-tool-module.slice.v1",
+  "slice_id": "mcp_tools.bulk",
+  "title": "MCP tool module: bulk",
+  "source_snapshot": "agent-docs/machine/architecture-analysis.snapshot.json",
+  "source_snapshot_sha256": "9fe6631a08edc80c5dd9f6d6d99bd7bf0b5c07706068972c32ad311a5a0af338",
+  "generated_at": "2026-06-18",
+  "load_when": [
+    "MCP tool implementation or registration changes in the bulk tool module",
+    "safety annotations, doc safety, destructive hints, or protocol usage change for bulk tools"
+  ],
+  "summary": {
+    "module": "bulk",
+    "tools_total": 3,
+    "safety_class_counts": {
+      "write-safe-required": 3
+    },
+    "destructive_hint_true_count": 0,
+    "first_line": 135
+  },
+  "tools": [
+    {
+      "contract_safety_class": "write-safe-required",
+      "destructive_hint": false,
+      "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_MIXER_LIST_TRACKS,CMD_MIXER_SET_MUTE; uses safety layer; helper_calls=_applied_state_changes,_dry_run_report,_mute_writes,_tracks,resolve_targets; safetyClass='write-safe-required'; doc_safety=True",
+      "has_safety_doc": true,
+      "line": 135,
+      "name": "fl_solo_tracks",
+      "path": "src/fls_pilot/tools/bulk.py",
+      "read_only_hint": false,
+      "safety_class_annotation": "write-safe-required",
+      "status": "write-safe-required",
+      "title": "Solo a group of tracks"
+    },
+    {
+      "contract_safety_class": "write-safe-required",
+      "destructive_hint": false,
+      "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_MIXER_LIST_TRACKS,CMD_MIXER_SET_MUTE; uses safety layer; helper_calls=_applied_state_changes,_dry_run_report,_mute_writes,_tracks,resolve_targets; safetyClass='write-safe-required'; doc_safety=True",
+      "has_safety_doc": true,
+      "line": 257,
+      "name": "fl_mute_tracks",
+      "path": "src/fls_pilot/tools/bulk.py",
+      "read_only_hint": false,
+      "safety_class_annotation": "write-safe-required",
+      "status": "write-safe-required",
+      "title": "Mute a group of tracks"
+    },
+    {
+      "contract_safety_class": "write-safe-required",
+      "destructive_hint": false,
+      "evidence": "annotation readOnlyHint=False destructiveHint=False; protocol=CMD_MIXER_LIST_TRACKS,CMD_MIXER_SET_MUTE,CMD_MIXER_SET_SOLO; uses safety layer; helper_calls=_applied_state_changes,_dry_run_report,_tracks; safetyClass='write-safe-required'; doc_safety=True",
+      "has_safety_doc": true,
+      "line": 361,
+      "name": "fl_clear_mute_solo",
+      "path": "src/fls_pilot/tools/bulk.py",
+      "read_only_hint": false,
+      "safety_class_annotation": "write-safe-required",
+      "status": "write-safe-required",
+      "title": "Clear all mutes + solos"
+    }
+  ]
+}
