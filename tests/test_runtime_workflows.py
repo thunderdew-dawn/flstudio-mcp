@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+from test_runtime_core import FakeBridge
+
 from fls_pilot.runtime.core import RuntimeCore
 from fls_pilot.runtime.workflow_runner import run_workflow
-
-from test_runtime_core import FakeBridge
 
 
 def test_mix_review_runs_and_stores_scoped_report() -> None:
@@ -14,7 +14,8 @@ def test_mix_review_runs_and_stores_scoped_report() -> None:
     report = runtime.latest_report("mix_review")
 
     assert result["workflow"] == "mix_review"
-    assert result["details"]["analysis_report"]["workflow"] == "mix_review"
+    assert result["contract_version"] == "fls-pilot.analysis-report.v1"
+    assert "analysis_report" not in result["details"]
     assert report is not None
     assert report.project_scope_id == runtime.project_context.project_scope_id
     assert report.snapshot_id == runtime.project_context.snapshot_id

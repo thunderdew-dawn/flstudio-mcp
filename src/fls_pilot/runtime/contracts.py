@@ -2,10 +2,24 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Mapping
+from typing import Any
 from uuid import uuid4
+
+RUNTIME_JOB_CONTRACT_VERSION = "fls-pilot.runtime-job.v1"
+RUNTIME_JOB_STATUSES = frozenset(
+    {
+        "queued",
+        "running",
+        "succeeded",
+        "failed",
+        "cancelled",
+        "expired",
+        "interrupted",
+    }
+)
 
 
 def utc_now_iso() -> str:
@@ -174,3 +188,48 @@ class RuntimeResponse:
             error=str(value["error"]) if value.get("error") else None,
             code=str(value["code"]) if value.get("code") else None,
         )
+
+
+@dataclass(frozen=True)
+class RuntimeJob:
+    job_id: str
+    kind: str
+    status: str
+    created_at: str
+    updated_at: str
+    started_at: str | None = None
+    finished_at: str | None = None
+    progress: float = 0.0
+    input_summary: dict[str, Any] = field(default_factory=dict)
+    result_ref: dict[str, Any] | None = None
+    error: dict[str, Any] | None = None
+    cancel_requested: bool = False
+    cache_hit: bool = False
+    retry_count: int = 0
+    idempotency_key: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.status not in RUNTIME_JOB_STATUSES:
+            raise ValueError(f"invalid Runtime job status: {self.status!r}")
+        object.__setattr__(self, "progress", min(1.0, max(0.0, float(self.progress))))
+        object.__setattr__(self, "retry_count", max(0, int(self.retry_count)))
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "contract_version": RUNTIME_JOB_CONTRACT_VERSION,
+            "job_id": self.job_id,
+            "kind": self.kind,
+            "status": self.status,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+            "started_at": self.started_at,
+            "finished_at": self.finished_at,
+            "progress": self.progress,
+            "input_summary": dict(self.input_summary),
+            "result_ref": dict(self.result_ref) if self.result_ref else None,
+            "error": dict(self.error) if self.error else None,
+            "cancel_requested": self.cancel_requested,
+            "cache_hit": self.cache_hit,
+            "retry_count": self.retry_count,
+            "idempotency_key": self.idempotency_key,
+        }

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from fls_pilot.runtime.contracts import (
+    RUNTIME_JOB_CONTRACT_VERSION,
     ProjectContext,
     ReportScope,
+    RuntimeJob,
     RuntimeResponse,
     RuntimeSession,
 )
@@ -41,3 +43,20 @@ def test_report_scope_and_runtime_response_round_trip() -> None:
     restored = RuntimeResponse.from_dict(response.to_dict())
     assert restored == response
     assert ReportScope.from_dict(restored.data["scope"]) == scope
+
+
+def test_runtime_job_contract_is_explicit() -> None:
+    job = RuntimeJob(
+        job_id="job_test",
+        kind="audio.features",
+        status="queued",
+        created_at="now",
+        updated_at="now",
+        input_summary={"source_basename": "mix.wav"},
+        idempotency_key="audio:key",
+    )
+
+    payload = job.to_dict()
+    assert payload["contract_version"] == RUNTIME_JOB_CONTRACT_VERSION
+    assert payload["result_ref"] is None
+    assert payload["cancel_requested"] is False

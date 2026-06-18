@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 RUNTIME_OPERATIONS = {
     "runtime.status",
@@ -20,6 +21,11 @@ RUNTIME_OPERATIONS = {
     "analysis.report.latest",
     "analysis.report.list",
     "analysis.health.get",
+    "job.submit",
+    "job.status",
+    "job.result",
+    "job.cancel",
+    "job.list",
 }
 
 OPERATION_ALLOWED_PARAMS = {
@@ -43,6 +49,18 @@ OPERATION_ALLOWED_PARAMS = {
     "analysis.report.latest": {"workflow_id"},
     "analysis.report.list": {"workflow_id"},
     "analysis.health.get": set(),
+    "job.submit": {
+        "kind",
+        "input",
+        "input_summary",
+        "idempotency_key",
+        "idempotent",
+        "max_retries",
+    },
+    "job.status": {"job_id"},
+    "job.result": {"job_id"},
+    "job.cancel": {"job_id"},
+    "job.list": {"kind", "status", "limit", "offset"},
 }
 
 

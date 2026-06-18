@@ -90,6 +90,55 @@ class RuntimeClient:
     def project_health(self) -> dict[str, Any]:
         return dict(self.request("analysis.health.get").data["health"])
 
+    def submit_job(
+        self,
+        kind: str,
+        *,
+        input: dict[str, Any],
+        input_summary: dict[str, Any] | None = None,
+        idempotency_key: str | None = None,
+        idempotent: bool = True,
+        max_retries: int = 1,
+    ) -> dict[str, Any]:
+        return dict(
+            self.request(
+                "job.submit",
+                {
+                    "kind": kind,
+                    "input": input,
+                    "input_summary": input_summary or {},
+                    "idempotency_key": idempotency_key,
+                    "idempotent": idempotent,
+                    "max_retries": max_retries,
+                },
+            ).data["job"]
+        )
+
+    def job_status(self, job_id: str) -> dict[str, Any]:
+        return dict(self.request("job.status", {"job_id": job_id}).data["job"])
+
+    def job_result(self, job_id: str) -> dict[str, Any]:
+        return dict(self.request("job.result", {"job_id": job_id}).data["job"])
+
+    def cancel_job(self, job_id: str) -> dict[str, Any]:
+        return dict(self.request("job.cancel", {"job_id": job_id}).data["job"])
+
+    def list_jobs(
+        self,
+        *,
+        kind: str | None = None,
+        status: str | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {"limit": limit, "offset": offset}
+        if kind:
+            params["kind"] = kind
+        if status:
+            params["status"] = status
+        rows = self.request("job.list", params).data.get("jobs") or ()
+        return [dict(row) for row in rows]
+
     def _rpc(self, request: dict[str, Any]) -> dict[str, Any]:
         with self._lock, socket.create_connection(
             (self.host, self.port), timeout=self.timeout

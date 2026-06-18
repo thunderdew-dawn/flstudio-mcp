@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import threading
+from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 from .. import __version__
@@ -11,9 +13,10 @@ from ..analysis.health_aggregator import aggregate_project_health
 from ..analysis.observations import ObservationStore
 from ..analysis.schema import AnalysisReport
 from ..analysis.store import ReportStore
-from ..workflows.registry import DEFAULT_WORKFLOW_REGISTRY, WorkflowRegistry
-from ..workflows.registry import canonical_workflow_id
+from ..workflows.registry import DEFAULT_WORKFLOW_REGISTRY, WorkflowRegistry, canonical_workflow_id
 from .contracts import ProjectContext, RuntimeSession
+from .job_store import JobStore
+from .jobs import JobHandler, RuntimeJobQueue
 from .project_context import ProjectContextService
 
 
@@ -27,6 +30,9 @@ class RuntimeCore:
         observation_store: ObservationStore | None = None,
         report_store: ReportStore | None = None,
         workflow_registry: WorkflowRegistry = DEFAULT_WORKFLOW_REGISTRY,
+        job_store_path: str | Path | None = None,
+        job_worker_concurrency: int = 1,
+        job_result_validator: Callable[[dict[str, Any]], bool] | None = None,
     ) -> None:
         self.session = session or RuntimeSession(runtime_version=__version__)
         self.observation_store = observation_store or ObservationStore()
@@ -37,7 +43,19 @@ class RuntimeCore:
         self.report_store = report_store or ReportStore()
         self.workflow_registry = workflow_registry
         self.project_contexts = ProjectContextService(self.session)
+        self.job_store = JobStore(job_store_path)
+        self.jobs = RuntimeJobQueue(
+            self.job_store,
+            max_workers=job_worker_concurrency,
+            result_validator=job_result_validator,
+        )
         self._lock = threading.RLock()
+
+    def register_job_handler(self, kind: str, handler: JobHandler) -> None:
+        self.jobs.register_handler(kind, handler)
+
+    def close(self, *, wait: bool = True) -> None:
+        self.jobs.close(wait=wait)
 
     @property
     def project_context(self) -> ProjectContext:

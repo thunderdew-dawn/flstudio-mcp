@@ -1,18 +1,19 @@
 from __future__ import annotations
 
 import threading
+import time
 
 import pytest
 
 from fls_pilot import daemon
-from fls_pilot.runtime.client import RuntimeClient, RuntimeClientError
+from fls_pilot.runtime.client import RuntimeClient
 from fls_pilot.runtime.core import RuntimeCore
 
 
 @pytest.fixture
-def runtime_server():
+def runtime_server(tmp_path):
     original_runtime = daemon._runtime
-    daemon._runtime = RuntimeCore()
+    daemon._runtime = RuntimeCore(job_store_path=tmp_path / "jobs.sqlite3")
     server = daemon._Server(("127.0.0.1", 0), daemon._Handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -21,6 +22,7 @@ def runtime_server():
     finally:
         server.shutdown()
         server.server_close()
+        daemon._runtime.close()
         daemon._runtime = original_runtime
 
 
@@ -121,3 +123,35 @@ def test_runtime_rejects_incompatible_report_versions(report: dict) -> None:
 
     assert response["ok"] is False
     assert response["code"] == "incompatible_report_version"
+
+
+def test_runtime_job_rpc_never_accesses_bridge(runtime_server, monkeypatch) -> None:
+    runtime = daemon._runtime
+    runtime.register_job_handler(
+        "test.rpc",
+        lambda payload, context: {"value": payload["value"]},
+    )
+    monkeypatch.setattr(
+        daemon,
+        "_get_bridge",
+        lambda: pytest.fail("Runtime jobs must not access the FL bridge"),
+    )
+    client = _client(runtime_server)
+
+    submitted = client.submit_job(
+        "test.rpc",
+        input={"value": 7},
+        input_summary={"value": 7},
+        idempotency_key="rpc:7",
+    )
+    for _ in range(100):
+        status = client.job_status(submitted["job_id"])
+        if status["status"] == "succeeded":
+            break
+        time.sleep(0.01)
+    else:
+        raise AssertionError("Runtime job did not complete")
+
+    result = client.job_result(submitted["job_id"])
+    assert result["result_ref"] == {"value": 7}
+    assert client.list_jobs(kind="test.rpc")

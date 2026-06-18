@@ -44,6 +44,10 @@ import socketserver
 import threading
 
 from . import __version__, protocol
+from .analysis.broker import StaticProjectSnapshot, StaticSnapshotPolicy
+from .analysis.contracts import IncompatibleReportVersionError
+from .analysis.live import LiveMeterPolicy
+from .analysis.schema import AnalysisReport
 from .connection import (
     DEFAULT_TCP_HOST,
     DEFAULT_TCP_PORT,
@@ -54,16 +58,12 @@ from .connection import (
     FLPortMissing,
     FLTimeout,
 )
-from .runtime_config import find_available_tcp_port
 from .runtime.contracts import RuntimeResponse
 from .runtime.core import RuntimeCore
 from .runtime.protocol import validate_runtime_request
-from .analysis.broker import StaticProjectSnapshot, StaticSnapshotPolicy
-from .analysis.live import LiveMeterPolicy
-from .analysis.contracts import IncompatibleReportVersionError
-from .analysis.schema import AnalysisReport
-from .workflows.registry import canonical_workflow_id
 from .runtime.workflow_runner import run_workflow
+from .runtime_config import find_available_tcp_port
+from .workflows.registry import canonical_workflow_id
 
 logger = logging.getLogger("fls_pilot.daemon")
 
@@ -256,7 +256,11 @@ def _dispatch_runtime_operation(
             "result": run_workflow(
                 _runtime,
                 workflow_id,
-                bridge=None if workflow_id in {"preset_assistant", "audio_evidence"} else _get_bridge(),
+                bridge=(
+                    None
+                    if workflow_id in {"preset_assistant", "audio_evidence"}
+                    else _get_bridge()
+                ),
                 inputs=inputs,
             )
         }
@@ -300,6 +304,38 @@ def _dispatch_runtime_operation(
         return {"reports": [report.to_dict() for report in reports]}
     if operation == "analysis.health.get":
         return {"health": _runtime.project_health()}
+    if operation == "job.submit":
+        payload = params.get("input") or {}
+        summary = params.get("input_summary") or {}
+        if not isinstance(payload, dict) or not isinstance(summary, dict):
+            raise ValueError("job input and input_summary must be objects")
+        job = _runtime.jobs.submit(
+            kind=str(params.get("kind") or ""),
+            input_payload=payload,
+            input_summary=summary,
+            idempotency_key=(
+                str(params["idempotency_key"])
+                if params.get("idempotency_key")
+                else None
+            ),
+            idempotent=bool(params.get("idempotent", True)),
+            max_retries=int(params.get("max_retries", 1)),
+        )
+        return {"job": job.to_dict()}
+    if operation == "job.status":
+        return {"job": _runtime.jobs.status(str(params["job_id"])).to_dict()}
+    if operation == "job.result":
+        return {"job": _runtime.jobs.result(str(params["job_id"])).to_dict()}
+    if operation == "job.cancel":
+        return {"job": _runtime.jobs.cancel(str(params["job_id"])).to_dict()}
+    if operation == "job.list":
+        jobs = _runtime.jobs.list(
+            kind=str(params["kind"]) if params.get("kind") else None,
+            status=str(params["status"]) if params.get("status") else None,
+            limit=int(params.get("limit", 100)),
+            offset=int(params.get("offset", 0)),
+        )
+        return {"jobs": [job.to_dict() for job in jobs]}
     raise ValueError(f"unsupported Runtime operation: {operation}")
 
 
@@ -311,6 +347,7 @@ def _runtime_capabilities() -> dict:
         "workflow_registry": True,
         "project_health": True,
         "workflow_execution": True,
+        "durable_jobs": True,
     }
 
 
@@ -393,6 +430,7 @@ def main() -> None:
     finally:
         server.shutdown()
         server.server_close()
+        _runtime.close(wait=False)
 
 
 if __name__ == "__main__":
