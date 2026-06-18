@@ -1,5 +1,5 @@
 
-![fls-pilot logo](assets/fls-pilot-logo-with-title-and-slogan.svg)
+![fls-pilot logo](assets/fls-pilot-logo-with-title-and-slogan.png)
 # Control Center
 
 The Control Center is the recommended first-run and daily runtime surface for

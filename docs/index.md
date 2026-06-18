@@ -1,4 +1,4 @@
-![fls-pilot logo](assets/fls-pilot-logo-with-title-and-slogan.svg)
+![fls-pilot logo](assets/fls-pilot-logo-with-title-and-slogan.png)
 # fls-pilot
 
 **Create more. Check less.**
