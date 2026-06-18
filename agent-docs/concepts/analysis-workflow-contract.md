@@ -15,10 +15,22 @@ producer workflow may introduce a private report shape, private score meaning,
 or hidden FL Studio call sequence when the shared analysis/report structure can
 represent it.
 
-Until the shared Analysis Broker and Observation Store are implemented, agents
-must preserve compatibility with current outputs while planning and coding
-toward the contract below. Compatibility adapters are acceptable during
-migration; new divergent contracts are not.
+Compatibility adapters are acceptable while legacy UI fields remain; new
+divergent contracts are not.
+
+## Runtime Ownership
+
+The Runtime service owns canonical session/project context, observations,
+workflow declarations, reports, freshness, and invalidation. It is
+daemon-hosted for Control Center/TCP operation and has an in-process
+compatibility path for direct transport. MCP workflows and Control Center
+panels must consume that shared state through the Runtime or an explicit
+compatibility adapter.
+
+Control Center panels must not create private workflow state, silently replace
+Runtime reports, or infer current FL Studio state from static source files.
+Static source can explain implementation only; current evidence must come from
+the Runtime/MCP path.
 
 ## Agent Dialogue Contract
 

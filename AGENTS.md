@@ -2,89 +2,103 @@
 
 **Create more. Check less.**
 
-This is the repository entry point for AI-assisted work in `thunderdew-dawn/fls-pilot`.
-Choose the smallest role-specific context path before reading more files.
+This is the compact routing entry point for AI-assisted work in
+`thunderdew-dawn/fls-pilot`. Choose one mode before reading more files.
 
-## Choose Your Role First
+## Mode 1: Runtime/MCP Usage
 
-### A) Use FLStudioPilot With FL Studio
+Use this mode when the user wants to use FLStudioPilot with FL Studio.
 
-Use this path when the task is to run or guide workflows such as Mix Review,
-Routing Review, Project Organizer, audio analysis, MIDI export, bridge/session
-health checks, or other user-facing MCP workflows.
+Examples:
 
-Read:
+- Mix Review, Routing Audit, Project Organizer, Project Health, or Preflight.
+- Export readiness, low-end checks, audio analysis, or MIDI export.
+- Bridge/session status, setup diagnosis, or guided safe edits.
+
+Read first:
 
 - `agent-docs/agents/runtime-usage.md`
-- `agent-docs/concepts/safety-contract.md`
-- `agent-docs/concepts/analysis-workflow-contract.md` when the task involves
-  Control Center reviews, Mix Review, Routing Review, Project Organizer,
-  Project Health, Preflight, Low-End Analysis, or other AI-guided workflow
-  reports.
+- `agent-docs/contracts/mcp-runtime-scope.md`
 
-Optional, only when needed:
+Then use MCP resources and tools. Start with `fl://agent-briefing` and
+`fl://status` when available.
 
-- `agent-docs/agents/knowledgebase-protocol.md` when the task involves FL Studio API
-  behavior, mixer/plugin parameters, MIDI, automation, REC events, ranges,
-  mappings, or reusable findings.
-- `src/fls_pilot/context/prompts/mix-review.md` when the user asks for a mix review.
-- `src/fls_pilot/context/prompts/routing-review.md` when the user asks for routing review.
-- `src/fls_pilot/context/prompts/project-organizer.md` when the user asks for project
-  cleanup or organization.
+Runtime/MCP usage agents should not inspect repository source files unless the
+user explicitly asks for repository development, implementation, debugging,
+tests, release, CI, security, or architecture work. Repository files are
+maintenance context, not evidence of current FL Studio session state.
 
-Do not read the GitHub playbook unless the task involves issues, PRs, releases,
-roadmap state, CI, security, or repository maintenance.
+Read only when relevant:
 
-### B) Develop Or Maintain The Repository
+- `agent-docs/concepts/safety-contract.md` for write-capable workflows.
+- `agent-docs/concepts/analysis-workflow-contract.md` for Control Center reviews
+  and AI-guided workflow reports.
+- `agent-docs/agents/knowledgebase-protocol.md` for FL API behavior, values,
+  mappings, plugin parameters, automation, REC events, or MIDI details.
 
-Use this path when changing code, tests, docs, scripts, controller files,
-Knowledgebase files, workflows, packaging, or project behavior.
+Do not load development, GitHub, or architecture documents during ordinary
+runtime usage.
 
-Read:
+## Mode 2: Repository Development
+
+Use this mode when changing or reviewing code, docs, tests, scripts, controller
+files, Knowledgebase files, workflows, packaging, safety rules, contracts,
+public behavior, or architecture.
+
+Read first:
 
 - `agent-docs/agents/development.md`
-- `agent-docs/concepts/safety-contract.md`
-- `agent-docs/concepts/analysis-workflow-contract.md`
-- `agent-docs/agents/knowledgebase-protocol.md`
-- `agent-docs/engineering/standards.md`
-- `agent-docs/project/ROADMAP.github.md`
+
+Then follow its task-specific routing:
+
+- Existing persistent-write implementation or safety behavior:
+  `agent-docs/concepts/safety-contract.md`
+- Safety classes, write contracts, approval/rollback guarantees, or public
+  persistent-write surface:
+  `agent-docs/concepts/safety-contract.md` and
+  `agent-docs/contracts/architecture-governance.md`
+- Analysis workflows or Control Center reports:
+  `agent-docs/concepts/analysis-workflow-contract.md`
+- Architecture, MCP surface, protocol, controller, runtime boundary, entrypoint,
+  or capability changes:
+  `agent-docs/contracts/architecture-governance.md`
+- FL API behavior, ranges, mappings, MIDI, automation, or reusable findings:
+  `agent-docs/agents/knowledgebase-protocol.md`
+- Issues, PRs, releases, CI, security, roadmap, hotfixes, or backports:
+  `agent-docs/agents/github-playbook.md`
+
+Load `agent-docs/machine/fls_pilot_architecture.json` only for architecture,
+public-surface, safety-posture, protocol/controller, or trust-boundary work. It
+is not a default read for ordinary code or documentation changes.
+
+The machine snapshot is an index of governed facts, not a substitute for the
+source files and tests named inside it. Do not copy its contents into
+`AGENTS.md`.
 
 For live FL Studio verification, also follow:
 
 - `agent-docs/agents/runtime-usage.md`
 
-### C) Work On GitHub Planning, PRs, Releases, Security, Or Roadmap
-
-Use this path when triaging issues, planning slices, reviewing PRs, preparing
-releases, handling CI failures, Dependabot, CodeQL, hotfixes, reverts, API
-probes, documentation-only changes, or backports.
-
-Read:
-
-- `agent-docs/agents/github-playbook.md`
-- `agent-docs/project/ROADMAP.github.md`
-
-Use the focused prompt files in `src/fls_pilot/context/prompts/` when applicable.
-
-## Universal Hard Rules
+## Universal Rules
 
 - Prefer high-level MCP tools over raw FL API calls.
-- Control Center reviews and AI-guided workflow reports must follow the shared
-  Analysis Workflow Contract; do not add private report shapes, private score
-  meanings, or hidden broad FL call sequences.
-- Check the Knowledgebase before FL state, mixer/plugin parameters, automation,
-  REC events, or MIDI work.
-- Do not guess FL Studio API ranges, normalized values, dB/Hz mappings, REC
-  event IDs, track indices, plugin parameter indices, or valid ranges.
-- No persistent FL write without scoped snapshot, smallest practical write,
-  readback verification where supported, changelog entry, and rollback path.
+- Live FL Studio state must come from MCP resources/tools, never from source
+  inspection.
+- Follow the shared Analysis Workflow Contract for Control Center reviews and
+  AI-guided reports. Do not invent private report shapes or score meanings.
+- Check the Knowledgebase before FL state writes, mixer/plugin parameters,
+  automation, REC events, or MIDI work.
+- Do not guess ranges, normalized values, dB/Hz mappings, event IDs, indices, or
+  plugin parameters.
+- No persistent FL write without explicit approval, scoped snapshot, smallest
+  practical write, readback where supported, changelog entry, and rollback.
 - If API support, bridge status, target selection, readback, rollback, or value
   evidence is unclear, switch to read-only, dry-run, probe-only, or manual
   guidance.
 - Do not ship plugin loading/insertion, playlist clip editing, pattern or clip
   deletion, project open/new/save-as/render automation, raw escape hatches,
-  broad UI automation, unsafe automation recording, or full-FLP restore claims
-  as user-facing tools.
+  broad UI automation, unsafe automation recording, or full-FLP restore claims.
+- Apply the architecture STOP rule only to real public-surface, safety-posture,
+  protocol/controller, supported-capability, or trust-boundary changes.
 - Preserve all user and uncommitted changes. Never revert unrelated work.
-- Use English for commits, code comments, docstrings, and repository
-  documentation.
+- Use English for commits, code comments, docstrings, and repository docs.

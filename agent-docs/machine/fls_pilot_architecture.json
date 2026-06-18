@@ -1,0 +1,369 @@
+{
+  "snapshot_version": 1,
+  "as_of": "2026-06-18",
+  "status": "governed",
+  "project": {
+    "name": "fls-pilot",
+    "package_version": "3.0.0b4",
+    "repository": "thunderdew-dawn/fls-pilot",
+    "architecture_contract": "agent-docs/contracts/architecture-governance.md",
+    "human_overview": "agent-docs/concepts/architecture.md"
+  },
+  "governance": {
+    "consult_for": [
+      "public_mcp_tool_surface",
+      "packaged_mcp_resources_or_prompts",
+      "operation_registry",
+      "safety_classes_or_write_contracts",
+      "runtime_workflows_or_analysis_declarations",
+      "protocol_commands_or_wire_format",
+      "controller_handlers",
+      "control_center_workflow_panels",
+      "bridge_daemon_runtime_trust_boundaries",
+      "entrypoints_or_public_cli",
+      "supported_forbidden_or_manual_capabilities"
+    ],
+    "update_sequence": [
+      "change_source_docs_tests",
+      "run_relevant_checks",
+      "update_snapshot_or_explain_unchanged",
+      "report_architecture_diff",
+      "stop_for_human_approval_when_required"
+    ],
+    "human_approval_stop_triggers": [
+      "public_behavior",
+      "public_mcp_surface",
+      "public_cli_or_control_center_behavior",
+      "safety_posture_or_write_contract",
+      "runtime_ownership_or_trust_boundary",
+      "supported_forbidden_or_manual_capability",
+      "protocol_or_controller_surface",
+      "entrypoint_or_external_integration"
+    ],
+    "no_stop_examples": [
+      "typo_or_formatting",
+      "ordinary_readme_edit",
+      "comment_only_change",
+      "small_behavior_preserving_test_fix",
+      "internal_refactor_without_surface_safety_protocol_or_boundary_impact"
+    ]
+  },
+  "entrypoints": [
+    {
+      "command": "fls-pilot",
+      "target": "fls_pilot.server:main",
+      "role": "fastmcp_server"
+    },
+    {
+      "command": "fls-pilot-control-center",
+      "target": "fls_pilot.control_center:main",
+      "role": "local_control_center"
+    },
+    {
+      "command": "fls-pilot-daemon",
+      "target": "fls_pilot.daemon:main",
+      "role": "localhost_tcp_daemon_and_runtime_host"
+    },
+    {
+      "command": "fls-pilot-status",
+      "target": "fls_pilot.status:main",
+      "role": "read_only_status_cli"
+    },
+    {
+      "command": "fls-pilot-doctor",
+      "target": "fls_pilot.doctor:main",
+      "role": "read_only_setup_diagnostics"
+    }
+  ],
+  "components": [
+    {
+      "id": "ai_clients",
+      "responsibility": "Connect to the MCP server over stdio or SSE/HTTP.",
+      "source_paths": [
+        "src/fls_pilot/server.py",
+        "src/fls_pilot/runtime_config.py"
+      ]
+    },
+    {
+      "id": "fastmcp_server",
+      "responsibility": "Register public MCP tools, resources, prompts, and server instructions.",
+      "source_paths": [
+        "src/fls_pilot/server.py",
+        "src/fls_pilot/prompts.py",
+        "src/fls_pilot/tools/"
+      ]
+    },
+    {
+      "id": "operation_registry",
+      "responsibility": "Validate internal operations, safety classes, scopes, restores, and batch eligibility.",
+      "source_paths": [
+        "src/fls_pilot/operations.py"
+      ]
+    },
+    {
+      "id": "safety_and_rollback",
+      "responsibility": "Own snapshots, persistent writes, readback, changelog, and LIFO rollback.",
+      "source_paths": [
+        "src/fls_pilot/safety.py"
+      ]
+    },
+    {
+      "id": "bridge_client",
+      "responsibility": "Carry validated FL commands over direct MIDI or localhost TCP.",
+      "source_paths": [
+        "src/fls_pilot/connection.py",
+        "src/fls_pilot/protocol.py"
+      ]
+    },
+    {
+      "id": "daemon_runtime_host",
+      "responsibility": "Own MIDI access and canonical Runtime state when using the TCP transport.",
+      "source_paths": [
+        "src/fls_pilot/daemon.py",
+        "src/fls_pilot/runtime/"
+      ]
+    },
+    {
+      "id": "control_center",
+      "responsibility": "Serve the local UI and consume declared Runtime workflows and reports.",
+      "source_paths": [
+        "src/fls_pilot/control_center.py",
+        "src/fls_pilot/control_center_static/"
+      ]
+    },
+    {
+      "id": "analysis_runtime",
+      "responsibility": "Own canonical observations, evidence modes, reports, freshness, scoring, and invalidation.",
+      "source_paths": [
+        "src/fls_pilot/analysis/",
+        "src/fls_pilot/runtime/core.py",
+        "src/fls_pilot/workflows/registry.py"
+      ]
+    },
+    {
+      "id": "knowledgebase",
+      "responsibility": "Store verified API behavior, mappings, pitfalls, and reusable workflow knowledge.",
+      "source_paths": [
+        "knowledgebase/",
+        "src/fls_pilot/tools/knowledgebase.py",
+        "src/fls_pilot/kb_policy.py"
+      ]
+    },
+    {
+      "id": "music_logic",
+      "responsibility": "Provide musical analysis, recipes, scales, levels, libraries, and MIDI export.",
+      "source_paths": [
+        "src/fls_pilot/music/"
+      ]
+    },
+    {
+      "id": "piano_roll_generated_script_bridge",
+      "responsibility": "Generate and trigger undo-backed Piano Roll scripts with explicit readback limits.",
+      "source_paths": [
+        "src/fls_pilot/pianoroll.py",
+        "src/fls_pilot/pyscript_gen.py",
+        "src/fls_pilot/pyscript_trigger.py"
+      ]
+    },
+    {
+      "id": "virtual_midi_loopback",
+      "responsibility": "Carry bidirectional SysEx between the host process and FL Studio.",
+      "source_paths": [
+        "src/fls_pilot/connection.py",
+        "agent-docs/concepts/architecture.md"
+      ]
+    },
+    {
+      "id": "fl_controller_script",
+      "responsibility": "Translate protocol commands into supported FL Studio API calls and return responses and heartbeats.",
+      "source_paths": [
+        "fl_controller/FLStudioPilot/device_FLStudioPilot.py"
+      ]
+    },
+    {
+      "id": "fl_studio_api",
+      "responsibility": "Final capability boundary for controller and Piano Roll scripting.",
+      "source_paths": [
+        "agent-docs/concepts/api-capability-audit.md",
+        "knowledgebase/fl_api/"
+      ]
+    }
+  ],
+  "public_surfaces": {
+    "mcp": {
+      "registration_source": "src/fls_pilot/server.py",
+      "tool_modules_source": "src/fls_pilot/tools/",
+      "baseline": {
+        "registered_public_tools": 91,
+        "static_audited_tools": 167,
+        "check": "python scripts/check_tool_registration_baseline.py"
+      },
+      "resources": [
+        "fl://agent-briefing",
+        "fl://status",
+        "fl://project",
+        "fl://transport",
+        "fl://channels",
+        "fl://mixer",
+        "fl://patterns",
+        "fls://docs/safety-contract",
+        "fls://docs/api-capability-audit",
+        "fls://docs/default-safe-ux",
+        "fls://docs/runtime-usage",
+        "fls://docs/knowledgebase-protocol",
+        "fls://docs/tool-policy",
+        "fls://capabilities/supported",
+        "fls://capabilities/not-possible",
+        "fls://capabilities/api-limits",
+        "fls://capabilities/write-safety"
+      ],
+      "resource_source": "src/fls_pilot/tools/resources.py",
+      "prompt_source": "src/fls_pilot/prompts.py"
+    },
+    "runtime_rpc": {
+      "owner": "daemon_runtime_host",
+      "source": "src/fls_pilot/runtime/protocol.py",
+      "raw_command_code_script_fields_forbidden": true
+    },
+    "controller_protocol": {
+      "protocol_version": 2,
+      "command_catalog_source": "src/fls_pilot/protocol.py",
+      "controller_handler_source": "fl_controller/FLStudioPilot/device_FLStudioPilot.py",
+      "transport": "midi_sysex",
+      "heartbeat_seconds": 0.5,
+      "stale_after_seconds": 3.0
+    },
+    "control_center": {
+      "source": "src/fls_pilot/control_center.py",
+      "workflow_registry": "src/fls_pilot/workflows/registry.py",
+      "runtime_client": "src/fls_pilot/runtime/client.py",
+      "state_ownership": "runtime"
+    }
+  },
+  "runtime_transports": {
+    "mcp": [
+      "stdio",
+      "sse_http"
+    ],
+    "fl_bridge": [
+      "direct_midi_sysex",
+      "localhost_tcp_to_daemon_then_midi_sysex"
+    ],
+    "default_daemon_endpoint": "127.0.0.1:9787",
+    "virtual_midi_ports": {
+      "to_fl": "FLStudioPilot RX",
+      "from_fl": "FLStudioPilot TX"
+    }
+  },
+  "analysis": {
+    "canonical_owner": "src/fls_pilot/runtime/core.py",
+    "workflow_registry": "src/fls_pilot/workflows/registry.py",
+    "report_contract": "src/fls_pilot/analysis/schema.py",
+    "observation_broker": "src/fls_pilot/analysis/broker.py",
+    "canonical_workflow_ids": [
+      "setup_runtime",
+      "project_health",
+      "mix_review",
+      "routing_audit",
+      "low_end_analysis",
+      "project_organizer",
+      "jam_2_project",
+      "preflight",
+      "sidechain_routing_check",
+      "plugin_assistant",
+      "preset_assistant",
+      "audio_evidence"
+    ],
+    "control_center_must_not_invent_workflow_state": true
+  },
+  "safety": {
+    "contract": "agent-docs/concepts/safety-contract.md",
+    "classes": [
+      "read-only",
+      "transient",
+      "server-state",
+      "external-write",
+      "write-safe-required",
+      "forbidden"
+    ],
+    "persistent_write_entrypoints": [
+      "safety.safe_write",
+      "safety.safe_write_group",
+      "safety.safe_piano_roll_write"
+    ],
+    "persistent_write_requirements": [
+      "explicit_user_approval",
+      "scoped_snapshot",
+      "smallest_practical_write",
+      "readback_where_supported",
+      "changelog_entry",
+      "rollback_path",
+      "stop_after_verified_change"
+    ],
+    "forbidden_user_facing_capabilities": [
+      "raw_controller_or_api_escape_hatches",
+      "plugin_loading_or_insertion",
+      "playlist_clip_editing_placement_movement_or_deletion",
+      "pattern_or_clip_deletion",
+      "project_open_new_save_as_or_render_automation",
+      "broad_ui_automation",
+      "unsafe_automation_recording",
+      "full_flp_snapshot_or_restore_claims"
+    ]
+  },
+  "trust_boundaries": [
+    {
+      "from": "ai_client",
+      "to": "fastmcp_server",
+      "mechanism": "stdio_or_sse_http"
+    },
+    {
+      "from": "mcp_tool_validation",
+      "to": "operation_execution",
+      "mechanism": "registered_tools_and_operation_registry"
+    },
+    {
+      "from": "safety_layer",
+      "to": "persistent_fl_project_mutation",
+      "mechanism": "snapshot_write_readback_changelog_rollback"
+    },
+    {
+      "from": "mcp_server",
+      "to": "daemon_runtime_host",
+      "mechanism": "localhost_newline_delimited_json_tcp"
+    },
+    {
+      "from": "host_process",
+      "to": "fl_controller_script",
+      "mechanism": "virtual_midi_sysex"
+    },
+    {
+      "from": "fl_controller_script",
+      "to": "fl_studio_api",
+      "mechanism": "image_line_midi_scripting_api"
+    },
+    {
+      "from": "host_process",
+      "to": "piano_roll_script",
+      "mechanism": "generated_file_and_os_hotkey"
+    },
+    {
+      "from": "user_files",
+      "to": "offline_analysis_or_midi_export",
+      "mechanism": "validated_local_file_paths"
+    }
+  ],
+  "source_of_truth": {
+    "package_and_entrypoints": "pyproject.toml",
+    "mcp_registration": "src/fls_pilot/server.py",
+    "operation_registry": "src/fls_pilot/operations.py",
+    "write_safety": "src/fls_pilot/safety.py",
+    "protocol": "src/fls_pilot/protocol.py",
+    "controller": "fl_controller/FLStudioPilot/device_FLStudioPilot.py",
+    "runtime": "src/fls_pilot/runtime/",
+    "analysis": "src/fls_pilot/analysis/",
+    "workflows": "src/fls_pilot/workflows/registry.py",
+    "capability_evidence": "agent-docs/concepts/api-capability-audit.md",
+    "knowledgebase": "knowledgebase/"
+  }
+}

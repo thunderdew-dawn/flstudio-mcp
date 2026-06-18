@@ -1,128 +1,112 @@
-# Development Guide
+# Repository Development
 
-Use this path when changing code, tests, docs, scripts, controller files,
-Knowledgebase files, workflows, packaging, or project behavior.
+Use this mode for code, docs, tests, scripts, controller files, Knowledgebase
+files, workflows, packaging, contracts, public behavior, or architecture.
 
-## Mandatory First Reads
+## Start Small
 
-Before changing code, tests, docs, scripts, controller files, skill files, evals, or roadmap state, read these files and follow them as binding project instructions:
+Read this file first, inspect the affected area, then load only the contracts
+required by the change.
 
-- `agent-docs/engineering/standards.md`
-- `agent-docs/concepts/safety-contract.md`
-- `agent-docs/concepts/api-capability-audit.md`
-- `agent-docs/concepts/analysis-workflow-contract.md`
-- `agent-docs/agents/knowledgebase-protocol.md`
-- `agent-docs/project/ROADMAP.github.md`
+| Change type | Required context |
+|---|---|
+| Ordinary code, tests, scripts, or docs | `agent-docs/engineering/standards.md` |
+| Existing persistent-write implementation or safety behavior | `agent-docs/concepts/safety-contract.md` |
+| Safety classes, write contracts, approval/rollback guarantees, or public persistent-write surface | `agent-docs/concepts/safety-contract.md` and `agent-docs/contracts/architecture-governance.md` |
+| Analysis workflows, reports, scoring, freshness, or Control Center panels | `agent-docs/concepts/analysis-workflow-contract.md` |
+| Architecture, MCP surface, resources/prompts, registry, protocol, controller, entrypoints, capabilities, or trust boundaries | `agent-docs/contracts/architecture-governance.md` |
+| FL API values, ranges, mappings, MIDI, automation, or reusable findings | `agent-docs/agents/knowledgebase-protocol.md` |
+| Issues, PRs, roadmap, releases, CI, security, hotfixes, or backports | `agent-docs/agents/github-playbook.md` and `agent-docs/project/ROADMAP.github.md` |
+| Live FL verification | `agent-docs/agents/runtime-usage.md` |
 
-If any file conflicts with an ad-hoc prompt, stop and surface the conflict before implementing. The safety contract, API capability audit, Knowledgebase protocol, and roadmap scope are not optional.
+Read `agent-docs/machine/fls_pilot_architecture.json` only when the Architecture
+Governance Contract requires it. Do not load it for routine edits.
 
-For GitHub planning, issue/PR work, roadmap execution, releases, dependency updates, security alerts, bug triage, reviews, hotfixes, reverts, documentation-only changes, API probes, or backports, additionally read:
+If a binding contract conflicts with the requested implementation, stop and
+surface the conflict before changing behavior.
 
-- `agent-docs/agents/github-playbook.md`
+## Working Method
 
-## Working Mode
+- Inspect surrounding code, existing patterns, tests, and public contracts
+  before editing.
+- Check whether the capability already exists or composes from safe primitives.
+- Keep changes small, testable, reviewable, and easy to revert.
+- Preserve user and uncommitted changes. Never revert unrelated work.
+- Prefer established protocol constants, controller handlers, operation
+  registry specs, safety helpers, workflow declarations, and FastMCP
+  registration patterns.
+- Keep the FL controller thin. Product judgement belongs server-side.
+- Use English for commits, comments, docstrings, and repository documentation.
 
-- Act as a senior, pragmatic software engineer.
-- Inspect the repo before changing it. Read surrounding code, existing tool
-  patterns, tests, safety layer, protocol constants, controller handlers, and
-  registration style.
-- For implementation work, explicitly inspect the relevant parts of
-  `agent-docs/project/ROADMAP.github.md`, `agent-docs/concepts/api-capability-audit.md`,
-  `src/fls_pilot/safety.py`, `src/fls_pilot/protocol.py`, the FL controller
-  script, existing tool modules, and focused tests/scripts before editing.
-- For non-trivial implementation slices, produce a short implementation plan
-  before editing and confirm the slice is dependency-correct and rollback-safe.
-- Before building anything new, check whether the functionality already exists
-  under a different name or can be composed from existing safe primitives.
-- Prefer existing project patterns over new abstractions.
-- For Control Center reviews, Mix Review, Routing Review, Project Organizer,
-  Project Health, Preflight, Low-End Analysis, Export Readiness, and other
-  AI-guided workflow reports, follow the Analysis Workflow Contract. Do not add
-  private report shapes, private scoring meanings, or hidden broad FL call
-  sequences; add compatibility adapters during migration instead.
-- Use established patterns: protocol constants, controller handlers,
-  `safety.safe_write`, `safety.safe_write_group`, Piano Roll safety helpers,
-  focused tests/scripts, and FastMCP registration style.
-- Keep edits small, coherent, and backport-friendly.
-- Preserve all user and uncommitted changes. Never revert unrelated work.
-- Use English for commits, code comments, docstrings, and repo documentation.
+For non-trivial implementation work, state a short plan before editing.
 
-## Implementation Checklist
+## Architecture-Relevant Changes
 
-For every new FL-mutating tool, add or update:
+Before editing an architecture-governed surface:
 
-- Protocol command constants, if needed.
-- FL controller handler.
-- Snapshot scope.
-- Restore operation.
-- Readback verification.
-- Safety-layer integration via the established safety helpers.
-- Tool annotations and docstring explaining safety behavior.
-- Static audit compatibility.
-- Focused script/unit test or rollback-safe live smoke script.
-- Roadmap/API audit/docs note when behavior or scope changes.
+1. Read `agent-docs/contracts/architecture-governance.md`.
+2. Consult `agent-docs/machine/fls_pilot_architecture.json`.
+3. Change source, docs, and tests first.
+4. Update the snapshot, or explicitly explain why it remains unchanged.
+5. Report an Architecture Diff.
+6. Stop for human approval when the contract's STOP rule applies.
 
-## Verification Expectations
+The STOP rule does not apply to typo fixes, normal README edits, comments,
+small test corrections, or internal refactors with no public-surface, safety,
+capability, protocol/controller, or trust-boundary effect.
 
-Run the smallest meaningful checks for the changed area, then broaden when the
-blast radius justifies it:
+## Write Tool Checklist
 
-- Compile checks for touched Python code.
-- `scripts/audit_tool_safety.py --fail-on-gaps`.
-- `scripts/audit_tool_safety.py --fail-on-missing-safety-docs --format json`
-  when tool annotations or docstrings change.
-- Focused script tests for changed areas.
-- FastMCP registration/tool-count checks when tool registration changes.
-- Analysis workflow contract tests or adapter coverage when Control Center
-  workflows, workflow reports, prerequisites, freshness, scoring, or health
-  aggregation change.
-- Rollback-safe live smoke tests when FL Studio is available and the change
-  touches live behavior.
+For every new persistent FL mutation, add or update:
 
-If repo-wide `pytest` or `ruff` failures are pre-existing, report them
-separately and do not churn unrelated code.
+- Protocol command and controller handler when needed.
+- Operation-registry declaration.
+- Scoped snapshot and restore operation.
+- Smallest practical write.
+- Readback verification where supported.
+- Safety-layer integration.
+- Changelog and rollback path.
+- Public safety annotation/docstring.
+- Focused tests or a rollback-safe live probe.
+- Knowledgebase/API audit/docs when behavior or evidence changes.
 
-At handoff, summarize changed files, verification run, remaining risks or API
-limits, and the next recommended roadmap slice.
+If any part is unclear, implement read-only, dry-run, manual guidance, or a
+probe instead of a user-facing write.
 
-## Local Environment
+## Verification
 
-- Python target: 3.12 for current development on this machine. Package metadata
-  still supports Python 3.10+ unless changed deliberately.
-- On macOS, commands importing pip, XML, or audio dependencies may need:
+Run the smallest meaningful checks for the changed area:
 
-```bash
-export DYLD_LIBRARY_PATH="/usr/local/opt/expat/lib:${DYLD_LIBRARY_PATH:-}"
-```
+- Compile or focused tests for touched Python.
+- `scripts/audit_tool_safety.py --fail-on-gaps` for tool/safety changes.
+- Missing-safety-doc audit when public tool annotations change.
+- Tool registration baseline when the FastMCP surface changes.
+- Analysis contract tests for workflow/report changes.
+- Rollback-safe live smoke tests only when live behavior changed and FL Studio
+  is available.
+- `git diff --check` for every change.
 
-- Prefer `rg` and `rg --files` for search.
-- Use `apply_patch` for manual file edits.
+Do not claim completion without reporting the checks run and anything not run.
+If failures are pre-existing, report them separately and avoid unrelated churn.
+
+## Local Conventions
+
+- Python target on this machine: 3.12. Package support remains 3.10+ unless
+  deliberately changed.
+- Prefer `rg` and `rg --files`.
+- Use `apply_patch` for manual edits.
 - Do not use destructive Git commands unless explicitly requested.
 
-## Live FL Studio Procedure
-
-- Start the TCP daemon yourself when live tests require it.
-- Confirm heartbeat and `fl_transport(action="ping")` before live work.
-- Confirm the controller build marker expected by the current code.
-- Read current state before writing.
-- For live write tests, write a temporary value, verify readback, rollback
-  immediately, and verify restoration.
-- If MIDI routing, script reload, or restart state is uncertain, diagnose the
-  connection before changing code.
-- Stop daemons you started and leave playback stopped/recording disarmed after
-  tests.
-
-## Workspace And File Artifact Protocol
-
-To keep the workspace clean and maintain context for generated artifacts, agents
-must use these output directories. Never write files directly to the root of
-`scratch/` or the project root.
+Generated artifacts belong under task-specific subdirectories:
 
 - Temporary scripts: `scratch/scripts/`
-- Generated MIDI: `scratch/midi/`
-- Analysis data and state dumps: `scratch/analysis/`
-- Audio files: `scratch/audio/`
+- MIDI: `scratch/midi/`
+- Analysis/state: `scratch/analysis/`
+- Audio: `scratch/audio/`
 - Logs: `scratch/logs/`
 
-Use session- or task-specific subdirectories where appropriate, for example
-`scratch/analysis/YYYY-MM-DD_session_name/`.
+## Handoff
+
+Summarize changed files, verification, remaining risks or API limits,
+Architecture Diff when applicable, snapshot status, and whether human approval
+is required by the STOP rule.

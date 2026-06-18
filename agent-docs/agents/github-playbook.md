@@ -24,6 +24,18 @@ agent chats are execution surfaces, not durable planning storage.
   rollback. If evidence is unclear, ship read-only, dry-run, probe-only, or
   manual guidance.
 
+## Architecture And Surface Gate
+
+- Keep branches and PRs small.
+- Describe architecture, safety, protocol/controller, trust-boundary, and
+  public MCP/CLI/Control Center surface changes explicitly in the PR.
+- Document tests and checks; do not make silent public-surface changes.
+- Do not add persistent writes without the Safety Contract.
+- Follow `agent-docs/contracts/architecture-governance.md` for governed
+  changes and report the Architecture Diff plus snapshot status.
+- Do not merge when the architecture STOP rule applies until a human approves
+  the reviewed surface/safety change.
+
 ## Roles
 
 - Human owner: decides product intent, accepts or rejects features, and resolves
