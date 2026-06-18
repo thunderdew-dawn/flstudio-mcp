@@ -5,9 +5,10 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
+from ..runtime.contracts import ProjectContext
+from .observations import Observation
 from .schema import AnalysisReport
 from .store import ReportStore
-from ..runtime.contracts import ProjectContext
 
 WORKFLOWS = (
     ("project_organizer", "Organizer"),
@@ -22,6 +23,7 @@ def aggregate_project_health(
     store: ReportStore,
     *,
     project_context: ProjectContext | None = None,
+    observations: tuple[Observation, ...] = (),
     now: datetime | None = None,
 ) -> dict[str, Any]:
     """Build Project Health without re-running source workflows."""
@@ -120,6 +122,11 @@ def aggregate_project_health(
         for section in sections
         if section.get("recommended_next_action")
     ]
+    audio_observations = [
+        row.to_dict()
+        for row in observations
+        if row.kind == "rendered_audio_features"
+    ]
 
     return {
         "overall_status": "fresh" if all_workflows_usable else "partial",
@@ -138,6 +145,17 @@ def aggregate_project_health(
             project_context.project_scope_id if project_context else "unknown"
         ),
         "snapshot_id": project_context.snapshot_id if project_context else "unknown",
+        "observation_summary": {
+            "rendered_audio_features": len(audio_observations),
+            "audio_evidence_levels": sorted(
+                {
+                    3
+                    if (row.get("payload") or {}).get("evidence_kind") == "stem"
+                    else 2
+                    for row in audio_observations
+                }
+            ),
+        },
     }
 
 
@@ -169,7 +187,7 @@ def _missing_section(workflow: str, title: str) -> dict[str, Any]:
         "coverage": {
             "required": 1,
             "available": 0,
-            "missing": ["workflow_report"],
+            "missing": ["analysis_report"],
             "optional_available": 0,
             "status": "unavailable",
             "score": 0,

@@ -162,6 +162,7 @@ class RuntimeCore:
         return aggregate_project_health(
             self.report_store,
             project_context=self.project_context,
+            observations=self.rendered_audio_observations(),
         )
 
     def invalidate(

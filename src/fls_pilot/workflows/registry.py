@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass, field
-from typing import Any, Iterable
+from typing import Any
 
 from ..analysis.requirements import WorkflowRequirementSet, requirement
 
@@ -235,10 +236,29 @@ DEFAULT_WORKFLOW_REGISTRY = WorkflowRegistry(
             "active",
             "included_when_current_report_available",
             True,
+            requirements=WorkflowRequirementSet(
+                "mix_review",
+                (
+                    requirement("fl_session_alive", ttl_seconds=2),
+                    requirement("static_project_snapshot", ttl_seconds=60),
+                    requirement(
+                        "rendered_audio_features",
+                        required=False,
+                        evidence_mode="rendered_audio",
+                        invalidates_on=(
+                            "project_identity_change",
+                            "audio_source_hash_changed",
+                        ),
+                    ),
+                ),
+            ),
             panel_id="producer_mix_review",
             endpoint="/api/workflows/mix-review",
             action_label="Run Mix Review",
-            safety_note="Read-only mixer review. No project changes are made.",
+            safety_note=(
+                "Read-only mixer review. Static execution remains available; "
+                "audio-backed conclusions require a linked rendered master."
+            ),
         ),
         _declaration(
             "routing_audit",
@@ -259,10 +279,29 @@ DEFAULT_WORKFLOW_REGISTRY = WorkflowRegistry(
             "active",
             "included_when_current_report_available",
             True,
+            requirements=WorkflowRequirementSet(
+                "low_end_analysis",
+                (
+                    requirement("fl_session_alive", ttl_seconds=2),
+                    requirement("static_project_snapshot", ttl_seconds=60),
+                    requirement(
+                        "rendered_audio_features",
+                        required=False,
+                        evidence_mode="rendered_audio",
+                        invalidates_on=(
+                            "project_identity_change",
+                            "audio_source_hash_changed",
+                        ),
+                    ),
+                ),
+            ),
             panel_id="producer_low_end",
             endpoint="/api/workflows/low-end-analysis",
             action_label="Run Low-End Safety Check",
-            safety_note="Metadata-based read-only low-end safety review.",
+            safety_note=(
+                "Read-only low-end review. Metadata raises suspicions; rendered "
+                "audio is required for audio-backed energy and stereo proxy claims."
+            ),
         ),
         _declaration(
             "project_organizer",

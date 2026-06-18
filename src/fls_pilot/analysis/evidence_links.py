@@ -128,7 +128,11 @@ class EvidenceLinkStore:
                 continue
             if context is not None and not link.compatible_with(context):
                 continue
-            if workflow_target and workflow_target not in link.workflow_targets:
+            if (
+                workflow_target
+                and link.workflow_targets
+                and workflow_target not in link.workflow_targets
+            ):
                 continue
             rows.append(link)
         return tuple(sorted(rows, key=lambda row: row.created_at))
