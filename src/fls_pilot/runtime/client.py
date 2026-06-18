@@ -25,7 +25,7 @@ class RuntimeClient:
         host: str | None = None,
         port: int | None = None,
         *,
-        timeout: float = 10.0,
+        timeout: float = 30.0,
     ) -> None:
         self.host = host or os.environ.get("FLS_PILOT_TCP_HOST", DEFAULT_TCP_HOST)
         self.port = int(port or os.environ.get("FLS_PILOT_TCP_PORT", DEFAULT_TCP_PORT))
@@ -41,6 +41,13 @@ class RuntimeClient:
         validate_runtime_request(request)
         try:
             payload = self._rpc(request)
+        except (TimeoutError, socket.timeout) as exc:
+            raise RuntimeClientError(
+                f"Operation '{operation}' timed out after {self.timeout}s. "
+                f"The Runtime at {self.host}:{self.port} took too long to respond. "
+                "This can happen during heavy tasks (like mix-review or low-end analysis) "
+                "if the project is large."
+            ) from exc
         except OSError as exc:
             raise RuntimeClientError(
                 f"Cannot reach Runtime at {self.host}:{self.port}: {exc}"
@@ -57,9 +64,7 @@ class RuntimeClient:
         return RuntimeSession.from_dict(self.request("runtime.session").data["session"])
 
     def project_context(self) -> ProjectContext:
-        return ProjectContext.from_dict(
-            self.request("project.current").data["project_context"]
-        )
+        return ProjectContext.from_dict(self.request("project.current").data["project_context"])
 
     def workflow_catalog(self, *, include_inactive: bool = True) -> list[dict[str, Any]]:
         data = self.request(
@@ -140,9 +145,10 @@ class RuntimeClient:
         return [dict(row) for row in rows]
 
     def _rpc(self, request: dict[str, Any]) -> dict[str, Any]:
-        with self._lock, socket.create_connection(
-            (self.host, self.port), timeout=self.timeout
-        ) as connection:
+        with (
+            self._lock,
+            socket.create_connection((self.host, self.port), timeout=self.timeout) as connection,
+        ):
             connection.settimeout(self.timeout)
             connection.sendall((json.dumps(request) + "\n").encode("utf-8"))
             payload = b""
