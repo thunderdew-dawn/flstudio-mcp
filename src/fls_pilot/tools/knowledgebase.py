@@ -400,7 +400,7 @@ def kb_get_capability(intent: str) -> dict:
         "routing": "Use fl_review_routing, fl_plan_routing_cleanup.",
         "piano roll": "Write notes after explicit user approval via fl_piano_roll.",
         "midi": "Export via fl_export_midi; write notes via fl_piano_roll or fl_write_raga_melody.",
-        "audio analysis": "Use fl_analyze_audio, fl_extract_melody.",
+        "audio analysis": "Use fl_audio_analysis; use fl_extract_melody for monophonic MIDI.",
         "scale": "Use fl_scale_list, fl_scale_get.",
         "raga": "Use fl_scale_list, fl_scale_get, fl_write_raga_melody, fl_write_raga_chords.",
         "preset": "Use fl_list_presets, fl_suggest_preset.",

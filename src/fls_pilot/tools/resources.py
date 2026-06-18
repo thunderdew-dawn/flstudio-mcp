@@ -344,7 +344,8 @@ def register(mcp: FastMCP) -> None:
                 "Project Health & Export Preflight (fl_project_health_overview, fl_check_project_preflight)",
                 "Piano Roll write after explicit user approval (fl_piano_roll write_notes, fl_write_raga_melody, fl_write_raga_chords)",
                 "MIDI Export from arrangement spec (fl_export_midi)",
-                "Audio File Analysis — tempo, key, energy (fl_analyze_audio)",
+                "Audio Feature Jobs — level, dynamics, bands, activity, stereo proxies "
+                "(fl_audio_analysis)",
                 "Melody Extraction from audio (fl_extract_melody)",
                 "Knowledgebase Search & Retrieval (kb_search, kb_get, kb_get_many, kb_get_workflow_pack)",
                 "Parameter Validation via Knowledgebase (kb_get_parameter_spec, kb_get_conversion)",

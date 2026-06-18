@@ -36,7 +36,7 @@ checks.
 | Already-loaded plugin params | `fl_plugin` | `fl_plugin(action="list_params")`, `kb_get_parameter_spec` |
 | Piano Roll notes/transforms | `fl_piano_roll` | Readback-limit reports and dry-run plans |
 | Many reads or grouped writes | `fl_batch` | Capped resources for first pass |
-| Audio file analysis | `fl_analyze_audio`, `fl_extract_melody` | Validate the user-provided file path first |
+| Audio file analysis | `fl_audio_analysis`, `fl_extract_melody` | Use Runtime jobs for core features; validate the user-provided file path first |
 | MIDI export | `fl_export_midi` | Validate arrangement spec before file write |
 | Values, ranges, mappings, pitfalls | Knowledgebase tools | `kb_search`, then specific `kb_get` |
 

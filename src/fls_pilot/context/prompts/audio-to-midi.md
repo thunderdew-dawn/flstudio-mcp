@@ -15,7 +15,8 @@ reference data, or prepare a MIDI representation of audio content.
 
 1. Confirm bridge/session health.
 2. Confirm the audio file path with the user if not provided.
-3. Use `fl_analyze_audio` to extract tempo, key, and energy data from the file.
+3. Use `fl_audio_analysis` to submit and retrieve core audio features. Use
+   `fl_extract_melody` only when monophonic pitch/MIDI extraction is requested.
 4. If melody extraction is requested, use `fl_extract_melody` (note: accuracy
    depends on audio quality and complexity).
 5. Present all analysis results to the user as **analysis output only**. Do not

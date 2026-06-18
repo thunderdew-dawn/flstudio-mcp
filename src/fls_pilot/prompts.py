@@ -121,7 +121,7 @@ _PROMPT_MAP: list[tuple[str, str, str | None, str]] = [
         "audio_to_midi_or_reference_analysis",
         "audio-to-midi.md",
         "audio_analysis",
-        "Analyze an audio file for tempo/key/melody; optionally write MIDI to Piano Roll.",
+        "Analyze audio through Runtime jobs; optionally extract melody and write reviewed MIDI.",
     ),
 ]
 

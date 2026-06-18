@@ -327,24 +327,150 @@ def register(mcp: FastMCP) -> None:
         "openWorldHint": True,
         "safetyClass": "read-only",
     }
+    _SERVER_STATE = {
+        "readOnlyHint": False,
+        "idempotentHint": False,
+        "destructiveHint": False,
+        "openWorldHint": True,
+        "safetyClass": "server-state",
+    }
 
-    @mcp.tool(annotations={"title": "Analyze audio (tempo/key)", **_RO})
-    def fl_analyze_audio(
-        path: Annotated[
-            str, Field(description="Path to a WAV/MP3 file (MP3 needs ffmpeg on PATH).")
+    @mcp.tool(annotations={"title": "Audio analysis jobs", **_SERVER_STATE})
+    def fl_audio_analysis(
+        action: Annotated[
+            str,
+            Field(description="Action: submit, status, result, cancel, or list."),
         ],
+        path: Annotated[
+            str | None,
+            Field(description="User-provided audio file path for submit."),
+        ] = None,
+        job_id: Annotated[
+            str | None,
+            Field(description="Runtime job id for status, result, or cancel."),
+        ] = None,
+        evidence_kind: Annotated[
+            str,
+            Field(description="Project link kind: rendered_master, stem, or candidate."),
+        ] = "rendered_master",
+        stem_role: Annotated[
+            str | None,
+            Field(description="Optional stem role when linking a successful result."),
+        ] = None,
+        workflow_targets: Annotated[
+            list[str] | None,
+            Field(description="Workflows that may consume the linked evidence."),
+        ] = None,
+        confirmed_by_user: Annotated[
+            bool,
+            Field(description="Confirm project association when Runtime identity is unknown."),
+        ] = False,
+        limit: Annotated[
+            int,
+            Field(description="Maximum jobs returned by list (1..100).", ge=1, le=100),
+        ] = 20,
+        offset: Annotated[
+            int,
+            Field(description="Pagination offset for list.", ge=0),
+        ] = 0,
     ) -> dict:
-        """Estimate tempo + key (+ duration, beats, onsets) of an audio file.
-        Pure offline analysis -- does NOT touch FL. Key is ESTIMATED.
+        """Submit and inspect daemon-owned offline audio feature jobs.
 
-        Safety: Read-Only.
+        Successful results contain artifact ids and compact feature summaries,
+        never raw audio or unbounded feature arrays. Project linking is
+        read-only with respect to FL Studio and records Runtime evidence only.
+
+        Safety: Server-State. Does not access or modify FL Studio.
         """
-        import os
-
-        if not os.path.isfile(path):
-            return {"ok": False, "error": f"file not found: {path}"}
         try:
-            return {"ok": True, **audio_analyze(path)}
+            from ..runtime.access import local_runtime
+            from ..runtime.audio_worker import build_audio_job_request
+            from ..runtime.client import RuntimeClient
+            from ..runtime.product_workflows import run_product_workflow
+
+            normalized = str(action or "").strip().lower()
+            use_tcp = os.environ.get("FLS_PILOT_TRANSPORT", "direct").lower() == "tcp"
+            service = RuntimeClient() if use_tcp else local_runtime()
+            if normalized == "submit":
+                request = build_audio_job_request(path or "")
+                if use_tcp:
+                    job = service.submit_job(
+                        request["kind"],
+                        input=request["input"],
+                        input_summary=request["input_summary"],
+                        idempotency_key=request["idempotency_key"],
+                        idempotent=True,
+                        max_retries=2,
+                    )
+                else:
+                    job = service.jobs.submit(
+                        kind=request["kind"],
+                        input_payload=request["input"],
+                        input_summary=request["input_summary"],
+                        idempotency_key=request["idempotency_key"],
+                        idempotent=True,
+                        max_retries=2,
+                    ).to_dict()
+                return {"ok": True, "job": job}
+            if normalized == "list":
+                jobs = (
+                    service.list_jobs(kind="audio.features", limit=limit, offset=offset)
+                    if use_tcp
+                    else [
+                        row.to_dict()
+                        for row in service.jobs.list(
+                            kind="audio.features",
+                            limit=limit,
+                            offset=offset,
+                        )
+                    ]
+                )
+                return {"ok": True, "jobs": jobs, "limit": limit, "offset": offset}
+            if normalized not in {"status", "result", "cancel"}:
+                raise ValueError("action must be submit, status, result, cancel, or list")
+            if not job_id:
+                raise ValueError(f"job_id is required for {normalized}")
+            if normalized == "status":
+                job = (
+                    service.job_status(job_id)
+                    if use_tcp
+                    else service.jobs.status(job_id).to_dict()
+                )
+                return {"ok": True, "job": job}
+            if normalized == "cancel":
+                job = (
+                    service.cancel_job(job_id)
+                    if use_tcp
+                    else service.jobs.cancel(job_id).to_dict()
+                )
+                return {"ok": True, "job": job}
+            job = (
+                service.job_result(job_id)
+                if use_tcp
+                else service.jobs.result(job_id).to_dict()
+            )
+            output = {"ok": True, "job": job}
+            artifact_id = str((job.get("result_ref") or {}).get("artifact_id") or "")
+            if artifact_id and (workflow_targets or confirmed_by_user or stem_role):
+                inputs = {
+                    "artifact_id": artifact_id,
+                    "evidence_kind": evidence_kind,
+                    "stem_role": stem_role,
+                    "workflow_links": workflow_targets or [],
+                    "confirmed_by_user": confirmed_by_user,
+                }
+                report = (
+                    service.run_workflow("audio_evidence", inputs=inputs)
+                    if use_tcp
+                    else run_product_workflow(
+                        service,
+                        "audio_evidence",
+                        bridge=None,
+                        inputs=inputs,
+                    )
+                )
+                output["report"] = report
+            return output
         except Exception as e:
             return {"ok": False, "error": f"{type(e).__name__}: {e}"}
 

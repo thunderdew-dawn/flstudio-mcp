@@ -70,6 +70,23 @@ def submit_audio_feature_job(
     *,
     extractor_config: FeatureExtractorConfig | None = None,
 ) -> dict[str, Any]:
+    request = build_audio_job_request(path, extractor_config=extractor_config)
+    job = runtime.jobs.submit(
+        kind=AUDIO_FEATURE_JOB_KIND,
+        input_payload=request["input"],
+        input_summary=request["input_summary"],
+        idempotency_key=request["idempotency_key"],
+        idempotent=True,
+        max_retries=2,
+    )
+    return job.to_dict()
+
+
+def build_audio_job_request(
+    path: str | Path,
+    *,
+    extractor_config: FeatureExtractorConfig | None = None,
+) -> dict[str, Any]:
     source = validate_audio_source(path)
     source_sha256 = sha256_file(source)
     config = extractor_config or FeatureExtractorConfig()
@@ -82,23 +99,20 @@ def submit_audio_feature_job(
             configuration_fingerprint,
         )
     )
-    job = runtime.jobs.submit(
-        kind=AUDIO_FEATURE_JOB_KIND,
-        input_payload={
+    return {
+        "kind": AUDIO_FEATURE_JOB_KIND,
+        "input": {
             "path": str(source),
             "source_sha256": source_sha256,
             "configuration_fingerprint": configuration_fingerprint,
         },
-        input_summary={
+        "input_summary": {
             "source_basename": source.name,
             "source_size_bytes": source.stat().st_size,
             "source_sha256_prefix": source_sha256[:12],
         },
-        idempotency_key=idempotency_key,
-        idempotent=True,
-        max_retries=2,
-    )
-    return job.to_dict()
+        "idempotency_key": idempotency_key,
+    }
 
 
 def validate_audio_source(path: Any) -> Path:

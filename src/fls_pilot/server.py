@@ -128,7 +128,7 @@ def build_server() -> FastMCP:
     project_organizer_tools.register(mcp)  # Phase 1: Project Organizer (naming, colors, structure)
     arrange_tools.register(mcp)  # Arrangement Slice 1: pattern create/clone + markers
     resource_defs.register(mcp)  # MCP resources: fl://status, fl://project, ...
-    audio_tools.register(mcp)  # Integration 2/3: audio analysis (tempo/key)
+    audio_tools.register(mcp)  # Runtime audio jobs + optional melody extraction
     compose_tools.register(mcp)  # Raga/scale composer: write LLM notes via the bridge
     chains_tools.register(mcp)  # Genre chain setup: map recipes to existing plugins
     export_tools.register(mcp)  # MIDI export: arrangement spec -> type-1 .mid on disk

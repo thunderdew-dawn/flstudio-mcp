@@ -203,7 +203,7 @@ WORKFLOW_REGISTRY: dict[str, dict] = {
             "fls://capabilities/not-possible",
         ],
         "tools_to_use": [
-            "fl_analyze_audio",
+            "fl_audio_analysis",
             "fl_extract_melody",
             "fl_inspect_audio_clips",
         ],

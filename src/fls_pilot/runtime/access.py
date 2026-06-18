@@ -102,9 +102,11 @@ class RuntimeReportStore:
 def local_runtime():
     global _LOCAL_RUNTIME
     if _LOCAL_RUNTIME is None:
+        from .audio_worker import AudioAnalysisWorker
         from .core import RuntimeCore
 
         _LOCAL_RUNTIME = RuntimeCore()
+        AudioAnalysisWorker(_LOCAL_RUNTIME.audio_artifacts).register(_LOCAL_RUNTIME)
     return _LOCAL_RUNTIME
 
 

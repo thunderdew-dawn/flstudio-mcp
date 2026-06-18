@@ -25,16 +25,16 @@ EXPECTED_REGISTERED_TOOL_COUNT = 91
 EXPECTED_STATIC_TOOL_COUNT = 167
 EXPECTED_REGISTERED_SAFETY_SUMMARY = {
     "external-write": 2,
-    "read-only": 50,
-    "server-state": 4,
+    "read-only": 49,
+    "server-state": 5,
     "transient": 1,
     "unannotated": 1,
     "write-safe-required": 33,
 }
 EXPECTED_STATIC_SAFETY_SUMMARY = {
     "external-write": 2,
-    "read-only": 71,
-    "server-state": 4,
+    "read-only": 70,
+    "server-state": 5,
     "transient": 6,
     "write-gap": 0,
     "write-safe-required": 84,
