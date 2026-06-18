@@ -468,6 +468,7 @@ def safe_write(
             "ts": time.time(),
         }
     )
+    _notify_runtime(bridge, scope=scope, command=command)
     return {
         "ok": True,
         "change_id": entry["change_id"],
@@ -506,6 +507,7 @@ def safe_piano_roll_write(bridge, *, tool, params, apply):
         "rollback_note": "Uses FL Studio undo for the generated Piano Roll script.",
     }
     entry = _log.append(entry)
+    _notify_runtime(bridge, scope="piano_roll", command="piano_roll_apply")
     return {
         "ok": True,
         "change_id": entry["change_id"],
@@ -637,6 +639,11 @@ def safe_write_group(bridge, *, tool, scope, writes, rollback_unit=None):
             "ts": time.time(),
         }
     )
+    _notify_runtime(
+        bridge,
+        scope=scope,
+        command=",".join(str(row["command"]) for row in checked),
+    )
     return {
         "ok": True,
         "change_id": entry["change_id"],
@@ -682,6 +689,7 @@ def _rollback_entry(bridge, entry: dict):
     change_id = entry.get("change_id")
     if entry.get("group"):  # grouped write -> replay every restore
         restored = [_call_restore(bridge, r) for r in reversed(entry.get("restores") or [])]
+        _notify_runtime(bridge, scope=entry.get("scope") or "project")
         return {
             "ok": True,
             "rolled_back": entry.get("tool"),
@@ -698,6 +706,11 @@ def _rollback_entry(bridge, entry: dict):
             "change_id": change_id,
         }
     restored = _call_restore(bridge, restore)
+    _notify_runtime(
+        bridge,
+        scope=entry.get("scope") or "project",
+        command=restore.get("command"),
+    )
     return {
         "ok": True,
         "rolled_back": entry.get("tool"),
@@ -705,3 +718,14 @@ def _rollback_entry(bridge, entry: dict):
         "change_id": change_id,
         "restored": restored,
     }
+
+
+def _notify_runtime(bridge, *, scope: str, command: str | None = None) -> None:
+    try:
+        from .runtime.invalidation import notify_verified_write
+
+        notify_verified_write(bridge, scope=scope, command=command)
+    except Exception:
+        # A verified FL write must not be reported as failed because a
+        # best-effort cache invalidation notification could not be delivered.
+        pass

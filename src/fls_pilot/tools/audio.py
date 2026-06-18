@@ -339,6 +339,23 @@ def register(mcp: FastMCP) -> None:
         path: Annotated[
             str, Field(description="Path to a WAV/MP3 file (MP3 needs ffmpeg on PATH).")
         ],
+        evidence_kind: Annotated[
+            str,
+            Field(
+                description=(
+                    "Evidence role: rendered_master, stem, or candidate. "
+                    "Stem and candidate files must be 180 seconds or shorter."
+                )
+            ),
+        ] = "rendered_master",
+        workflow_links: Annotated[
+            list[str] | None,
+            Field(
+                description=(
+                    "Optional workflow ids that should reference this file-hash-scoped evidence."
+                )
+            ),
+        ] = None,
     ) -> dict:
         """Estimate tempo + key (+ duration, beats, onsets) of an audio file.
         Pure offline analysis -- does NOT touch FL. Key is ESTIMATED.
@@ -350,7 +367,17 @@ def register(mcp: FastMCP) -> None:
         if not os.path.isfile(path):
             return {"ok": False, "error": f"file not found: {path}"}
         try:
-            return {"ok": True, **audio_analyze(path)}
+            from ..analysis import get_report_store
+            from ..runtime.product_workflows import build_audio_evidence_report
+
+            report = build_audio_evidence_report(
+                path,
+                evidence_kind=evidence_kind,
+                workflow_links=tuple(workflow_links or ()),
+            )
+            stored = get_report_store().add_report(report)
+            features = dict(report.metadata.get("features") or {})
+            return {"ok": True, **features, "analysis_report": stored.to_dict()}
         except Exception as e:
             return {"ok": False, "error": f"{type(e).__name__}: {e}"}
 

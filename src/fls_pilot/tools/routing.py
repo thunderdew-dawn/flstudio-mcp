@@ -22,6 +22,7 @@ from .. import kb_policy, operations, protocol, safety, workflow_report
 from .. import project_templates as templates
 from ..analysis import (
     analysis_report_to_workflow_report,
+    get_analysis_broker,
     routing_analysis_report_from_legacy_payload,
 )
 from ..connection import fetch_all_pages, get_bridge
@@ -402,11 +403,10 @@ def register(mcp: FastMCP) -> None:
         Safety: Read-Only.
         """
         bridge = get_bridge()
-        chans = fetch_all_pages(bridge, protocol.CMD_CHANNEL_ROUTING_SUMMARY, "channels")
-        routing = fetch_all_pages(bridge, protocol.CMD_MIXER_GET_ROUTING_ALL, "routing")
-        channels = chans.get("channels", [])
-        tracks = routing.get("routing", [])
-        template_context = templates.classify_topology(tracks, tracks, channels)
+        snapshot = get_analysis_broker().get_static_project_snapshot(bridge)
+        channels = list(snapshot.channels)
+        tracks = list(snapshot.routing)
+        template_context = snapshot.template_context
 
         unrouted = []
         direct_to_master = []
@@ -475,6 +475,8 @@ def register(mcp: FastMCP) -> None:
                 ],
                 "routes": tracks,
                 "template_context": templates.compact_context(template_context),
+                "project_fingerprint": snapshot.project_fingerprint,
+                "source_observation_ids": list(snapshot.source_observation_ids),
                 "policy_notes": [
                     "Preserve recognizable existing routing structure before proposing cleanup.",
                     (

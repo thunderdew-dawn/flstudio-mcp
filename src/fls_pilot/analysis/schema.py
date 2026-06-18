@@ -235,7 +235,11 @@ class AnalysisReport:
     evidence_mode: str = "static_snapshot_only"
     report_id: str = field(default_factory=report_id)
     created_at: str = field(default_factory=utc_now_iso)
+    runtime_session_id: str | None = None
+    project_scope_id: str | None = None
     project_fingerprint: str | None = None
+    snapshot_id: str | None = None
+    snapshot_revision: int = 0
     freshness: Freshness = field(default_factory=Freshness)
     coverage: Coverage = field(default_factory=Coverage)
     prerequisites: tuple[Prerequisite, ...] = ()
@@ -262,6 +266,7 @@ class AnalysisReport:
             _validate(self.analysis_mode, ANALYSIS_MODES, "analysis mode"),
         )
         object.__setattr__(self, "evidence_mode", str(self.evidence_mode))
+        object.__setattr__(self, "snapshot_revision", max(0, int(self.snapshot_revision)))
         object.__setattr__(self, "risk_score", clamp_score(self.risk_score))
         health = (
             health_from_risk(self.risk_score) if self.health_score is None else self.health_score
@@ -299,7 +304,11 @@ class AnalysisReport:
             "created_at": self.created_at,
             "analysis_mode": self.analysis_mode,
             "evidence_mode": self.evidence_mode,
+            "runtime_session_id": self.runtime_session_id or "unknown",
+            "project_scope_id": self.project_scope_id or "unknown",
             "project_fingerprint": self.project_fingerprint or "unknown",
+            "snapshot_id": self.snapshot_id or "unknown",
+            "snapshot_revision": self.snapshot_revision,
             "freshness": self.freshness.to_dict(),
             "coverage": self.coverage.to_dict(),
             "prerequisites": [_compact(item) for item in self.prerequisites],
@@ -318,3 +327,97 @@ class AnalysisReport:
             "safety": _compact(self.safety),
             "metadata": _compact(self.metadata),
         }
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any]) -> AnalysisReport:
+        """Restore a report received through the Runtime transport."""
+        freshness = payload.get("freshness") or {}
+        coverage = payload.get("coverage") or {}
+        return cls(
+            report_id=str(payload.get("report_id") or report_id()),
+            workflow=str(payload.get("workflow") or "workflow"),
+            title=str(payload.get("title") or payload.get("workflow") or "Workflow"),
+            analysis_mode=str(payload.get("analysis_mode") or "static_snapshot"),
+            evidence_mode=str(payload.get("evidence_mode") or "static_snapshot_only"),
+            created_at=str(payload.get("created_at") or utc_now_iso()),
+            runtime_session_id=_optional_identity(payload.get("runtime_session_id")),
+            project_scope_id=_optional_identity(payload.get("project_scope_id")),
+            project_fingerprint=_optional_identity(payload.get("project_fingerprint")),
+            snapshot_id=_optional_identity(payload.get("snapshot_id")),
+            snapshot_revision=int(payload.get("snapshot_revision") or 0),
+            freshness=Freshness(
+                status=freshness.get("status", "unknown"),
+                created_at=freshness.get("created_at"),
+                valid_until=freshness.get("valid_until"),
+                invalidates_on=tuple(freshness.get("invalidates_on") or ()),
+                source_observation_ids=tuple(
+                    freshness.get("source_observation_ids") or ()
+                ),
+                details=freshness.get("details"),
+            ),
+            coverage=Coverage(
+                required=coverage.get("required", 0),
+                available=coverage.get("available", 0),
+                missing=tuple(coverage.get("missing") or ()),
+                optional_available=coverage.get("optional_available", 0),
+            ),
+            prerequisites=tuple(
+                Prerequisite(
+                    id=str(row.get("id") or ""),
+                    status=str(row.get("status") or "unknown"),
+                    details=row.get("details"),
+                )
+                for row in payload.get("prerequisites") or ()
+                if isinstance(row, dict)
+            ),
+            risk_score=int(payload.get("risk_score") or 0),
+            health_score=payload.get("health_score"),
+            confidence_score=int(payload.get("confidence_score") or 0),
+            findings=tuple(
+                _finding_from_dict(row)
+                for row in payload.get("findings") or ()
+                if isinstance(row, dict)
+            ),
+            assumptions=tuple(payload.get("assumptions") or ()),
+            limitations=tuple(payload.get("limitations") or ()),
+            manual_checks=tuple(payload.get("manual_checks") or ()),
+            source_observations=tuple(payload.get("source_observations") or ()),
+            next_actions=tuple(payload.get("next_actions") or ()),
+            proposed_changes=tuple(payload.get("proposed_changes") or ()),
+            applied_changes=tuple(payload.get("applied_changes") or ()),
+            safety=dict(payload.get("safety") or {"read_only": True}),
+            metadata=dict(payload.get("metadata") or {}),
+        )
+
+
+def _optional_identity(value: Any) -> str | None:
+    normalized = str(value or "").strip()
+    return None if normalized in {"", "unknown"} else normalized
+
+
+def _finding_from_dict(payload: dict[str, Any]) -> Finding:
+    return Finding(
+        id=str(payload.get("id") or "finding"),
+        rule_id=str(payload.get("rule_id") or payload.get("id") or "finding"),
+        title=str(payload.get("title") or "Finding"),
+        severity=str(payload.get("severity") or "info"),
+        risk_score=int(payload.get("risk_score") or 0),
+        confidence_score=int(payload.get("confidence_score") or 0),
+        evidence_mode=str(payload.get("evidence_mode") or "static_snapshot"),
+        entities=tuple(
+            EntityRef(
+                type=str(row.get("type") or "entity"),
+                canonical_id=str(row.get("canonical_id") or "unknown"),
+                display_name=row.get("display_name"),
+                metadata=dict(row.get("metadata") or {}),
+            )
+            for row in payload.get("entities") or ()
+            if isinstance(row, dict)
+        ),
+        evidence=tuple(payload.get("evidence") or ()),
+        assumptions=tuple(payload.get("assumptions") or ()),
+        limitations=tuple(payload.get("limitations") or ()),
+        source_observation_ids=tuple(payload.get("source_observation_ids") or ()),
+        recommended_next_action=payload.get("recommended_next_action"),
+        metadata=dict(payload.get("metadata") or {}),
+    )

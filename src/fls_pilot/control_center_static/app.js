@@ -27,6 +27,7 @@ const state = {
     error: null,
     lastRun: null
   },
+  runtimeWorkflows: {},
   setupFeedback: {},
   actionFeedback: {},
   evidenceKeys: new Set()
@@ -57,11 +58,11 @@ const DEFAULT_WORKFLOW_CATALOG = [
   { id: "routing_audit", panel_id: "producer_routing", title: "Routing Audit", group: "Project Review", maturity: "read_only", enabled: true, endpoint: "/api/workflows/routing-audit", action_label: "Run Routing Audit", safety_note: "Read-only routing audit. Cleanup remains proposal-first." },
   { id: "low_end_analysis", panel_id: "producer_low_end", title: "Low-End Analysis", group: "Project Review", maturity: "read_only", enabled: true, endpoint: "/api/workflows/low-end-analysis", action_label: "Run Low-End Analysis", safety_note: "Read-only low-end and stereo safety review." },
   { id: "project_organizer", panel_id: "producer_organizer", title: "Organizer", group: "Project Review", maturity: "read_only", enabled: true, endpoint: "/api/workflows/project-organizer", action_label: "Run Organizer", safety_note: "Read-only scan. Any cleanup requires an approved safe-write tool." },
-  { id: "preflight", panel_id: "producer_preflight", title: "Preflight", group: "Roadmap", maturity: "planned", enabled: false, endpoint: null, action_label: null, safety_note: "Planned. No Control Center action is available yet." },
-  { id: "jam_2_project", panel_id: "producer_jam_2_project", title: "Jam 2 Project", group: "Roadmap", maturity: "planned", enabled: false, endpoint: null, action_label: null, safety_note: "Planned. No Control Center action is available yet." },
-  { id: "sidechaining", panel_id: "producer_sidechaining", title: "Sidechaining", group: "Roadmap", maturity: "planned", enabled: false, endpoint: null, action_label: null, safety_note: "Planned. No Control Center action is available yet." },
-  { id: "plugin_assistant", panel_id: "producer_plugin_assistant", title: "Plugin Assistant", group: "Roadmap", maturity: "planned", enabled: false, endpoint: null, action_label: null, safety_note: "Planned. Plugin loading remains manual." },
-  { id: "preset_assistant", panel_id: "producer_preset_assistant", title: "Preset Assistant", group: "Roadmap", maturity: "planned", enabled: false, endpoint: null, action_label: null, safety_note: "Planned. No Control Center action is available yet." }
+  { id: "preflight", panel_id: "producer_preflight", title: "Preflight", group: "Project Review", maturity: "read_only", enabled: true, endpoint: "/api/workflows/preflight", action_label: "Run Preflight", safety_note: "Read-only export-readiness review. Render, save, export, and mastering remain manual." },
+  { id: "jam_2_project", panel_id: "producer_jam_2_project", title: "Structure Jammed Project", group: "Project Review", maturity: "read_only", enabled: true, endpoint: "/api/workflows/jam-2-project", action_label: "Build Structure Plan", safety_note: "Read-only structure plan. Playlist clips are not moved, created, or deleted." },
+  { id: "sidechain_routing_check", panel_id: "producer_sidechaining", title: "Sidechain Routing Check", group: "Project Review", maturity: "read_only", enabled: true, endpoint: "/api/workflows/sidechain-routing-check", action_label: "Check Sidechain Routing", safety_note: "Read-only routing evidence. Plugin detector settings remain a manual check." },
+  { id: "plugin_assistant", panel_id: "producer_plugin_assistant", title: "Plugin Assistant", group: "Assistants", maturity: "read_only", enabled: true, endpoint: "/api/workflows/plugin-assistant", action_label: "Inspect Plugin Target", safety_note: "Inspects already-loaded plugins only. Plugin loading remains manual." },
+  { id: "preset_assistant", panel_id: "producer_preset_assistant", title: "Preset Assistant", group: "Assistants", maturity: "read_only", enabled: true, endpoint: "/api/workflows/preset-assistant", action_label: "Scan Preset Names", safety_note: "Reads local preset names. Suggestions are name-based and preset loading remains manual." }
 ];
 
 // ─── Setup Doctor Layers ──────────────────────────────────────────────────────
@@ -210,6 +211,7 @@ function render() {
   renderRoutingAudit();
   renderProjectOrganizer();
   renderProjectHealth();
+  renderRuntimeProductPanels();
   renderLogsHistory();
   renderPorts();
   renderConnection();
@@ -272,6 +274,187 @@ function renderPlannedWorkflows() {
     card.append(heading, body);
     list.appendChild(card);
   }
+}
+
+function runtimeWorkflowState(workflowId) {
+  if (!state.runtimeWorkflows[workflowId]) {
+    state.runtimeWorkflows[workflowId] = { loading: false, report: null, error: null };
+  }
+  return state.runtimeWorkflows[workflowId];
+}
+
+async function runRuntimeProductWorkflow(workflowId) {
+  const workflow = workflowById(workflowId);
+  if (!workflow?.endpoint) return;
+  const workflowState = runtimeWorkflowState(workflowId);
+  workflowState.loading = true;
+  workflowState.error = null;
+  renderRuntimeProductPanel(workflowId);
+  try {
+    const body = {};
+    if (workflowId === "plugin_assistant") {
+      const raw = document.getElementById("plugin-assistant-track")?.value;
+      if (raw !== "" && raw != null) body.track = Number(raw);
+    }
+    if (workflowId === "preset_assistant") {
+      body.plugin = document.getElementById("preset-assistant-plugin")?.value || "";
+      body.description = document.getElementById("preset-assistant-description")?.value || "";
+    }
+    workflowState.report = await api(workflow.endpoint, {
+      method: "POST",
+      body: JSON.stringify(body)
+    });
+  } catch (error) {
+    workflowState.error = error.message;
+  } finally {
+    workflowState.loading = false;
+    renderRuntimeProductPanel(workflowId);
+  }
+}
+
+function renderRuntimeProductPanels() {
+  for (const workflow of workflowCatalog()) {
+    if (["preflight", "jam_2_project", "sidechain_routing_check", "plugin_assistant", "preset_assistant"].includes(workflow.id)) {
+      renderRuntimeProductPanel(workflow.id);
+    }
+  }
+}
+
+function renderRuntimeProductPanel(workflowId) {
+  const workflow = workflowById(workflowId);
+  const panel = workflow?.panel_id ? document.getElementById(workflow.panel_id) : null;
+  if (!workflow || !panel) return;
+  const container = panel.querySelector?.(".runtime-workflow-content")
+    || document.getElementById(`${workflowId}-runtime-content`);
+  if (!container) return;
+  container.innerHTML = "";
+  const workflowState = runtimeWorkflowState(workflowId);
+  const report = workflowState.report;
+
+  const controls = document.createElement("div");
+  controls.className = "workflow-runtime-controls";
+  if (workflowId === "plugin_assistant") {
+    controls.appendChild(runtimeInput("plugin-assistant-track", "Mixer track", "number", "0"));
+  }
+  if (workflowId === "preset_assistant") {
+    controls.appendChild(runtimeInput("preset-assistant-plugin", "Plugin", "text", "Serum"));
+    controls.appendChild(runtimeInput("preset-assistant-description", "Sound description", "text", "bright pluck"));
+  }
+  const runButton = document.createElement("button");
+  runButton.type = "button";
+  runButton.className = "ghost-button primary-action";
+  runButton.textContent = workflowState.loading ? "Running..." : (workflow.action_label || "Run Check");
+  runButton.disabled = workflowState.loading || workflow.enabled === false;
+  runButton.addEventListener("click", () => runRuntimeProductWorkflow(workflowId));
+  controls.appendChild(runButton);
+  container.appendChild(controls);
+
+  if (workflowState.error) {
+    container.appendChild(runtimeNotice(
+      "Workflow unavailable",
+      `${workflowState.error} Check Setup Doctor, then run the workflow again.`,
+      "is-critical"
+    ));
+    return;
+  }
+  if (!report) {
+    container.appendChild(runtimeNotice(
+      "No report yet",
+      workflow.safety_note || "Run the read-only workflow to collect current evidence.",
+      "is-info"
+    ));
+    return;
+  }
+
+  const evidence = report.evidence_mode || report.analysis_mode || "unknown";
+  const freshness = report.freshness?.status || "unknown";
+  const coverage = report.coverage?.score;
+  const summary = document.createElement("div");
+  summary.className = "workflow-runtime-summary";
+  for (const [label, value] of [
+    ["Evidence", evidenceLabel(evidence)],
+    ["Freshness", stateLabel(freshness)],
+    ["Coverage", coverage == null ? "Unavailable" : `${coverage}%`],
+    ["Confidence", report.confidence_score == null ? "Unavailable" : `${report.confidence_score}%`]
+  ]) {
+    const item = document.createElement("div");
+    const key = document.createElement("span");
+    key.textContent = label;
+    const val = document.createElement("strong");
+    val.textContent = value;
+    item.append(key, val);
+    summary.appendChild(item);
+  }
+  container.appendChild(summary);
+  container.appendChild(runtimeReportList("Findings", report.findings, "No findings in available evidence."));
+  container.appendChild(runtimeReportList("Limitations", report.limitations, "No additional limitations reported."));
+  container.appendChild(runtimeReportList("Next evidence step", report.next_actions, "No next evidence step reported."));
+}
+
+function runtimeInput(id, labelText, type, placeholderText) {
+  const label = document.createElement("label");
+  label.className = "workflow-runtime-input";
+  const title = document.createElement("span");
+  title.textContent = labelText;
+  const input = document.createElement("input");
+  input.id = id;
+  input.type = type;
+  input.placeholder = placeholderText;
+  if (type === "number") input.min = "0";
+  label.append(title, input);
+  return label;
+}
+
+function runtimeNotice(titleText, bodyText, className) {
+  const notice = document.createElement("div");
+  notice.className = `workflow-runtime-notice ${className}`;
+  const title = document.createElement("strong");
+  title.textContent = titleText;
+  const body = document.createElement("p");
+  body.textContent = bodyText;
+  notice.append(title, body);
+  return notice;
+}
+
+function runtimeReportList(titleText, rows, emptyText) {
+  const card = document.createElement("section");
+  card.className = "workflow-runtime-list";
+  const title = document.createElement("h2");
+  title.textContent = titleText;
+  card.appendChild(title);
+  const values = Array.isArray(rows) ? rows : [];
+  if (!values.length) {
+    const empty = document.createElement("p");
+    empty.textContent = emptyText;
+    card.appendChild(empty);
+    return card;
+  }
+  const list = document.createElement("ul");
+  for (const row of values.slice(0, 12)) {
+    const item = document.createElement("li");
+    if (typeof row === "string") {
+      item.textContent = row;
+    } else {
+      item.textContent = safeString(row.title || row.label || row.id || "Review evidence");
+    }
+    list.appendChild(item);
+  }
+  card.appendChild(list);
+  return card;
+}
+
+function evidenceLabel(value) {
+  const labels = {
+    static_snapshot_only: "Project metadata",
+    loaded_plugin_inventory: "Loaded plugin inventory",
+    local_preset_name_inventory: "Local preset names",
+    rendered_master: "Rendered master audio",
+    stem: "Selected short stem",
+    candidate: "Selected audio candidate",
+    manual_check: "Manual check",
+    unavailable: "Unavailable"
+  };
+  return labels[value] || safeString(value).replaceAll("_", " ");
 }
 
 function renderNextAction() {
@@ -3150,31 +3333,8 @@ async function runProjectHealth() {
     state.projectHealth.backendData = payload;
   } catch (error) {
     state.projectHealth.backendData = null;
-    console.warn("Backend project health aggregate failed, running fallback steps:", error);
-    
-    // COMPATIBILITY FALLBACK FOR OLD PROJECT HEALTH PAYLOADS
-    const steps = [
-      { title: "Project Organizer", run: runProjectOrganizer },
-      { title: "Mix Review", run: runMixReview },
-      { title: "Routing Audit", run: runRoutingAudit },
-      { title: "Low-End Analysis", run: runLowEndAnalysis }
-    ];
-    const failures = [];
-
-    for (const step of steps) {
-      try {
-        await step.run();
-      } catch (err) {
-        failures.push(`${step.title}: ${err.message}`);
-      }
-      renderProjectHealth();
-    }
-    
-    const aggregate = buildHealthOverview();
-    const unavailable = aggregate.sections.filter(section => section.error);
-    if (failures.length || unavailable.length === aggregate.sections.length) {
-      state.projectHealth.error = failures.join(" · ") || "Health scan could not read any section.";
-    }
+    state.projectHealth.error = error.message || "Runtime Project Health is unavailable.";
+    console.warn("Runtime Project Health request failed:", error);
   }
 
   state.projectHealth.loading = false;
@@ -3205,6 +3365,11 @@ function buildHealthOverview() {
   if (backend) {
     const sections = backend.sections.map(sec => {
       const panelId = workflowById(sec.workflow)?.panel_id || "producer_health";
+      const findings = healthNormalizeFindings(
+        sec.title || sec.workflow,
+        panelId,
+        Array.isArray(sec.findings) ? sec.findings : []
+      );
       return {
         id: sec.workflow,
         title: sec.title,
@@ -3215,10 +3380,16 @@ function buildHealthOverview() {
         confidence: sec.confidence_score,
         hasReport: sec.report_id != null,
         error: sec.freshness === "missing" || sec.freshness === "unavailable" ? sec.reason : null,
-        findingsCount: 0,
-        findings: []
+        findingsCount: findings.length,
+        findings,
+        metrics: [
+          { label: "Coverage", value: sec.coverage?.score != null ? `${sec.coverage.score}%` : "--" },
+          { label: "Confidence", value: sec.confidence_score != null ? `${sec.confidence_score}%` : "--" }
+        ]
       };
     });
+    const warnings = healthDedupeFindings(sections.flatMap(section => section.findings))
+      .sort(healthWarningSort);
     
     return {
       sections,
@@ -3226,30 +3397,23 @@ function buildHealthOverview() {
       risk: backend.overall_risk_score,
       coverage_pct: backend.overall_coverage_pct,
       confidence: backend.overall_confidence_score,
-      warnings: [],
+      warnings,
       availableSections: backend.sections.filter(s => s.report_id != null).length,
       readySections: backend.sections.filter(s => s.freshness === "fresh" || s.freshness === "partial").length,
-      findingTotal: 0,
-      blockerTotal: 0,
-      warningTotal: 0,
+      findingTotal: sections.reduce((sum, section) => sum + section.findingsCount, 0),
+      blockerTotal: warnings.filter(row => healthSeverityRank(row.severity) >= 3).length,
+      warningTotal: warnings.filter(row => healthSeverityRank(row.severity) >= 2).length,
       totalSections: backend.sections.length
     };
   }
 
-  // COMPATIBILITY FALLBACK FOR OLD PROJECT HEALTH PAYLOADS
+  // Render-only compatibility for reports already present in older clients.
   const sections = [
-    buildOrganizerHealthSection(),
-    buildMixHealthSection(),
-    buildRoutingHealthSection(),
-    buildLowEndHealthSection()
+    buildLegacyRuntimeSection("project_organizer", "Organizer", "producer_organizer", state.projectOrganizer),
+    buildLegacyRuntimeSection("mix_review", "Mix Review", "producer_mix_review", state.mixReview),
+    buildLegacyRuntimeSection("routing_audit", "Routing", "producer_routing", state.routingAudit),
+    buildLegacyRuntimeSection("low_end_analysis", "Low-End", "producer_low_end", state.lowEndAnalysis)
   ];
-  const scores = sections
-    .map(section => section.score)
-    .filter(score => Number.isFinite(score));
-  const score = scores.length
-    ? Math.round(scores.reduce((sum, value) => sum + value, 0) / scores.length)
-    : null;
-  const risk = score == null ? null : Math.max(0, Math.min(100, 100 - score));
   const warnings = healthDedupeFindings(sections.flatMap(section => section.findings))
     .sort(healthWarningSort);
   const availableSections = sections.filter(section => section.hasReport).length;
@@ -3260,8 +3424,8 @@ function buildHealthOverview() {
 
   return {
     sections,
-    score,
-    risk,
+    score: null,
+    risk: null,
     warnings,
     availableSections,
     readySections,
@@ -3269,6 +3433,31 @@ function buildHealthOverview() {
     blockerTotal,
     warningTotal,
     totalSections: sections.length
+  };
+}
+
+function buildLegacyRuntimeSection(id, title, target, stateData) {
+  const report = stateData.report;
+  const analysis = report?.analysis || report?.details?.analysis_report || {};
+  const findings = healthNormalizeFindings(
+    title,
+    target,
+    Array.isArray(report?.findings) ? report.findings : []
+  );
+  return {
+    id,
+    title,
+    target,
+    score: Number.isFinite(Number(analysis.health_score)) ? Number(analysis.health_score) : null,
+    risk: Number.isFinite(Number(analysis.risk_score)) ? Number(analysis.risk_score) : null,
+    coverage: analysis.coverage || null,
+    confidence: analysis.confidence_score ?? null,
+    hasReport: Boolean(report),
+    error: stateData.error || null,
+    loading: Boolean(stateData.loading),
+    findings,
+    findingsCount: findings.length,
+    metrics: []
   };
 }
 
@@ -4131,6 +4320,10 @@ function selectPanel(targetId) {
   if (targetId === "producer_routing") renderRoutingAudit();
   if (targetId === "producer_organizer") renderProjectOrganizer();
   if (targetId === "producer_health") renderProjectHealth();
+  const runtimeWorkflow = workflowByPanel(targetId);
+  if (runtimeWorkflow && ["preflight", "jam_2_project", "sidechain_routing_check", "plugin_assistant", "preset_assistant"].includes(runtimeWorkflow.id)) {
+    renderRuntimeProductPanel(runtimeWorkflow.id);
+  }
   if (targetId === "producer_roadmap") renderPlannedWorkflows();
   if (targetId === "logs_history") renderLogsHistory();
   if (targetId === "ports") renderPorts();
@@ -4287,12 +4480,15 @@ window.flsPilotControlCenter = {
   runRoutingAudit,
   runProjectOrganizer,
   runProjectHealth,
+  runRuntimeProductWorkflow,
   renderMixReview,
   renderLowEndAnalysis,
   renderProjectData,
   renderRoutingAudit,
   renderProjectOrganizer,
   renderProjectHealth,
+  renderRuntimeProductPanel,
+  renderRuntimeProductPanels,
   renderRuntime,
   renderOverview,
   renderConnectionCheck,

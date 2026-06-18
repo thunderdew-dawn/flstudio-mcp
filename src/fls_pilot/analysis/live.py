@@ -66,6 +66,33 @@ class LiveMeterWindow:
             out["project_fingerprint"] = self.project_fingerprint
         return out
 
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any]) -> LiveMeterWindow:
+        coverage = payload.get("coverage") or {}
+        return cls(
+            target_capture_seconds=float(payload.get("target_capture_seconds") or 0.0),
+            captured_seconds=float(payload.get("captured_seconds") or 0.0),
+            read_count=int(payload.get("read_count") or 0),
+            watched_track_count=int(payload.get("watched_track_count") or 0),
+            playback_state=str(payload.get("playback_state") or "unknown"),
+            started_at=payload.get("started_at"),
+            completed_at=payload.get("completed_at"),
+            created_at=float(payload.get("created_at") or time()),
+            track_meter_summaries=dict(payload.get("track_meter_summaries") or {}),
+            source=str(payload.get("source") or "peak_watcher"),
+            project_fingerprint=payload.get("project_fingerprint"),
+            freshness=str(payload.get("freshness") or "unknown"),
+            coverage=Coverage(
+                required=coverage.get("required", 0),
+                available=coverage.get("available", 0),
+                missing=tuple(coverage.get("missing") or ()),
+                optional_available=coverage.get("optional_available", 0),
+            ),
+            confidence=str(payload.get("confidence") or "unknown"),
+            errors=tuple(payload.get("errors") or ()),
+            limitations=tuple(payload.get("limitations") or ()),
+        )
+
 
 def normalize_live_meter_window(
     *,

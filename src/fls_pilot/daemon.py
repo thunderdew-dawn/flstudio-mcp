@@ -55,12 +55,21 @@ from .connection import (
     FLTimeout,
 )
 from .runtime_config import find_available_tcp_port
+from .runtime.contracts import RuntimeResponse
+from .runtime.core import RuntimeCore
+from .runtime.protocol import validate_runtime_request
+from .analysis.broker import StaticProjectSnapshot, StaticSnapshotPolicy
+from .analysis.live import LiveMeterPolicy
+from .analysis.schema import AnalysisReport
+from .workflows.registry import canonical_workflow_id
+from .runtime.workflow_runner import run_workflow
 
 logger = logging.getLogger("fls_pilot.daemon")
 
 
 _bridge: FLBridge | None = None
 _bridge_lock = threading.Lock()
+_runtime = RuntimeCore()
 
 
 def _get_bridge() -> FLBridge:
@@ -80,6 +89,9 @@ def _get_bridge() -> FLBridge:
 
 def _handle_request(req: dict) -> dict:
     op = req.get("op")
+
+    if op == "runtime":
+        return _handle_runtime_request(req)
 
     if op == "health":
         try:
@@ -155,6 +167,155 @@ def _handle_request(req: dict) -> dict:
             return {"ok": False, "exc": "Error", "error": f"{type(e).__name__}: {e}"}
 
     return {"ok": False, "exc": "Error", "error": f"unknown op: {op!r}"}
+
+
+def _handle_runtime_request(req: dict) -> dict:
+    try:
+        operation, params = validate_runtime_request(req)
+        data = _dispatch_runtime_operation(operation, params)
+        return RuntimeResponse(ok=True, operation=operation, data=data).to_dict()
+    except (KeyError, TypeError, ValueError) as exc:
+        return RuntimeResponse(
+            ok=False,
+            operation=str(req.get("operation") or ""),
+            error=str(exc),
+            code="invalid_request",
+        ).to_dict()
+    except Exception as exc:  # pragma: no cover - defensive transport boundary
+        logger.exception("Runtime operation failed")
+        return RuntimeResponse(
+            ok=False,
+            operation=str(req.get("operation") or ""),
+            error=f"{type(exc).__name__}: {exc}",
+            code="runtime_error",
+        ).to_dict()
+
+
+def _dispatch_runtime_operation(
+    operation: str,
+    params: dict,
+) -> dict:
+    if operation == "runtime.status":
+        return {
+            "session": _runtime.session.to_dict(),
+            "project_context": _runtime.project_context.to_dict(),
+            "capabilities": _runtime_capabilities(),
+        }
+    if operation == "runtime.session":
+        return {"session": _runtime.session.to_dict()}
+    if operation == "runtime.capabilities":
+        return {"capabilities": _runtime_capabilities()}
+    if operation == "runtime.invalidate":
+        workflows = tuple(str(row) for row in params.get("workflows") or ())
+        return {
+            "invalidation": _runtime.invalidate(
+                str(params.get("event") or "project_state_change"),
+                workflows=workflows,
+            )
+        }
+    if operation == "project.current":
+        return {"project_context": _runtime.project_context.to_dict()}
+    if operation in {"project.snapshot.get", "project.snapshot.refresh"}:
+        snapshot = _runtime.get_static_project_snapshot(
+            _get_bridge(),
+            StaticSnapshotPolicy(
+                force_refresh=operation.endswith("refresh"),
+                include_patterns=bool(params.get("include_patterns", True)),
+                include_playlist=bool(params.get("include_playlist", True)),
+            ),
+        )
+        return {
+            "snapshot": snapshot.to_dict(),
+            "project_context": _runtime.project_context.to_dict(),
+        }
+    if operation == "workflow.catalog":
+        rows = _runtime.workflow_registry.list(
+            include_inactive=bool(params.get("include_inactive", True))
+        )
+        return {"workflows": [row.to_dict() for row in rows]}
+    if operation == "workflow.declaration.get":
+        workflow_id = canonical_workflow_id(str(params["workflow_id"]))
+        return {"workflow": _runtime.workflow_registry.get(workflow_id).to_dict()}
+    if operation == "analysis.workflow.run":
+        workflow_id = canonical_workflow_id(str(params["workflow_id"]))
+        declaration = _runtime.workflow_registry.get(workflow_id)
+        if not declaration.enabled:
+            raise ValueError(f"workflow is not active: {workflow_id}")
+        inputs = params.get("inputs") or {}
+        if not isinstance(inputs, dict):
+            raise ValueError("workflow inputs must be an object")
+        return {
+            "result": run_workflow(
+                _runtime,
+                workflow_id,
+                bridge=None if workflow_id in {"preset_assistant", "audio_evidence"} else _get_bridge(),
+                inputs=inputs,
+            )
+        }
+    if operation == "analysis.live_meter.normalize":
+        policy_data = dict(params.get("policy") or {})
+        snapshot = StaticProjectSnapshot.from_dict(
+            dict(params.get("static_snapshot") or {})
+        )
+        provider = _PayloadWatcherProvider(
+            status=dict(params.get("watch_status") or {}),
+            last_max=dict(params.get("watch_last_max") or {}),
+        )
+        window = _runtime.analysis_broker.get_live_meter_window(
+            _get_bridge(),
+            policy=LiveMeterPolicy(
+                ttl_seconds=float(policy_data.get("ttl_seconds") or 2.0),
+                require_playing=bool(policy_data.get("require_playing", False)),
+                min_capture_seconds=float(
+                    policy_data.get("min_capture_seconds") or 1.0
+                ),
+                recent_watch_seconds=float(
+                    policy_data.get("recent_watch_seconds") or 120.0
+                ),
+            ),
+            watcher_provider=provider,
+            static_snapshot=snapshot,
+        )
+        return {"live_meter_window": window.to_dict()}
+    if operation == "analysis.report.add":
+        report = AnalysisReport.from_dict(dict(params["report"]))
+        stored = _runtime.add_report(report)
+        return {"report": stored.to_dict()}
+    if operation == "analysis.report.latest":
+        workflow_id = canonical_workflow_id(str(params["workflow_id"]))
+        report = _runtime.latest_report(workflow_id)
+        return {"report": report.to_dict() if report else None}
+    if operation == "analysis.report.list":
+        workflow = params.get("workflow_id")
+        workflow_id = canonical_workflow_id(str(workflow)) if workflow else None
+        reports = _runtime.report_store.list_reports(workflow_id)
+        return {"reports": [report.to_dict() for report in reports]}
+    if operation == "analysis.health.get":
+        return {"health": _runtime.project_health()}
+    raise ValueError(f"unsupported Runtime operation: {operation}")
+
+
+def _runtime_capabilities() -> dict:
+    return {
+        "canonical_project_state": True,
+        "observation_store": True,
+        "report_store": True,
+        "workflow_registry": True,
+        "project_health": True,
+        "workflow_execution": True,
+    }
+
+
+class _PayloadWatcherProvider:
+    def __init__(self, *, status: dict, last_max: dict) -> None:
+        self._status = status
+        self._last_max = last_max
+
+    def status(self) -> dict:
+        return dict(self._status)
+
+    def last_max(self) -> dict[int, float]:
+        return {int(key): float(value) for key, value in self._last_max.items()}
 
 
 class _Handler(socketserver.StreamRequestHandler):

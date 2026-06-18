@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 from dataclasses import dataclass, field, replace
 from typing import Any
 
@@ -42,6 +44,7 @@ class StaticSnapshotPolicy:
 class StaticProjectSnapshot:
     created_at: float
     project_fingerprint: str
+    snapshot_id: str = "unknown"
     project_state: dict[str, Any] = field(default_factory=dict)
     channels: tuple[dict[str, Any], ...] = ()
     mixer_tracks: tuple[dict[str, Any], ...] = ()
@@ -60,6 +63,7 @@ class StaticProjectSnapshot:
         out: dict[str, Any] = {
             "created_at": self.created_at,
             "project_fingerprint": self.project_fingerprint,
+            "snapshot_id": self.snapshot_id,
             "project_state": dict(self.project_state),
             "channels": [dict(row) for row in self.channels],
             "mixer_tracks": [dict(row) for row in self.mixer_tracks],
@@ -84,6 +88,7 @@ class StaticProjectSnapshot:
             observation_id=payload.get("observation_id"),
             created_at=float(payload.get("created_at") or 0.0),
             project_fingerprint=str(payload.get("project_fingerprint") or "unknown"),
+            snapshot_id=str(payload.get("snapshot_id") or "unknown"),
             project_state=dict(payload.get("project_state") or {}),
             channels=tuple(dict(row) for row in payload.get("channels") or []),
             mixer_tracks=tuple(dict(row) for row in payload.get("mixer_tracks") or []),
@@ -228,9 +233,19 @@ class AnalysisBroker:
         )
         observations.append(template_observation)
         source_observation_ids = tuple(row.observation_id for row in observations)
+        snapshot_payload = {
+            "project_state": project_state,
+            "channels": channels,
+            "mixer_tracks": annotated_mixer_tracks,
+            "routing": routing,
+            "patterns": patterns,
+            "playlist_tracks": playlist_tracks,
+            "counts": counts,
+        }
         snapshot = StaticProjectSnapshot(
             created_at=self.observation_store.now(),
             project_fingerprint=fingerprint,
+            snapshot_id=_snapshot_id(snapshot_payload),
             project_state=project_state,
             channels=channels,
             mixer_tracks=annotated_mixer_tracks,
@@ -298,7 +313,6 @@ class AnalysisBroker:
             invalidates_on=("fl_disconnect",),
             errors=errors,
         )
-
     def _record_project_state(
         self,
         bridge: Any,
@@ -357,6 +371,16 @@ class AnalysisBroker:
                 continue
             specs.append(spec)
         return tuple(specs)
+
+
+def _snapshot_id(payload: dict[str, Any]) -> str:
+    encoded = json.dumps(
+        payload,
+        sort_keys=True,
+        separators=(",", ":"),
+        default=str,
+    ).encode("utf-8")
+    return f"snapshot_{hashlib.sha256(encoded).hexdigest()[:16]}"
 
 
 def _payload_dict(payload: Any) -> dict[str, Any]:

@@ -84,6 +84,31 @@
             <span aria-hidden="true">&#x25f0;</span><span>Organizer</span><span
               class="nav-badge badge-ok">Read-only</span>
           </button>
+          <button class="nav-item nav-item-preview" type="button" data-target="producer_preflight"
+            data-workflow-id="preflight" id="nav-preflight">
+            <span aria-hidden="true">&#x25f0;</span><span>Preflight</span><span
+              class="nav-badge badge-ok">Read-only</span>
+          </button>
+          <button class="nav-item nav-item-preview" type="button" data-target="producer_jam_2_project"
+            data-workflow-id="jam_2_project" id="nav-jam-2-project">
+            <span aria-hidden="true">&#x25f0;</span><span>Jam Structure</span><span
+              class="nav-badge badge-ok">Read-only</span>
+          </button>
+          <button class="nav-item nav-item-preview" type="button" data-target="producer_sidechaining"
+            data-workflow-id="sidechain_routing_check" id="nav-sidechain">
+            <span aria-hidden="true">&#x25f0;</span><span>Sidechain Check</span><span
+              class="nav-badge badge-ok">Read-only</span>
+          </button>
+          <button class="nav-item nav-item-preview" type="button" data-target="producer_plugin_assistant"
+            data-workflow-id="plugin_assistant" id="nav-plugin-assistant">
+            <span aria-hidden="true">&#x25f0;</span><span>Plugin Assistant</span><span
+              class="nav-badge badge-ok">Read-only</span>
+          </button>
+          <button class="nav-item nav-item-preview" type="button" data-target="producer_preset_assistant"
+            data-workflow-id="preset_assistant" id="nav-preset-assistant">
+            <span aria-hidden="true">&#x25f0;</span><span>Preset Assistant</span><span
+              class="nav-badge badge-ok">Read-only</span>
+          </button>
           <button class="nav-item" type="button" data-target="producer_roadmap" id="nav-roadmap">
             <span aria-hidden="true">&#x25a3;</span><span>Roadmap</span><span
               class="nav-badge badge-planned">Planned</span>
@@ -1013,98 +1038,59 @@
       </section>
     </main>
 
-    <!-- ── Preflight Planned ─────────────────────────────────────────────── -->
+    <!-- ── Preflight ─────────────────────────────────────────────────────── -->
     <main class="status-report" id="producer_preflight">
       <section class="hero">
         <div>
-          <h1>Preflight <span class="badge badge-planned">Planned</span></h1>
-          <p>Preflight checks before exporting or publishing.</p>
+          <h1>Preflight <span class="badge badge-ok">Read-only</span></h1>
+          <p>Review project metadata before export. Level evidence, render settings, and mastering remain separate checks.</p>
         </div>
       </section>
-      <div class="roadmap-status-card" role="note">
-        <div class="roadmap-status-card-header">
-          <span class="roadmap-status-card-icon" aria-hidden="true">&#x25c6;</span>
-          <strong>Workflow Status</strong>
-          <span class="badge badge-planned">Planned</span>
-        </div>
-        <p>This workflow is planned. Use the active Project Review panels for read-only scans; project-changing steps
-          stay proposal-first.</p>
-      </div>
+      <div class="runtime-workflow-content" id="preflight-runtime-content"></div>
     </main>
 
-    <!-- ── Jam 2 Project Planned ─────────────────────────────────────────── -->
+    <!-- ── Jam 2 Project ─────────────────────────────────────────────────── -->
     <main class="status-report" id="producer_jam_2_project">
       <section class="hero">
         <div>
-          <h1>Jam 2 Project <span class="badge badge-planned">Planned</span></h1>
-          <p>Convert your jam sessions into structured project files.</p>
+          <h1>Structure Jammed Project <span class="badge badge-ok">Read-only</span></h1>
+          <p>Build a naming and structure plan without moving Playlist clips or making arrangement decisions.</p>
         </div>
       </section>
-      <div class="roadmap-status-card" role="note">
-        <div class="roadmap-status-card-header">
-          <span class="roadmap-status-card-icon" aria-hidden="true">&#x25c6;</span>
-          <strong>Workflow Status</strong>
-          <span class="badge badge-planned">Planned</span>
-        </div>
-        <p>This workflow is planned. Use the active Project Review panels for read-only scans; project-changing steps
-          stay proposal-first.</p>
-      </div>
+      <div class="runtime-workflow-content" id="jam_2_project-runtime-content"></div>
     </main>
 
-    <!-- ── Sidechaining Planned ──────────────────────────────────────────── -->
+    <!-- ── Sidechain Routing Check ───────────────────────────────────────── -->
     <main class="status-report" id="producer_sidechaining">
       <section class="hero">
         <div>
-          <h1>Sidechaining <span class="badge badge-planned">Planned</span></h1>
-          <p>Automated sidechain routing and configuration.</p>
+          <h1>Sidechain Routing Check <span class="badge badge-ok">Read-only</span></h1>
+          <p>Inspect routing facts. Verify plugin detector inputs and plugin-specific settings manually.</p>
         </div>
       </section>
-      <div class="roadmap-status-card" role="note">
-        <div class="roadmap-status-card-header">
-          <span class="roadmap-status-card-icon" aria-hidden="true">&#x25c6;</span>
-          <strong>Workflow Status</strong>
-          <span class="badge badge-planned">Planned</span>
-        </div>
-        <p>This workflow is planned. Use the active Project Review panels for read-only scans; project-changing steps
-          stay proposal-first.</p>
-      </div>
+      <div class="runtime-workflow-content" id="sidechain_routing_check-runtime-content"></div>
     </main>
 
-    <!-- ── Plugin Assistant Planned ──────────────────────────────────────── -->
+    <!-- ── Plugin Assistant ──────────────────────────────────────────────── -->
     <main class="status-report" id="producer_plugin_assistant">
       <section class="hero">
         <div>
-          <h1>Plugin Assistant <span class="badge badge-planned">Planned</span></h1>
-          <p>AI-powered suggestions for plugin parameters and chains.</p>
+          <h1>Plugin Assistant <span class="badge badge-ok">Read-only</span></h1>
+          <p>Inspect plugins already loaded on one mixer track. Loading plugins and guessing parameter values are not supported.</p>
         </div>
       </section>
-      <div class="roadmap-status-card" role="note">
-        <div class="roadmap-status-card-header">
-          <span class="roadmap-status-card-icon" aria-hidden="true">&#x25c6;</span>
-          <strong>Workflow Status</strong>
-          <span class="badge badge-planned">Planned</span>
-        </div>
-        <p>This workflow is planned. Plugin loading stays manual; fls-pilot can only configure supported parameters on
-          already-loaded plugins.</p>
-      </div>
+      <div class="runtime-workflow-content" id="plugin_assistant-runtime-content"></div>
     </main>
 
-    <!-- ── Preset Assistant Planned ──────────────────────────────────────── -->
+    <!-- ── Preset Assistant ──────────────────────────────────────────────── -->
     <main class="status-report" id="producer_preset_assistant">
       <section class="hero">
         <div>
-          <h1>Preset Assistant <span class="badge badge-planned">Planned</span></h1>
-          <p>Discover and organize presets intelligently.</p>
+          <h1>Preset Assistant <span class="badge badge-ok">Read-only</span></h1>
+          <p>Search local preset names. Audition and load presets in the plugin UI.</p>
         </div>
       </section>
-      <div class="roadmap-status-card" role="note">
-        <div class="roadmap-status-card-header">
-          <span class="roadmap-status-card-icon" aria-hidden="true">&#x25c6;</span>
-          <strong>Workflow Status</strong>
-          <span class="badge badge-planned">Planned</span>
-        </div>
-        <p>This workflow is planned. Use AI Clients and Project Review for the active Control Center workflows.</p>
-      </div>
+      <div class="runtime-workflow-content" id="preset_assistant-runtime-content"></div>
     </main>
 
     <!-- ═══════════════════════════════════════════════════════════════════════

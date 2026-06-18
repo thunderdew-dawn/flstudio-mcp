@@ -8,6 +8,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 APP_JS = ROOT / "src" / "fls_pilot" / "control_center_static" / "app.js"
+INDEX_HTML = ROOT / "src" / "fls_pilot" / "control_center_static" / "index.html"
 
 
 def _run_node_dom_check(script: str) -> None:
@@ -22,6 +23,19 @@ def _run_node_dom_check(script: str) -> None:
         check=False,
     )
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_v3_runtime_workflow_copy_exposes_evidence_limits() -> None:
+    html = INDEX_HTML.read_text("utf-8")
+    js = APP_JS.read_text("utf-8")
+
+    assert "Preflight <span class=\"badge badge-ok\">Read-only</span>" in html
+    assert "Level evidence, render settings, and mastering remain separate checks." in html
+    assert "Verify plugin detector inputs" in html
+    assert "Loading plugins and guessing parameter values are not supported." in html
+    assert "rendered_master: \"Rendered master audio\"" in js
+    assert "static_snapshot_only: \"Project metadata\"" in js
+    assert "Planned. No Control Center action is available yet." not in html
 
 
 def test_control_center_static_runtime_and_disconnect_behaviour() -> None:
@@ -1708,6 +1722,66 @@ controls.state.lowEndAnalysis.report = {
       ]
     }
   }
+};
+controls.state.projectHealth.backendData = {
+  overall_status: "fresh",
+  overall_health_score: 78,
+  overall_risk_score: 22,
+  overall_coverage_pct: 100,
+  overall_confidence_score: 82,
+  sections: [
+    {
+      workflow: "project_organizer",
+      title: "Organizer",
+      report_id: "rep_org",
+      freshness: "fresh",
+      health_score: 76,
+      risk_score: 24,
+      confidence_score: 80,
+      coverage: { required: 1, available: 1, status: "fresh", score: 100 },
+      findings: controls.state.projectOrganizer.report.findings
+    },
+    {
+      workflow: "mix_review",
+      title: "Mix Review",
+      report_id: "rep_mix",
+      freshness: "fresh",
+      health_score: 72,
+      risk_score: 28,
+      confidence_score: 80,
+      coverage: { required: 1, available: 1, status: "fresh", score: 100 },
+      findings: [
+        ...controls.state.mixReview.report.findings,
+        {
+          severity: "critical",
+          title: "Master Peak Over 0 dB",
+          detail: "Master peak reads 0.2 dB."
+        }
+      ]
+    },
+    {
+      workflow: "routing_audit",
+      title: "Routing",
+      report_id: "rep_routing",
+      freshness: "fresh",
+      health_score: 81,
+      risk_score: 19,
+      confidence_score: 90,
+      coverage: { required: 1, available: 1, status: "fresh", score: 100 },
+      findings: controls.state.routingAudit.report.findings
+    },
+    {
+      workflow: "low_end_analysis",
+      title: "Low-End",
+      report_id: "rep_low",
+      freshness: "fresh",
+      health_score: 83,
+      risk_score: 17,
+      confidence_score: 78,
+      coverage: { required: 1, available: 1, status: "fresh", score: 100 },
+      findings: controls.state.lowEndAnalysis.report.details.low_end.findings
+    }
+  ]
 };
 
 controls.renderProjectHealth();

@@ -26,7 +26,6 @@ from typing import Any
 from . import doctor, kb_policy, protocol
 from . import project_templates as templates
 from .analysis import (
-    AnalysisBroker,
     AnalysisReport,
     Coverage,
     EntityRef,
@@ -44,9 +43,7 @@ from .analysis import (
     routing_analysis_report_from_legacy_payload,
     routing_health_score,
 )
-from .analysis.health_aggregator import aggregate_project_health
 from .analysis.live import LiveMeterPolicy
-from .analysis.store import ReportStore
 from .connection import DEFAULT_TCP_HOST, DEFAULT_TCP_PORT, TCPBridge, fetch_all_pages
 from .music import mix_doctor as mix_review
 from .runtime_config import (
@@ -59,6 +56,8 @@ from .runtime_config import (
     tcp_port_status,
 )
 from .status import collect_status as collect_status_report
+from .runtime.client import RuntimeClient
+from .workflows.registry import DEFAULT_WORKFLOW_REGISTRY
 
 STATIC_PACKAGE = "fls_pilot.control_center_static"
 MAX_LOG_LINES = 80
@@ -69,119 +68,7 @@ MANUAL_CHECKPOINTS = {
     "ran_mcp_apply",
     "granted_macos_accessibility",
 }
-WORKFLOW_CATALOG = [
-    {
-        "id": "project_health",
-        "panel_id": "producer_health",
-        "title": "Health",
-        "group": "Project Review",
-        "maturity": "read_only",
-        "enabled": True,
-        "endpoint": None,
-        "client_action": "runProjectHealth",
-        "action_label": "Run Health Scan",
-        "safety_note": "Read-only overview across available workflow reports.",
-    },
-    {
-        "id": "mix_review",
-        "panel_id": "producer_mix_review",
-        "title": "Mix Review",
-        "group": "Project Review",
-        "maturity": "read_only",
-        "enabled": True,
-        "endpoint": "/api/workflows/mix-review",
-        "action_label": "Run Mix Review",
-        "safety_note": "Read-only mixer review. No project changes are made.",
-    },
-    {
-        "id": "routing_audit",
-        "panel_id": "producer_routing",
-        "title": "Routing Audit",
-        "group": "Project Review",
-        "maturity": "read_only",
-        "enabled": True,
-        "endpoint": "/api/workflows/routing-audit",
-        "action_label": "Run Routing Audit",
-        "safety_note": "Read-only routing audit. Cleanup remains proposal-first.",
-    },
-    {
-        "id": "low_end_analysis",
-        "panel_id": "producer_low_end",
-        "title": "Low-End Analysis",
-        "group": "Project Review",
-        "maturity": "read_only",
-        "enabled": True,
-        "endpoint": "/api/workflows/low-end-analysis",
-        "action_label": "Run Low-End Analysis",
-        "safety_note": "Read-only low-end and stereo safety review.",
-    },
-    {
-        "id": "project_organizer",
-        "panel_id": "producer_organizer",
-        "title": "Organizer",
-        "group": "Project Review",
-        "maturity": "read_only",
-        "enabled": True,
-        "endpoint": "/api/workflows/project-organizer",
-        "action_label": "Run Organizer",
-        "safety_note": "Read-only scan. Any cleanup requires an approved safe-write tool.",
-    },
-    {
-        "id": "preflight",
-        "panel_id": "producer_preflight",
-        "title": "Preflight",
-        "group": "Roadmap",
-        "maturity": "planned",
-        "enabled": False,
-        "endpoint": None,
-        "action_label": None,
-        "safety_note": "Planned. No Control Center action is available yet.",
-    },
-    {
-        "id": "jam_2_project",
-        "panel_id": "producer_jam_2_project",
-        "title": "Jam 2 Project",
-        "group": "Roadmap",
-        "maturity": "planned",
-        "enabled": False,
-        "endpoint": None,
-        "action_label": None,
-        "safety_note": "Planned. No Control Center action is available yet.",
-    },
-    {
-        "id": "sidechaining",
-        "panel_id": "producer_sidechaining",
-        "title": "Sidechaining",
-        "group": "Roadmap",
-        "maturity": "planned",
-        "enabled": False,
-        "endpoint": None,
-        "action_label": None,
-        "safety_note": "Planned. No Control Center action is available yet.",
-    },
-    {
-        "id": "plugin_assistant",
-        "panel_id": "producer_plugin_assistant",
-        "title": "Plugin Assistant",
-        "group": "Roadmap",
-        "maturity": "planned",
-        "enabled": False,
-        "endpoint": None,
-        "action_label": None,
-        "safety_note": "Planned. Plugin loading remains manual.",
-    },
-    {
-        "id": "preset_assistant",
-        "panel_id": "producer_preset_assistant",
-        "title": "Preset Assistant",
-        "group": "Roadmap",
-        "maturity": "planned",
-        "enabled": False,
-        "endpoint": None,
-        "action_label": None,
-        "safety_note": "Planned. No Control Center action is available yet.",
-    },
-]
+WORKFLOW_CATALOG = DEFAULT_WORKFLOW_REGISTRY.control_center_catalog()
 
 
 def _read_project_version() -> str:
@@ -239,8 +126,7 @@ class ControlCenterState:
         self.daemon_host = daemon_host
         self.daemon_port = daemon_port
         self.daemon_fallback_port: int | None = None
-        self.report_store = ReportStore()
-        self.broker = AnalysisBroker()
+        self.runtime_client = RuntimeClient(daemon_host, daemon_port)
         self.checkpoints: dict[str, dict[str, Any]] = {}
         self.processes: dict[str, ManagedProcess] = {}
         self.last_findings: list[doctor.Finding] = []
@@ -458,6 +344,56 @@ def _ui_service_action(
         },
         "detail": _ui_service_detail(label, state_value, host, selected_port, external),
     }
+
+
+def _run_runtime_product_workflow(
+    state: ControlCenterState,
+    workflow_id: str,
+    *,
+    inputs: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Run a declared read-only Runtime workflow for a Control Center panel."""
+    try:
+        return state.runtime_client.run_workflow(workflow_id, inputs=inputs)
+    except Exception as exc:
+        return {
+            "contract_version": "fls-pilot.analysis-report.v1",
+            "workflow": workflow_id,
+            "title": DEFAULT_WORKFLOW_REGISTRY.get(workflow_id).title,
+            "analysis_mode": "manual_check",
+            "evidence_mode": "unavailable",
+            "freshness": {"status": "unavailable"},
+            "coverage": {
+                "required": 1,
+                "available": 0,
+                "missing": ["runtime_workflow"],
+                "score": 0,
+                "status": "unavailable",
+            },
+            "risk_score": 0,
+            "health_score": 0,
+            "confidence_score": 0,
+            "findings": [],
+            "limitations": [f"{type(exc).__name__}: {exc}"],
+            "manual_checks": [
+                {
+                    "id": f"{workflow_id}.runtime_unavailable",
+                    "title": "Connect the FL Studio Runtime and run the check again.",
+                }
+            ],
+            "next_actions": [
+                {
+                    "type": "setup",
+                    "label": "Open Setup Doctor",
+                    "target_panel": "setup",
+                }
+            ],
+            "proposed_changes": [],
+            "applied_changes": [],
+            "safety": {"read_only": True, "project_changes": False},
+            "ok": False,
+            "error": f"{type(exc).__name__}: {exc}",
+        }
 
 
 def _ui_service_detail(
@@ -889,14 +825,28 @@ def _collect_mix_snapshot(
     )
 
 
-def _run_mix_review(state: ControlCenterState) -> dict[str, Any]:
+def _run_mix_review(
+    state: ControlCenterState,
+    *,
+    bridge_override: Any | None = None,
+) -> dict[str, Any]:
     """Run the read-only Mix Review workflow for the Control Center UI."""
-    with state.lock:
-        daemon_host, daemon_port = _selected_daemon_endpoint(state)
-
-    bridge = None
+    if bridge_override is None and hasattr(state, "runtime_client"):
+        try:
+            return state.runtime_client.run_workflow("mix_review")
+        except Exception as exc:
+            report = _mix_review_unavailable_report(f"{type(exc).__name__}: {exc}")
+            analysis = _generic_analysis_report_from_legacy(
+                report, "mix_review", "Mix Review"
+            )
+            return analysis_report_to_control_center_legacy(analysis, report)
+    bridge = bridge_override
+    owns_bridge = bridge is None
     try:
-        bridge = TCPBridge(daemon_host, daemon_port)
+        if bridge is None:
+            with state.lock:
+                daemon_host, daemon_port = _selected_daemon_endpoint(state)
+            bridge = TCPBridge(daemon_host, daemon_port)
         wait = getattr(bridge, "wait_for_heartbeat", None)
         if callable(wait):
             wait(timeout=1.0)
@@ -914,7 +864,7 @@ def _run_mix_review(state: ControlCenterState) -> dict[str, Any]:
             "mix_review",
             "Mix Review",
         )
-        state.report_store.add_report(analysis_report)
+        analysis_report = state.report_store.add_report(analysis_report)
         return analysis_report_to_control_center_legacy(analysis_report, report_payload)
     except Exception as exc:
         report = _mix_review_unavailable_report(f"{type(exc).__name__}: {exc}")
@@ -923,22 +873,34 @@ def _run_mix_review(state: ControlCenterState) -> dict[str, Any]:
             "mix_review",
             "Mix Review",
         )
-        state.report_store.add_report(analysis_report)
+        analysis_report = state.report_store.add_report(analysis_report)
         return analysis_report_to_control_center_legacy(analysis_report, report)
     finally:
-        if bridge is not None:
+        if owns_bridge and bridge is not None:
             with contextlib.suppress(Exception):
                 bridge.close()
 
 
-def _run_low_end_analysis(state: ControlCenterState) -> dict[str, Any]:
+def _run_low_end_analysis(
+    state: ControlCenterState,
+    *,
+    bridge_override: Any | None = None,
+) -> dict[str, Any]:
     """Run the read-only Low-End Analysis workflow for the Control Center UI."""
-    with state.lock:
-        daemon_host, daemon_port = _selected_daemon_endpoint(state)
-
-    bridge = None
+    if bridge_override is None and hasattr(state, "runtime_client"):
+        try:
+            return state.runtime_client.run_workflow("low_end_analysis")
+        except Exception as exc:
+            report = _low_end_unavailable_report(f"{type(exc).__name__}: {exc}")
+            analysis = _build_low_end_analysis_report(report)
+            return analysis_report_to_control_center_legacy(analysis, report)
+    bridge = bridge_override
+    owns_bridge = bridge is None
     try:
-        bridge = TCPBridge(daemon_host, daemon_port)
+        if bridge is None:
+            with state.lock:
+                daemon_host, daemon_port = _selected_daemon_endpoint(state)
+            bridge = TCPBridge(daemon_host, daemon_port)
         wait = getattr(bridge, "wait_for_heartbeat", None)
         if callable(wait):
             wait(timeout=1.0)
@@ -956,7 +918,7 @@ def _run_low_end_analysis(state: ControlCenterState) -> dict[str, Any]:
             _low_end_unavailable_report(f"{type(exc).__name__}: {exc}"),
         )
     finally:
-        if bridge is not None:
+        if owns_bridge and bridge is not None:
             with contextlib.suppress(Exception):
                 bridge.close()
 
@@ -966,7 +928,9 @@ def _store_low_end_report(
     legacy_report: dict[str, Any],
 ) -> dict[str, Any]:
     analysis_report = _build_low_end_analysis_report(legacy_report)
-    state.report_store.add_report(analysis_report)
+    store = getattr(state, "report_store", None)
+    if store is not None:
+        analysis_report = store.add_report(analysis_report)
     return analysis_report_to_control_center_legacy(analysis_report, legacy_report)
 
 
@@ -1793,14 +1757,30 @@ ORGANIZER_POLICY_RULE_IDS = [
 ]
 
 
-def _run_project_organizer(state: ControlCenterState) -> dict[str, Any]:
+def _run_project_organizer(
+    state: ControlCenterState,
+    *,
+    bridge_override: Any | None = None,
+) -> dict[str, Any]:
     """Run the read-only Project Organizer workflow for the Control Center UI."""
-    with state.lock:
-        daemon_host, daemon_port = _selected_daemon_endpoint(state)
-
-    bridge = None
+    if bridge_override is None and hasattr(state, "runtime_client"):
+        try:
+            return state.runtime_client.run_workflow("project_organizer")
+        except Exception as exc:
+            report = _project_organizer_unavailable_report(
+                f"{type(exc).__name__}: {exc}"
+            )
+            analysis = _generic_analysis_report_from_legacy(
+                report, "project_organizer", "Organizer"
+            )
+            return analysis_report_to_control_center_legacy(analysis, report)
+    bridge = bridge_override
+    owns_bridge = bridge is None
     try:
-        bridge = TCPBridge(daemon_host, daemon_port)
+        if bridge is None:
+            with state.lock:
+                daemon_host, daemon_port = _selected_daemon_endpoint(state)
+            bridge = TCPBridge(daemon_host, daemon_port)
         wait = getattr(bridge, "wait_for_heartbeat", None)
         if callable(wait):
             wait(timeout=1.0)
@@ -1845,7 +1825,7 @@ def _run_project_organizer(state: ControlCenterState) -> dict[str, Any]:
             "project_organizer",
             "Organizer",
         )
-        state.report_store.add_report(analysis_report)
+        analysis_report = state.report_store.add_report(analysis_report)
         return analysis_report_to_control_center_legacy(analysis_report, report_payload)
     except Exception as exc:
         report = _project_organizer_unavailable_report(f"{type(exc).__name__}: {exc}")
@@ -1854,10 +1834,10 @@ def _run_project_organizer(state: ControlCenterState) -> dict[str, Any]:
             "project_organizer",
             "Organizer",
         )
-        state.report_store.add_report(analysis_report)
+        analysis_report = state.report_store.add_report(analysis_report)
         return analysis_report_to_control_center_legacy(analysis_report, report)
     finally:
-        if bridge is not None:
+        if owns_bridge and bridge is not None:
             with contextlib.suppress(Exception):
                 bridge.close()
 
@@ -2907,14 +2887,31 @@ def _organizer_health_label(score: int) -> str:
     return "At Risk"
 
 
-def _run_routing_audit(state: ControlCenterState) -> dict[str, Any]:
+def _run_routing_audit(
+    state: ControlCenterState,
+    *,
+    bridge_override: Any | None = None,
+) -> dict[str, Any]:
     """Run the read-only Routing Audit workflow for the Control Center UI."""
-    with state.lock:
-        daemon_host, daemon_port = _selected_daemon_endpoint(state)
-
-    bridge = None
+    if bridge_override is None and hasattr(state, "runtime_client"):
+        try:
+            return state.runtime_client.run_workflow("routing_audit")
+        except Exception as exc:
+            report = _routing_unavailable_report(f"{type(exc).__name__}: {exc}")
+            analysis = routing_analysis_report_from_legacy_payload(
+                report,
+                workflow="routing_audit",
+                title="Routing Audit",
+                created_at=report["generated_at"],
+            )
+            return analysis_report_to_control_center_legacy(analysis, report)
+    bridge = bridge_override
+    owns_bridge = bridge is None
     try:
-        bridge = TCPBridge(daemon_host, daemon_port)
+        if bridge is None:
+            with state.lock:
+                daemon_host, daemon_port = _selected_daemon_endpoint(state)
+            bridge = TCPBridge(daemon_host, daemon_port)
         wait = getattr(bridge, "wait_for_heartbeat", None)
         if callable(wait):
             wait(timeout=1.0)
@@ -2945,7 +2942,7 @@ def _run_routing_audit(state: ControlCenterState) -> dict[str, Any]:
             project_fingerprint=static_snapshot.project_fingerprint,
             source_observation_ids=static_snapshot.source_observation_ids,
         )
-        state.report_store.add_report(analysis_report)
+        analysis_report = state.report_store.add_report(analysis_report)
         return legacy_report
     except Exception as exc:
         report = _routing_unavailable_report(f"{type(exc).__name__}: {exc}")
@@ -2955,10 +2952,10 @@ def _run_routing_audit(state: ControlCenterState) -> dict[str, Any]:
             title="Routing Audit",
             created_at=report["generated_at"],
         )
-        state.report_store.add_report(analysis_report)
+        analysis_report = state.report_store.add_report(analysis_report)
         return analysis_report_to_control_center_legacy(analysis_report, report)
     finally:
-        if bridge is not None:
+        if owns_bridge and bridge is not None:
             with contextlib.suppress(Exception):
                 bridge.close()
 
@@ -3716,8 +3713,56 @@ def _handler_factory(state: ControlCenterState):
                 self._json(_run_project_organizer(state))
             elif self.path == "/api/workflows/routing-audit":
                 self._json(_run_routing_audit(state))
+            elif self.path == "/api/workflows/preflight":
+                self._json(_run_runtime_product_workflow(state, "preflight"))
+            elif self.path == "/api/workflows/jam-2-project":
+                self._json(_run_runtime_product_workflow(state, "jam_2_project"))
+            elif self.path == "/api/workflows/sidechain-routing-check":
+                self._json(
+                    _run_runtime_product_workflow(
+                        state,
+                        "sidechain_routing_check",
+                    )
+                )
+            elif self.path == "/api/workflows/plugin-assistant":
+                self._json(
+                    _run_runtime_product_workflow(
+                        state,
+                        "plugin_assistant",
+                        inputs=body,
+                    )
+                )
+            elif self.path == "/api/workflows/preset-assistant":
+                self._json(
+                    _run_runtime_product_workflow(
+                        state,
+                        "preset_assistant",
+                        inputs=body,
+                    )
+                )
             elif self.path == "/api/workflows/project-health":
-                self._json(aggregate_project_health(state.report_store))
+                try:
+                    self._json(state.runtime_client.project_health())
+                except Exception as exc:
+                    self._json(
+                        {
+                            "overall_status": "unavailable",
+                            "overall_health_score": None,
+                            "overall_risk_score": None,
+                            "overall_coverage_pct": 0,
+                            "overall_confidence_score": 0,
+                            "sections": [],
+                            "missing_workflows": [
+                                "project_organizer",
+                                "mix_review",
+                                "routing_audit",
+                                "low_end_analysis",
+                            ],
+                            "mixed_project_fingerprints": False,
+                            "next_suggested_workflows": [],
+                            "error": f"{type(exc).__name__}: {exc}",
+                        }
+                    )
             else:
                 self._json({"ok": False, "error": "not found"}, status=HTTPStatus.NOT_FOUND)
 
@@ -3959,7 +4004,14 @@ def _process_status(state: ControlCenterState) -> dict[str, Any]:
     return managed
 
 
-def _port_state(state: ControlCenterState) -> dict[str, dict[str, Any]]:
+def _port_state(
+    state: ControlCenterState,
+    *,
+    bind_check=None,
+    status_provider=None,
+) -> dict[str, dict[str, Any]]:
+    bind_check = bind_check or can_bind_tcp
+    status_provider = status_provider or tcp_port_status
     _, daemon_selected = _selected_daemon_endpoint(state)
     return {
         "control_center": {
@@ -3971,18 +4023,18 @@ def _port_state(state: ControlCenterState) -> dict[str, dict[str, Any]]:
         "sse": {
             "host": state.sse_host,
             "preferred_port": DEFAULT_SSE_PORT,
-            "available": can_bind_tcp(state.sse_host, DEFAULT_SSE_PORT),
+            "available": bind_check(state.sse_host, DEFAULT_SSE_PORT),
             "selected_port": state.sse_port,
             "fallback_port": None if state.sse_port == DEFAULT_SSE_PORT else state.sse_port,
         },
         "daemon": {
             "host": state.daemon_host,
             "preferred_port": state.daemon_port,
-            "available": can_bind_tcp(state.daemon_host, state.daemon_port),
+            "available": bind_check(state.daemon_host, state.daemon_port),
             "selected_port": daemon_selected,
             "fallback_port": state.daemon_fallback_port,
         },
-        "status": tcp_port_status(DEFAULT_CONTROL_CENTER_HOST, 8765),
+        "status": status_provider(DEFAULT_CONTROL_CENTER_HOST, 8765),
     }
 
 

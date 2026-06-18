@@ -5,6 +5,8 @@ import json
 import subprocess
 from unittest import mock
 
+import pytest
+
 from fls_pilot import control_center, doctor, runtime_config
 
 
@@ -18,6 +20,22 @@ def _state(*, port: int = 8766, sse_port: int = 8080) -> control_center.ControlC
         port=port,
         sse_host="127.0.0.1",
         sse_port=sse_port,
+    )
+
+
+@pytest.fixture(autouse=True)
+def _stable_port_probes(monkeypatch):
+    monkeypatch.setattr(control_center, "can_bind_tcp", lambda host, port: True)
+    monkeypatch.setattr(
+        control_center,
+        "tcp_port_status",
+        lambda host, port: {
+            "host": host,
+            "preferred_port": port,
+            "available": True,
+            "selected_port": port,
+            "fallback_port": None,
+        },
     )
 
 
@@ -65,8 +83,9 @@ def test_ui_payload_surfaces_catalog_next_action_and_service_actions():
 
     catalog = {item["id"]: item for item in payload["workflow_catalog"]}
     assert catalog["mix_review"]["enabled"] is True
-    assert catalog["preflight"]["enabled"] is False
-    assert catalog["plugin_assistant"]["endpoint"] is None
+    assert catalog["preflight"]["enabled"] is True
+    assert catalog["preflight"]["endpoint"] == "/api/workflows/preflight"
+    assert catalog["plugin_assistant"]["endpoint"] == "/api/workflows/plugin-assistant"
     assert payload["next_action"]["target_panel"] == "producer_health"
     assert payload["next_action"]["action_label"] == "Open Health"
     assert payload["service_actions"]["daemon"]["stop"]["enabled"] is True
@@ -699,6 +718,9 @@ def test_http_mix_review_and_low_end_endpoints(monkeypatch):
             "title": "Low-End Analysis",
             "state": "live",
             "analysis": {"workflow": "low_end_analysis"},
+            "details": {
+                "analysis_report": {"workflow": "low_end_analysis"},
+            },
         },
     )
     state = _state(port=0)

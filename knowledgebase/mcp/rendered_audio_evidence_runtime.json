@@ -1,0 +1,42 @@
+{
+  "schema_version": "fls-pilot.kb-entry.v1",
+  "date": "2026-06-18",
+  "author": "Codex",
+  "topic": "Runtime-owned rendered audio evidence",
+  "affected": [
+    "fl_analyze_audio",
+    "analysis.workflow.run:audio_evidence",
+    "project_health"
+  ],
+  "confidence": "implementation_verified",
+  "evidence_kinds": [
+    "rendered_master",
+    "stem",
+    "candidate"
+  ],
+  "short_file_limit_seconds": 180,
+  "validity": {
+    "scope": "sha256_file_hash",
+    "invalidation": "file_hash_change"
+  },
+  "supported_claims": [
+    "duration",
+    "peak_db_when_decoder_available",
+    "rms_db_when_decoder_available",
+    "tempo_estimate_when_librosa_available",
+    "key_estimate_when_librosa_available",
+    "spectral_band_shares_when_librosa_available"
+  ],
+  "unsupported_claims": [
+    "automatic_fl_render",
+    "true_loudness",
+    "phase_correlation",
+    "mono_sum_cancellation",
+    "multi_stem_overlap"
+  ],
+  "health_policy": {
+    "linked_workflow_confidence": "max(existing, audio_evidence)",
+    "risk_score_unchanged": true,
+    "health_score_unchanged": true
+  }
+}
