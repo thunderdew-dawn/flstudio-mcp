@@ -1233,8 +1233,6 @@ def _h_api_probe(p):
     dir    -> {module, names}: public names of one FL module (per-module to
               stay under the SysEx size limit).
     ppq    -> {ppq, pattern_count, pattern_number}
-    marker_add -> arrangement.addAutoTimeMarker(time, name)
-    undo   -> general.undoUp() (best-effort, to remove a test marker)
     """
     op = p.get("op", "dir")
     if op == "dir":
@@ -1281,37 +1279,6 @@ def _h_api_probe(p):
             except Exception as e:
                 out[key + "_error"] = str(e)
         return out
-    if op == "marker_add":
-        if arrangement is None:
-            return {"ok": False, "error": "arrangement module not available"}
-        t = int(p["time"])
-        name = p.get("name", "TEST")
-        try:
-            arrangement.addAutoTimeMarker(t, name)
-            return {"ok": True, "added": name, "time": t}
-        except Exception as e:
-            return {"ok": False, "error": f"addAutoTimeMarker: {e}"}
-    if op == "undo":
-        try:
-            general.undoUp()
-            return {"ok": True, "undid": True}
-        except Exception as e:
-            return {"ok": False, "error": f"undoUp: {e}"}
-    if op == "volume_sweep":
-        track = int(p.get("track", 1))
-        start = int(p.get("start", 0))
-        count = int(p.get("count", 25))
-        orig_vol = mixer.getTrackVolume(track, 0)
-        sweep_results = []
-        for i in range(start, start + count):
-            if i > 100:
-                break
-            val = i / 100.0
-            mixer.setTrackVolume(track, val)
-            db_val = mixer.getTrackVolume(track, 1)
-            sweep_results.append((round(val, 4), round(db_val, 4)))
-        mixer.setTrackVolume(track, orig_vol)
-        return {"sweep": sweep_results}
     return {"error": f"unknown op: {op}"}
 
 
@@ -2167,7 +2134,6 @@ def _h_channel_set_steps(p):
 
 _HANDLERS = {
     "ping": _h_ping,
-    "bridge_eval": lambda p: {"result": str(eval(p.get("expr", "")))},
     "get_tempo": _h_get_tempo,
     "set_tempo": _h_set_tempo,
     "general_undo": _h_general_undo,

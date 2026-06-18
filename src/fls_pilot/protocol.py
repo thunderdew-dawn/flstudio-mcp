@@ -152,7 +152,7 @@ CMD_CHANNEL_GET_COLOR = "channel_get_color"
 CMD_PLUGIN_PRESET = "plugin_preset"  # getPresetCount/next/prev/getName
 CMD_PLUGIN_GET_PRESET_NAME = "plugin_get_preset_name"
 
-# API introspection / arrangement probe -- op: dir | ppq | marker_add | undo
+# API introspection probe -- op: dir | ppq
 CMD_API_PROBE = "api_probe"
 
 # Arrangement primitives (Slice 1) -- pattern create/clone + section markers
