@@ -21,6 +21,15 @@
         </span>
         <span class="brand-subtitle">Control Center</span>
       </div>
+      <div class="connection-card">
+        <span class="shield" aria-hidden="true">&#x25c7;</span>
+        <div>
+          <span class="eyebrow">Connected To</span>
+          <strong id="connected-target">FL Studio</strong>
+          <span id="connected-version">Local daemon API</span>
+        </div>
+        <span class="connection-dot" id="connection-dot"></span>
+      </div>
       <div class="topbar-status" aria-label="Status">
         <span class="pill pill-live" id="bridge-pill">Loading</span>
         <span class="pill pill-version" id="version-pill">...</span>
@@ -112,16 +121,6 @@
         </div>
 
       </nav>
-
-      <div class="connection-card">
-        <span class="shield" aria-hidden="true">&#x25c7;</span>
-        <div>
-          <span class="eyebrow">Connected To</span>
-          <strong id="connected-target">FL Studio</strong>
-          <span id="connected-version">Local daemon API</span>
-        </div>
-        <span class="connection-dot" id="connection-dot"></span>
-      </div>
     </aside>
 
     <!-- ═══════════════════════════════════════════════════════════════════════
@@ -1023,7 +1022,8 @@
       <section class="hero">
         <div>
           <h1>Preflight <span class="badge badge-ok">Read-only</span></h1>
-          <p>Review project metadata before export. Level evidence, render settings, and mastering remain separate checks.</p>
+          <p>Review project metadata before export. Level evidence, render settings, and mastering remain separate
+            checks.</p>
         </div>
       </section>
       <div class="runtime-workflow-content" id="preflight-runtime-content"></div>
@@ -1142,9 +1142,9 @@
     <!-- ── Footer ─────────────────────────────────────────────────────────── -->
     <footer class="statusbar">
       <div>
-        <span aria-hidden="true">&#x25a3;</span>
+        <img src="assets/fls-pilot-logo.svg" aria-hidden="true" width="16" height="16" alt="">
         <strong>FLS Pilot Control Center</strong>
-        <span>Setup, diagnostics, and service management for FL Studio.</span>
+        <span>Create more. Check less.</span>
       </div>
       <div id="footer-cc-port" class="footer-port"></div>
     </footer>
