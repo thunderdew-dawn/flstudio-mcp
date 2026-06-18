@@ -1,7 +1,7 @@
 # Architecture Overview
 
 This document is the human-readable orientation. The governed machine snapshot
-is `agent-docs/machine/fls_pilot_architecture.json`; consult it only under the
+is `agent-docs/machine/architecture-governance.snapshot.json`; consult it only under the
 [Architecture Governance Contract](../contracts/architecture-governance.md).
 
 ## System Flow

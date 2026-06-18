@@ -380,6 +380,7 @@ def test_channel_mute_solo_select_color_and_steps_specs_match_payloads() -> None
         },
     )
     assert steps.snapshot_scope == "channel_steps:4:2"
+    assert steps.batch_eligible is False
     assert steps.command.as_dict() == {
         "command": protocol.CMD_CHANNEL_SET_STEPS,
         "params": {

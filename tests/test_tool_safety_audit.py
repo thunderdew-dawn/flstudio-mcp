@@ -74,6 +74,36 @@ def fl_good_write():
     assert result.safety_class_annotation == "write-safe-required"
 
 
+def test_approved_step_write_helper_classifies_as_write_safe_required(
+    tmp_path: Path,
+) -> None:
+    result = _audit_source(
+        tmp_path,
+        '''
+from fls_pilot.step_sequencer import safe_set_steps
+
+
+@mcp.tool(annotations={"readOnlyHint": False, "safetyClass": "write-safe-required"})
+def fl_step_write():
+    """Safe bounded step write.
+
+    Safety: Write-Safe-Required with Rollback.
+    """
+    return safe_set_steps(
+        bridge,
+        tool="channel_set_steps",
+        channel=0,
+        pattern=1,
+        steps=[{"step": 0, "value": True}],
+        rollback_unit="step_test",
+    )
+''',
+    )
+
+    assert result.status == "write-safe-required"
+    assert result.contract_safety_class == "write-safe-required"
+
+
 def test_legacy_write_safe_annotation_is_not_mapped(tmp_path: Path) -> None:
     result = _audit_source(
         tmp_path,

@@ -13,7 +13,8 @@ from fastmcp import FastMCP
 from pydantic import Field
 
 from .. import protocol, safety
-from ..connection import fetch_all_pages, get_bridge
+from ..connection import fetch_all_pages, fetch_step_pages, get_bridge
+from ..step_sequencer import restore_action, safe_set_steps
 from .registration import RETIRED_LOW_LEVEL_TOOLS, hide_retired_tools
 from .targets import mixer_track_error, no_free_mixer_track_response
 
@@ -35,31 +36,7 @@ def _target_restore(channel: int, before: dict) -> dict:
 
 
 def _steps_restore(channel: int, before: dict) -> dict:
-    steps_list = []
-    rel = before.get("release", [])
-    mod = before.get("mod", [])
-    pitch = before.get("pitch", [])
-    for s in range(len(before.get("grid", []))):
-        row = {
-            "step": s,
-            "value": before["grid"][s],
-            "velocity": before["vel"][s],
-            "pan": before["pan"][s],
-            "shift": before["shift"][s],
-            "repeat": before["rep"][s],
-        }
-        if s < len(rel) and rel[s] is not None:
-            row["release"] = rel[s]
-        if s < len(mod) and mod[s] is not None:
-            row["mod"] = mod[s]
-        if s < len(pitch) and pitch[s] is not None:
-            row["pitch"] = pitch[s]
-        steps_list.append(row)
-    pattern = before.get("pattern")
-    return {
-        "command": protocol.CMD_CHANNEL_SET_STEPS,
-        "params": {"channel": channel, "pattern": pattern, "steps": steps_list},
-    }
+    return restore_action(channel, before)
 
 
 def _needs_assignment(channel: dict, *, include_master: bool = True) -> bool:
@@ -239,20 +216,32 @@ def register(mcp: FastMCP) -> None:
         steps: Annotated[
             int,
             Field(ge=1, le=64, description="Number of steps to read."),
-        ] = 64,
+        ] = 16,
         pattern: Annotated[
             int | None,
             Field(ge=1, description="Optional pattern index. Defaults to current pattern."),
+        ] = None,
+        include: Annotated[
+            list[str] | None,
+            Field(
+                description=(
+                    "Optional fields: grid, vel/velocity, pan, shift, rep/repeat, "
+                    "release, mod, pitch. Defaults to all fields."
+                )
+            ),
         ] = None,
     ) -> dict:
         """Read the step sequencer grid and parameters (velocity, pan, shift, repeat) for a channel.
 
         Safety: Read-Only.
         """
-        params = {"channel": channel, "steps": steps}
-        if pattern is not None:
-            params["pattern"] = pattern
-        return get_bridge().call(protocol.CMD_CHANNEL_GET_STEPS, params)
+        return fetch_step_pages(
+            get_bridge(),
+            channel,
+            pattern=pattern,
+            steps=steps,
+            include=include,
+        )
 
     @mcp.tool(annotations={"title": "Set step sequencer grid bit", **_WR})
     def fl_channel_set_grid_bit(
@@ -297,13 +286,12 @@ def register(mcp: FastMCP) -> None:
         bridge = get_bridge()
         selected = bridge.call(protocol.CMD_PATTERN_SELECTED)
         pattern_index = int(pattern or selected["selected"])
-        return safety.safe_write(
+        return safe_set_steps(
             bridge,
             tool="channel_set_grid_bit",
-            scope=f"channel_steps:{channel}:{pattern_index}",
-            command=protocol.CMD_CHANNEL_SET_STEPS,
-            params={"channel": channel, "pattern": pattern_index, "steps": [params]},
-            build_restore=lambda b: _steps_restore(channel, b),
+            channel=channel,
+            pattern=pattern_index,
+            steps=[params],
             rollback_unit=f"step_grid_bit_ch{channel}_pat{pattern_index}",
         )
 
@@ -349,13 +337,12 @@ def register(mcp: FastMCP) -> None:
         bridge = get_bridge()
         selected = bridge.call(protocol.CMD_PATTERN_SELECTED)
         pattern_index = int(pattern or selected["selected"])
-        return safety.safe_write(
+        return safe_set_steps(
             bridge,
             tool="channel_set_step_param",
-            scope=f"channel_steps:{channel}:{pattern_index}",
-            command=protocol.CMD_CHANNEL_SET_STEPS,
-            params={"channel": channel, "pattern": pattern_index, "steps": [payload]},
-            build_restore=lambda b: _steps_restore(channel, b),
+            channel=channel,
+            pattern=pattern_index,
+            steps=[payload],
             rollback_unit=f"step_param_ch{channel}_pat{pattern_index}",
         )
 
@@ -403,13 +390,12 @@ def register(mcp: FastMCP) -> None:
         selected = bridge.call(protocol.CMD_PATTERN_SELECTED)
         pattern_index = int(pattern or selected["selected"])
 
-        return safety.safe_write(
+        return safe_set_steps(
             bridge,
             tool="channel_set_steps",
-            scope=f"channel_steps:{channel}:{pattern_index}",
-            command=protocol.CMD_CHANNEL_SET_STEPS,
-            params={"channel": channel, "pattern": pattern_index, "steps": validated_steps},
-            build_restore=lambda b: _steps_restore(channel, b),
+            channel=channel,
+            pattern=pattern_index,
+            steps=validated_steps,
             rollback_unit=f"step_batch_ch{channel}_pat{pattern_index}",
         )
 
@@ -428,20 +414,22 @@ def register(mcp: FastMCP) -> None:
         bridge = get_bridge()
         selected = bridge.call(protocol.CMD_PATTERN_SELECTED)
         pattern_index = int(pattern or selected["selected"])
-        current = bridge.call(
-            protocol.CMD_CHANNEL_GET_STEPS,
-            {"channel": channel, "pattern": pattern_index},
+        current = fetch_step_pages(
+            bridge,
+            channel,
+            pattern=pattern_index,
+            steps=64,
+            include=["grid"],
         )
         grid_len = len(current.get("grid", [])) or 64
         cleared_steps = [{"step": s, "value": False} for s in range(grid_len)]
 
-        return safety.safe_write(
+        return safe_set_steps(
             bridge,
             tool="channel_clear_grid",
-            scope=f"channel_steps:{channel}:{pattern_index}",
-            command=protocol.CMD_CHANNEL_SET_STEPS,
-            params={"channel": channel, "pattern": pattern_index, "steps": cleared_steps},
-            build_restore=lambda b: _steps_restore(channel, b),
+            channel=channel,
+            pattern=pattern_index,
+            steps=cleared_steps,
             rollback_unit=f"step_clear_ch{channel}_pat{pattern_index}",
         )
 

@@ -18,7 +18,6 @@ from pathlib import Path
 
 from .protocol import (
     CMD_CHANNEL_GET,
-    CMD_CHANNEL_GET_STEPS,
     CMD_CHANNEL_LIST,
     CMD_CHANNEL_SELECTED,
     CMD_GET_PROJECT_STATE,
@@ -236,10 +235,20 @@ def take_snapshot(bridge, scope):
         return fetch_all_pages(bridge, CMD_CHANNEL_LIST, "channels")
     if kind == "channel_steps":
         parts = [int(x) for x in arg.split(":")]
-        params = {"channel": parts[0]}
-        if len(parts) > 1:
-            params["pattern"] = parts[1]
-        return bridge.call(CMD_CHANNEL_GET_STEPS, params)
+        from .connection import fetch_step_pages
+
+        channel = parts[0]
+        pattern = parts[1] if len(parts) > 1 else None
+        start = parts[2] if len(parts) > 2 else 0
+        count = parts[3] if len(parts) > 3 else 64 - start
+        return fetch_step_pages(
+            bridge,
+            channel,
+            pattern=pattern,
+            steps=64,
+            start=start,
+            read_count=count,
+        )
     if kind == "pattern":
         return bridge.call(CMD_PATTERN_GET, {"index": int(arg)})
     if kind == "patterns_selected":

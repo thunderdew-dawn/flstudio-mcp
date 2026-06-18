@@ -226,10 +226,20 @@
       "raw_command_code_script_fields_forbidden": true
     },
     "controller_protocol": {
-      "protocol_version": 2,
+      "protocol_version": 3,
       "command_catalog_source": "src/fls_pilot/protocol.py",
       "controller_handler_source": "fl_controller/FLStudioPilot/device_FLStudioPilot.py",
       "transport": "midi_sysex",
+      "max_wire_bytes_including_framing": 1000,
+      "oversized_request_policy": "reject_before_midi_send",
+      "oversized_response_policy": "replace_with_response_too_large_error",
+      "bounded_operations": [
+        "channel_get_steps",
+        "channel_set_steps",
+        "mixer_get_all_peaks",
+        "plugin_get_params"
+      ],
+      "stable_dev_probes_enabled": false,
       "heartbeat_seconds": 0.5,
       "stale_after_seconds": 3.0
     },

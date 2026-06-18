@@ -134,6 +134,18 @@ def register(mcp: FastMCP) -> None:
     def fl_plugin_get_params(
         track: Annotated[int, Field(ge=0)],
         slot: Annotated[int, Field(ge=0, le=9, description="Effect slot index 0-9.")],
+        count: Annotated[
+            int,
+            Field(ge=1, le=32, description="Maximum parameters scanned per SysEx page."),
+        ] = 32,
+        names_only: Annotated[
+            bool,
+            Field(description="Return only parameter indices and names."),
+        ] = False,
+        values: Annotated[
+            bool,
+            Field(description="Include normalized values and display strings."),
+        ] = True,
     ) -> dict:
         """Every named parameter of the plugin in this slot: index, name,
         normalised value (0..1) and FL's display string (e.g. '3.6dB',
@@ -150,7 +162,13 @@ def register(mcp: FastMCP) -> None:
                 bridge,
                 protocol.CMD_PLUGIN_GET_PARAMS,
                 "params",
-                {"track": track, "slot": slot},
+                {
+                    "track": track,
+                    "slot": slot,
+                    "count": count,
+                    "names_only": names_only,
+                    "values": values,
+                },
                 timeout=10.0,
                 attempts=3,
             )

@@ -67,7 +67,7 @@ Then follow its task-specific routing:
 - Issues, PRs, releases, CI, security, roadmap, hotfixes, or backports:
   `agent-docs/agents/github-playbook.md`
 
-Load `agent-docs/machine/fls_pilot_architecture.json` only for architecture,
+Load `agent-docs/machine/architecture-governance.snapshot.json` only for architecture,
 public-surface, safety-posture, protocol/controller, or trust-boundary work. It
 is not a default read for ordinary code or documentation changes.
 

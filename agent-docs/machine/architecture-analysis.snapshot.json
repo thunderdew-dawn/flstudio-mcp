@@ -929,10 +929,10 @@
       "request_id": "8 ASCII [a-z0-9]",
       "payload": "base64 encoded UTF-8 JSON"
     },
-    "protocol_version": 2,
+    "protocol_version": 3,
     "heartbeat_seconds": 0.5,
     "stale_threshold_seconds": 3.0,
-    "safe_payload_strategy": "controller paginates list responses to about 600 JSON bytes because larger SysEx payloads can be dropped"
+    "safe_payload_strategy": "host rejects requests and controller replaces responses above 1000 final wire bytes; expensive step, peak, plugin, and list operations use bounded pages or grouped writes"
   },
   "entrypoints": {
     "console_scripts": {

@@ -7,7 +7,7 @@
 Lives at:
     Documents/Image-Line/FL Studio/Settings/Hardware/FLStudioPilot/device_FLStudioPilot.py
 
-This v3.0 rewrite uses MIDI SysEx in both directions, implementing strict byte governance
+This v3.0 rewrite uses still MIDI SysEx in both directions, implementing strict byte governance
 and improvements to performance and safety.
 
 To activate in FL:
@@ -66,7 +66,8 @@ except Exception:
 # Protocol constants -- MUST stay in sync with src/fls_pilot/protocol.py
 # ---------------------------------------------------------------------------
 
-PROTOCOL_VERSION = 2
+PROTOCOL_VERSION = 3
+MAX_SYSEX_WIRE_SAFE = 1000
 
 SYSEX_MANUFACTURER = 0x7D
 SYSEX_MAGIC = (0x4D, 0x43, 0x50)  # ASCII "MCP"
@@ -79,6 +80,7 @@ REQUEST_ID_LEN = 8
 _HEADER_LEN = 1 + 3 + 1 + REQUEST_ID_LEN
 
 HEARTBEAT_INTERVAL = 0.5  # seconds between heartbeats
+_ENABLE_DEV_PROBES = False
 
 
 # ---------------------------------------------------------------------------
@@ -176,8 +178,45 @@ def _handle_request_sysex(event, source):
         # Not for us (could be a stray response heard back on the input).
         return False
 
+    if not isinstance(request, dict):
+        _send_message(
+            DIR_RESPONSE,
+            request_id,
+            {
+                "v": PROTOCOL_VERSION,
+                "ok": False,
+                "error": "invalid request envelope",
+                "code": "invalid_request",
+            },
+        )
+        return True
+    if request.get("v") != PROTOCOL_VERSION:
+        _send_message(
+            DIR_RESPONSE,
+            request_id,
+            {
+                "v": PROTOCOL_VERSION,
+                "ok": False,
+                "error": "protocol version mismatch",
+                "code": "protocol_mismatch",
+            },
+        )
+        return True
+
     command = request.get("cmd", "")
     params = request.get("params") or {}
+    if not isinstance(command, str) or not isinstance(params, dict):
+        _send_message(
+            DIR_RESPONSE,
+            request_id,
+            {
+                "v": PROTOCOL_VERSION,
+                "ok": False,
+                "error": "invalid command or params",
+                "code": "invalid_request",
+            },
+        )
+        return True
 
     try:
         result = _dispatch(command, params)
@@ -233,6 +272,15 @@ def _encode_message(direction, request_id, payload):
     return bytes(out)
 
 
+def _wire_size_for_payload(direction, request_id, payload):
+    return len(_encode_message(direction, request_id, payload)) + 2
+
+
+def _fits_response_data(data):
+    payload = {"v": PROTOCOL_VERSION, "ok": True, "data": data}
+    return _wire_size_for_payload(DIR_RESPONSE, "00000000", payload) <= MAX_SYSEX_WIRE_SAFE
+
+
 def _decode_message(data):
     if len(data) < _HEADER_LEN:
         return None
@@ -259,6 +307,23 @@ def _send_message(direction, request_id, payload):
         return
     body = _encode_message(direction, request_id, payload)
     framed = bytes([0xF0]) + body + bytes([0xF7])
+    if len(framed) > MAX_SYSEX_WIRE_SAFE:
+        if direction != DIR_RESPONSE:
+            print(
+                "[FLStudioPilot] Refusing oversized SysEx message: " + str(len(framed)) + " bytes."
+            )
+            return
+        payload = {
+            "v": PROTOCOL_VERSION,
+            "ok": False,
+            "error": "response too large",
+            "code": "response_too_large",
+        }
+        body = _encode_message(direction, request_id, payload)
+        framed = bytes([0xF0]) + body + bytes([0xF7])
+        if len(framed) > MAX_SYSEX_WIRE_SAFE:
+            print("[FLStudioPilot] Internal error: size-error response exceeds wire limit.")
+            return
     try:
         _send_sysex_fn(framed)
     except Exception as e:
@@ -290,6 +355,70 @@ class _ClientError(Exception):
         self.code = code
 
 
+def _int_param(params, name, default=None, min_value=None, max_value=None):
+    if name not in params:
+        if default is None:
+            raise _ClientError("missing parameter: " + name)
+        value = default
+    else:
+        value = params[name]
+    if isinstance(value, bool):
+        raise _ClientError("invalid " + name + ": expected integer")
+    if isinstance(value, float) and not value.is_integer():
+        raise _ClientError("invalid " + name + ": expected integer")
+    try:
+        value = int(value)
+    except (TypeError, ValueError):
+        raise _ClientError("invalid " + name + ": expected integer")
+    if min_value is not None and value < min_value:
+        raise _ClientError(name + " out of range")
+    if max_value is not None and value > max_value:
+        raise _ClientError(name + " out of range")
+    return value
+
+
+def _float_param(params, name, default=None, min_value=None, max_value=None):
+    if name not in params:
+        if default is None:
+            raise _ClientError("missing parameter: " + name)
+        value = default
+    else:
+        value = params[name]
+    if isinstance(value, bool):
+        raise _ClientError("invalid " + name + ": expected number")
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        raise _ClientError("invalid " + name + ": expected number")
+    if not math.isfinite(value):
+        raise _ClientError("invalid " + name + ": expected finite number")
+    if min_value is not None and value < min_value:
+        raise _ClientError(name + " out of range")
+    if max_value is not None and value > max_value:
+        raise _ClientError(name + " out of range")
+    return value
+
+
+def _bool_param(params, name, default=None):
+    if name not in params:
+        if default is None:
+            raise _ClientError("missing parameter: " + name)
+        return bool(default)
+    value = params[name]
+    if not isinstance(value, bool):
+        raise _ClientError("invalid " + name + ": expected boolean")
+    return value
+
+
+def _list_param(params, name, default=None):
+    if name not in params:
+        return list(default or [])
+    value = params[name]
+    if not isinstance(value, list):
+        raise _ClientError("invalid " + name + ": expected list")
+    return value
+
+
 def _dispatch(command, params):
     handler = _HANDLERS.get(command)
     if handler is None:
@@ -304,7 +433,7 @@ def _h_ping(params):
     return {
         "fl_version": _fl_version,
         "protocol_version": PROTOCOL_VERSION,
-        "build": "channels-v39",  # reload marker -- bump to verify reloads take
+        "build": "channels-v40",  # reload marker -- bump to verify reloads take
         "ts": time.time(),
     }
 
@@ -418,13 +547,16 @@ def _h_set_song_pos(params):
 
 
 # -- Phase 1: project / mixer / channel read surface -------------------------
-# SysEx payloads >~1.5 KB are dropped (probe: 1000 B OK, 2000 B lost). LIST
-# reads paginate by PAYLOAD BUDGET (not a fixed count) and truncate names, so a
-# page never exceeds the safe size no matter how long the names are. Full
-# untruncated names stay available via the single-item gets.
+# Final SysEx messages are governed at 1000 bytes (probe: 1000 B reliable,
+# 2000 B previously observed lost). LIST reads paginate by payload budget and
+# truncate names. Full untruncated names stay available via single-item gets.
 
-_LIST_BUDGET = 600  # max bytes of 'data' JSON/page -> ~843 B wire (< safe 1000)
+_LIST_BUDGET = 600  # conservative data JSON budget below MAX_SYSEX_WIRE_SAFE
 _NAME_CAP = 24  # name length in LIST responses only
+_MAX_PAGE_COUNT = 32
+_MAX_STEP_PAGE_COUNT = 16
+_MAX_STEP_WRITE_COUNT = 16
+_STEP_TOTAL = 64
 
 
 def _truncate_name(name):
@@ -958,37 +1090,48 @@ def _h_plugin_list(p):
 
 
 def _h_plugin_get_params(p):
-    track = int(p["track"])
-    slot = int(p["slot"])
+    track = _int_param(p, "track", min_value=0)
+    slot = _int_param(p, "slot", min_value=0, max_value=9)
     if not plugins.isValid(track, slot):
         raise _ClientError(f"no plugin at track {track} slot {slot}")
     total = plugins.getParamCount(track, slot)
-    start = max(0, int(p.get("start", 0)))
+    start = _int_param(p, "start", default=0, min_value=0)
+    count = _int_param(p, "count", default=32, min_value=1, max_value=_MAX_PAGE_COUNT)
+    names_only = _bool_param(p, "names_only", default=False)
+    values = _bool_param(p, "values", default=True) and not names_only
+    plugin_name = (plugins.getPluginName(track, slot) or "")[:48]
     out = []
     i = start
-    scanned = 0
-    while i < total and scanned < 150:  # cap scan/page (bounds VST 4240 cost)
+    while i < total and len(out) < count:
         nm = plugins.getParamName(i, track, slot)
         cur = i
         i += 1
-        scanned += 1
-        # Always include to see all indices
-        out.append(
-            {
-                "i": cur,
-                "name": nm[:30] if nm else "EMPTY",
-                "v": round(plugins.getParamValue(cur, track, slot), 4),
-                "s": (plugins.getParamValueString(cur, track, slot) or "")[:16],
-            }
-        )
-        if len(json.dumps(out, separators=(",", ":"))) > 480:
+        row = {"i": cur, "name": nm[:30] if nm else "EMPTY"}
+        if values:
+            row["v"] = round(plugins.getParamValue(cur, track, slot), 4)
+            row["s"] = (plugins.getParamValueString(cur, track, slot) or "")[:16]
+        out.append(row)
+        candidate = {
+            "track": track,
+            "slot": slot,
+            "plugin": plugin_name,
+            "total": total,
+            "start": start,
+            "count": len(out),
+            "next_start": (i if i < total else None),
+            "params": out,
+        }
+        if not _fits_response_data(candidate) and len(out) > 1:
+            out.pop()
+            i -= 1
             break
     return {
         "track": track,
         "slot": slot,
-        "plugin": plugins.getPluginName(track, slot),
+        "plugin": plugin_name,
         "total": total,
         "start": start,
+        "count": len(out),
         "next_start": (i if i < total else None),
         "params": out,
     }
@@ -1158,14 +1301,56 @@ def _h_mixer_get_peaks(p):
 
 
 def _h_mixer_get_all_peaks(p):
-    """Batch read all peaks for tracks 0-125."""
+    """Bounded peak read for polling. Values are integers scaled by 1e6."""
+    total = max(0, int(mixer.trackCount()))
+    tracks = p.get("tracks")
+    if tracks is not None:
+        tracks = _list_param(p, "tracks")
+        if len(tracks) > _MAX_PAGE_COUNT:
+            raise _ClientError("tracks out of range")
+        if total <= 0 and tracks:
+            raise _ClientError("tracks out of range")
+        selected = [
+            _int_param(
+                {"track": track},
+                "track",
+                min_value=0,
+                max_value=max(0, total - 1),
+            )
+            for track in tracks
+        ]
+        start = 0
+        next_start = None
+    else:
+        start = _int_param(p, "start", default=0, min_value=0, max_value=total)
+        count = _int_param(p, "count", default=32, min_value=1, max_value=_MAX_PAGE_COUNT)
+        selected = list(range(start, min(total, start + count)))
+        next_start = start + len(selected)
+        if next_start >= total:
+            next_start = None
+    sparse = _bool_param(p, "sparse", default=False)
+    threshold = _float_param(p, "threshold", default=0.0, min_value=0.0)
     peaks = []
-    for t in range(126):
+    for t in selected:
         try:
-            peaks.append(round(float(mixer.getTrackPeaks(t, 2)), 6))
+            value = max(0, int(round(float(mixer.getTrackPeaks(t, 2)) * 1000000.0)))
         except Exception:
-            peaks.append(0.0)
-    return {"peaks": peaks}
+            value = 0
+        if sparse:
+            if value >= int(round(threshold * 1000000.0)):
+                peaks.append({"track": t, "peak": value})
+        else:
+            peaks.append(value)
+    return {
+        "total": total,
+        "start": start,
+        "count": len(selected),
+        "next_start": next_start,
+        "tracks": selected if tracks is not None else None,
+        "scale": 1000000,
+        "sparse": sparse,
+        "peaks": peaks,
+    }
 
 
 def _h_mixer_selected(params):
@@ -1487,100 +1672,157 @@ def _safe_playlist_track_color(i):
 
 
 def _h_channel_get_steps(p):
-    idx = int(p["channel"])
-    steps = int(p.get("steps", 64))
+    idx = _int_param(p, "channel", min_value=0)
+    total_steps = _int_param(p, "steps", default=_STEP_TOTAL, min_value=1, max_value=_STEP_TOTAL)
+    start = _int_param(p, "start", default=0, min_value=0, max_value=total_steps)
+    requested_count = _int_param(
+        p,
+        "count",
+        default=_MAX_STEP_PAGE_COUNT,
+        min_value=1,
+        max_value=_MAX_STEP_PAGE_COUNT,
+    )
+    end = min(total_steps, start + requested_count)
+    aliases = {"velocity": "vel", "repeat": "rep"}
+    allowed = ("grid", "vel", "pan", "shift", "rep", "release", "mod", "pitch")
+    requested = _list_param(p, "include", default=allowed)
+    include = []
+    for field in requested:
+        if not isinstance(field, str):
+            raise _ClientError("invalid include: expected field names")
+        field = aliases.get(field, field)
+        if field not in allowed:
+            raise _ClientError("invalid include field: " + field)
+        if field not in include:
+            include.append(field)
+    if not include:
+        raise _ClientError("include must contain at least one field")
+
     target_pattern = p.get("pattern")
     previous_pattern = None
     if target_pattern is not None:
-        target_pattern = int(target_pattern)
+        target_pattern = _int_param(p, "pattern", min_value=1)
         previous_pattern = patterns.patternNumber()
         if target_pattern < 1 or target_pattern > patterns.patternCount():
             raise _ClientError("pattern index out of range")
         if previous_pattern != target_pattern:
             patterns.jumpToPattern(target_pattern)
-    grid, vel, pan, shift, rep = [], [], [], [], []
-    rel, modx, pitch = [], [], []
+
     p_release = getattr(midi, "pRelease", None)
     p_modx = getattr(midi, "pModX", None)
     p_pitch = getattr(midi, "pPitch", None) or getattr(midi, "pFinePitch", None)
+    arrays = {field: [] for field in include}
+    capabilities = {
+        "release": bool(p_release is not None),
+        "mod": bool(p_modx is not None),
+        "pitch": bool(p_pitch is not None),
+    }
+
+    def append_step(step):
+        if "grid" in arrays:
+            try:
+                value = bool(channels.getGridBit(idx, step))
+            except Exception:
+                value = False
+            arrays["grid"].append(value)
+        if "vel" in arrays:
+            try:
+                value = round(
+                    float(channels.getStepParam(idx, step, midi.pVelocity, 0, 0)) / 127.0,
+                    4,
+                )
+            except Exception:
+                value = 0.8
+            arrays["vel"].append(value)
+        if "pan" in arrays:
+            try:
+                value = round(
+                    float(channels.getStepParam(idx, step, midi.pPan, 0, 0)) / 64.0 - 1.0,
+                    4,
+                )
+            except Exception:
+                value = 0.0
+            arrays["pan"].append(value)
+        if "shift" in arrays:
+            try:
+                value = round(
+                    float(channels.getStepParam(idx, step, midi.pShift, 0, 0)) / 240.0,
+                    4,
+                )
+            except Exception:
+                value = 0.0
+            arrays["shift"].append(value)
+        if "rep" in arrays:
+            try:
+                value = int(channels.getStepParam(idx, step, midi.pRepeat, 0, 0))
+            except Exception:
+                value = 0
+            arrays["rep"].append(value)
+        if "release" in arrays:
+            if p_release is None:
+                value = None
+            else:
+                try:
+                    value = round(
+                        float(channels.getStepParam(idx, step, p_release, 0, 0)) / 127.0,
+                        4,
+                    )
+                except Exception:
+                    value = 0.0
+            arrays["release"].append(value)
+        if "mod" in arrays:
+            if p_modx is None:
+                value = None
+            else:
+                try:
+                    value = round(
+                        float(channels.getStepParam(idx, step, p_modx, 0, 0)) / 255.0,
+                        4,
+                    )
+                except Exception:
+                    value = 0.0
+            arrays["mod"].append(value)
+        if "pitch" in arrays:
+            if p_pitch is None:
+                value = None
+            else:
+                try:
+                    value = int(channels.getStepParam(idx, step, p_pitch, 0, 0))
+                except Exception:
+                    value = 0
+            arrays["pitch"].append(value)
+
     try:
-        for s in range(steps):
-            try:
-                g = bool(channels.getGridBit(idx, s))
-            except Exception:
-                g = False
-            grid.append(g)
-
-            try:
-                raw_v = channels.getStepParam(idx, s, midi.pVelocity, 0, 0)
-                v = round(float(raw_v) / 127.0, 4)
-            except Exception:
-                v = 0.8
-            vel.append(v)
-
-            try:
-                raw_pan = channels.getStepParam(idx, s, midi.pPan, 0, 0)
-                pn = round(float(raw_pan) / 64.0 - 1.0, 4)
-            except Exception:
-                pn = 0.0
-            pan.append(pn)
-
-            try:
-                raw_shift = channels.getStepParam(idx, s, midi.pShift, 0, 0)
-                sh = round(float(raw_shift) / 240.0, 4)
-            except Exception:
-                sh = 0.0
-            shift.append(sh)
-
-            try:
-                rp = int(channels.getStepParam(idx, s, midi.pRepeat, 0, 0))
-            except Exception:
-                rp = 0
-            rep.append(rp)
-
-            if p_release is not None:
-                try:
-                    raw_rel = channels.getStepParam(idx, s, p_release, 0, 0)
-                    rel.append(round(float(raw_rel) / 127.0, 4))
-                except Exception:
-                    rel.append(0.0)
-            else:
-                rel.append(None)
-
-            if p_modx is not None:
-                try:
-                    raw_modx = channels.getStepParam(idx, s, p_modx, 0, 0)
-                    modx.append(round(float(raw_modx) / 255.0, 4))
-                except Exception:
-                    modx.append(0.0)
-            else:
-                modx.append(None)
-
-            if p_pitch is not None:
-                try:
-                    raw_pitch = channels.getStepParam(idx, s, p_pitch, 0, 0)
-                    pitch.append(int(raw_pitch))
-                except Exception:
-                    pitch.append(0)
-            else:
-                pitch.append(None)
-
+        actual_end = start
+        for step in range(start, end):
+            append_step(step)
+            actual_end = step + 1
+            candidate = {
+                "channel": idx,
+                "pattern": patterns.patternNumber(),
+                "total": total_steps,
+                "start": start,
+                "count": actual_end - start,
+                "next_start": (actual_end if actual_end < total_steps else None),
+                **arrays,
+                "capabilities": capabilities,
+            }
+            if not _fits_response_data(candidate):
+                for values in arrays.values():
+                    values.pop()
+                actual_end -= 1
+                break
+        if actual_end <= start:
+            raise _ClientError("requested step fields exceed response budget")
         return {
             "channel": idx,
             "pattern": patterns.patternNumber(),
-            "grid": grid,
-            "vel": vel,
-            "pan": pan,
-            "shift": shift,
-            "rep": rep,
-            "release": rel,
-            "mod": modx,
-            "pitch": pitch,
-            "capabilities": {
-                "release": bool(p_release is not None),
-                "mod": bool(p_modx is not None),
-                "pitch": bool(p_pitch is not None),
-            },
+            "total": total_steps,
+            "start": start,
+            "count": actual_end - start,
+            "next_start": (actual_end if actual_end < total_steps else None),
+            **arrays,
+            "capabilities": capabilities,
         }
     finally:
         if previous_pattern is not None and previous_pattern != patterns.patternNumber():
@@ -2031,9 +2273,13 @@ def _h_set_time_sig(p):
 
 
 def _h_channel_set_steps(p):
-    idx = int(p["channel"])
-    steps_list = p.get("steps", [])
-    target_pattern = int(p.get("pattern") or patterns.patternNumber())
+    idx = _int_param(p, "channel", min_value=0)
+    steps_list = _list_param(p, "steps")
+    if len(steps_list) > _MAX_STEP_WRITE_COUNT:
+        raise _ClientError(
+            "steps out of range: maximum " + str(_MAX_STEP_WRITE_COUNT) + " rows per request"
+        )
+    target_pattern = _int_param(p, "pattern", default=patterns.patternNumber(), min_value=1)
     if target_pattern < 1 or target_pattern > patterns.patternCount():
         raise _ClientError("pattern index out of range")
     previous_pattern = patterns.patternNumber()
@@ -2046,13 +2292,15 @@ def _h_channel_set_steps(p):
     p_pitch = getattr(midi, "pPitch", None) or getattr(midi, "pFinePitch", None)
     try:
         for s_info in steps_list:
-            step_idx = int(s_info["step"])
+            if not isinstance(s_info, dict):
+                raise _ClientError("invalid steps: expected objects")
+            step_idx = _int_param(s_info, "step", min_value=0, max_value=_STEP_TOTAL - 1)
             if "value" in s_info:
-                v = bool(s_info["value"])
+                v = _bool_param(s_info, "value")
                 channels.setGridBit(idx, step_idx, 1 if v else 0)
 
             if "velocity" in s_info and s_info["velocity"] is not None:
-                vel = max(0, min(127, int(float(s_info["velocity"]) * 127.0)))
+                vel = int(_float_param(s_info, "velocity", min_value=0.0, max_value=1.0) * 127.0)
                 try:
                     channels.setStepParameterByIndex(
                         idx, pat_idx, step_idx, midi.pVelocity, vel, True
@@ -2061,14 +2309,14 @@ def _h_channel_set_steps(p):
                     failures.append({"step": step_idx, "param": "velocity", "error": str(e)})
 
             if "pan" in s_info and s_info["pan"] is not None:
-                pan = max(0, min(128, int((float(s_info["pan"]) + 1.0) * 64.0)))
+                pan = int((_float_param(s_info, "pan", min_value=-1.0, max_value=1.0) + 1.0) * 64.0)
                 try:
                     channels.setStepParameterByIndex(idx, pat_idx, step_idx, midi.pPan, pan, True)
                 except Exception as e:
                     failures.append({"step": step_idx, "param": "pan", "error": str(e)})
 
             if "shift" in s_info and s_info["shift"] is not None:
-                shift = max(0, min(240, int(float(s_info["shift"]) * 240.0)))
+                shift = int(_float_param(s_info, "shift", min_value=0.0, max_value=1.0) * 240.0)
                 try:
                     channels.setStepParameterByIndex(
                         idx, pat_idx, step_idx, midi.pShift, shift, True
@@ -2077,7 +2325,7 @@ def _h_channel_set_steps(p):
                     failures.append({"step": step_idx, "param": "shift", "error": str(e)})
 
             if "repeat" in s_info and s_info["repeat"] is not None:
-                rep = max(0, min(15, int(s_info["repeat"])))
+                rep = _int_param(s_info, "repeat", min_value=0, max_value=15)
                 try:
                     channels.setStepParameterByIndex(
                         idx, pat_idx, step_idx, midi.pRepeat, rep, True
@@ -2089,7 +2337,9 @@ def _h_channel_set_steps(p):
                 if p_release is None:
                     failures.append({"step": step_idx, "param": "release", "error": "unsupported"})
                 else:
-                    release = max(0, min(127, int(float(s_info["release"]) * 127.0)))
+                    release = int(
+                        _float_param(s_info, "release", min_value=0.0, max_value=1.0) * 127.0
+                    )
                     try:
                         channels.setStepParameterByIndex(
                             idx, pat_idx, step_idx, p_release, release, True
@@ -2101,7 +2351,7 @@ def _h_channel_set_steps(p):
                 if p_modx is None:
                     failures.append({"step": step_idx, "param": "mod", "error": "unsupported"})
                 else:
-                    mod = max(0, min(255, int(float(s_info["mod"]) * 255.0)))
+                    mod = int(_float_param(s_info, "mod", min_value=0.0, max_value=1.0) * 255.0)
                     try:
                         channels.setStepParameterByIndex(idx, pat_idx, step_idx, p_modx, mod, True)
                     except Exception as e:
@@ -2111,7 +2361,7 @@ def _h_channel_set_steps(p):
                 if p_pitch is None:
                     failures.append({"step": step_idx, "param": "pitch", "error": "unsupported"})
                 else:
-                    pitch = int(s_info["pitch"])
+                    pitch = _int_param(s_info, "pitch")
                     try:
                         channels.setStepParameterByIndex(
                             idx, pat_idx, step_idx, p_pitch, pitch, True
@@ -2121,9 +2371,43 @@ def _h_channel_set_steps(p):
 
         with contextlib.suppress(Exception):
             channels.updateGraphEditor()
-        out = _h_channel_get_steps({"channel": idx, "pattern": target_pattern})
-        if failures:
-            out["step_param_failures"] = failures
+        out = {
+            "channel": idx,
+            "pattern": target_pattern,
+            "changed": len(steps_list),
+            "failures": failures,
+        }
+        if _bool_param(p, "readback", default=False):
+            read_start = _int_param(
+                p,
+                "readback_start",
+                default=min(
+                    (int(row.get("step", 0)) for row in steps_list),
+                    default=0,
+                ),
+                min_value=0,
+                max_value=_STEP_TOTAL,
+            )
+            read_count = _int_param(
+                p,
+                "readback_count",
+                default=min(_MAX_STEP_PAGE_COUNT, max(1, len(steps_list))),
+                min_value=1,
+                max_value=_MAX_STEP_PAGE_COUNT,
+            )
+            readback = _h_channel_get_steps(
+                {
+                    "channel": idx,
+                    "pattern": target_pattern,
+                    "start": read_start,
+                    "count": read_count,
+                    "include": p.get("readback_include") or ["grid", "vel", "pan", "shift", "rep"],
+                }
+            )
+            out["readback"] = readback
+            if not _fits_response_data(out):
+                out.pop("readback")
+                out["readback_omitted"] = "response budget exceeded"
         return out
     finally:
         if previous_pattern != patterns.patternNumber():
@@ -2211,12 +2495,18 @@ _HANDLERS = {
     "mixer_set_slot_enabled": _h_mixer_set_slot_enabled,
     "mixer_get_eq": _h_mixer_get_eq,
     "mixer_set_eq": _h_mixer_set_eq,
-    "mixer_probe_eq_type": _h_mixer_probe_eq_type,
-    "mixer_probe_eq_gain": _h_mixer_probe_eq_gain,
-    "mixer_probe_eq_freq": _h_mixer_probe_eq_freq,
-    "mixer_probe_eq_q": _h_mixer_probe_eq_q,
     "mixer_format_event_value": _h_mixer_format_event_value,
     "get_time_sig": _h_get_time_sig,
     "set_time_sig": _h_set_time_sig,
     "channel_set_steps": _h_channel_set_steps,
 }
+
+if _ENABLE_DEV_PROBES:
+    _HANDLERS.update(
+        {
+            "mixer_probe_eq_type": _h_mixer_probe_eq_type,
+            "mixer_probe_eq_gain": _h_mixer_probe_eq_gain,
+            "mixer_probe_eq_freq": _h_mixer_probe_eq_freq,
+            "mixer_probe_eq_q": _h_mixer_probe_eq_q,
+        }
+    )

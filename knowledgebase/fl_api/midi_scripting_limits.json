@@ -1,0 +1,52 @@
+{
+  "date": "2026-06-18",
+  "agent_author": "Codex",
+  "topic": "MIDI SysEx wire-size governance for the FL controller bridge",
+  "affected_file_api": [
+    "src/fls_pilot/protocol.py",
+    "src/fls_pilot/connection.py",
+    "fl_controller/FLStudioPilot/device_FLStudioPilot.py",
+    "device.midiOutSysex"
+  ],
+  "context": "The bridge transports base64-encoded JSON without transport-level chunking or reassembly.",
+  "observation": "Approximately 1000 final wire bytes are reported reliable, while messages around 2000 bytes were previously observed to disappear.",
+  "tested_values": {
+    "full_64_step_response_wire_bytes_approx": 3071,
+    "full_126_float_peak_response_wire_bytes_approx": 1575,
+    "full_64_step_write_wire_bytes_approx": 9579,
+    "response_too_large_wire_bytes_approx": 115
+  },
+  "result": "Protocol v3 enforces a 1000-byte final SysEx wire limit, rejects oversized host requests, replaces oversized controller responses with a bounded error, and bounds expensive step, peak, and plugin parameter operations.",
+  "confidence_level": {
+    "implementation": "implementation_verified",
+    "physical_transport_threshold": "user_reported"
+  },
+  "source_method": "User transport observations, source inspection, deterministic JSON/base64 wire-size tests, and focused unit tests.",
+  "valid_ranges": {
+    "max_sysex_wire_bytes_including_f0_f7": 1000,
+    "max_requested_step_page_count": 16,
+    "max_distinct_step_indices_per_write_window": 5,
+    "max_peak_page_count": 32,
+    "max_plugin_parameter_scan_count": 32
+  },
+  "example": {
+    "command": "channel_get_steps",
+    "params": {
+      "channel": 0,
+      "start": 0,
+      "count": 16,
+      "include": [
+        "grid",
+        "vel"
+      ]
+    }
+  },
+  "known_pitfalls": [
+    "JSON size is not wire size because base64, protocol header, and F0/F7 framing add overhead.",
+    "A response-only guard does not protect oversized writes or rollback requests.",
+    "Selected step fields can cause a page to return fewer rows than requested."
+  ],
+  "reproduction_steps": "Serialize compact JSON, base64-encode it, add the 13-byte protocol header and F0/F7, then compare with MAX_SYSEX_WIRE_SAFE.",
+  "open_questions": "Re-measure physical-loopback reliability on each supported OS and MIDI backend before increasing the limit.",
+  "next_recommended_action": "Run rollback-safe live probes with controller build channels-v40 and retain the 1000-byte limit unless repeated measurements justify a lower value."
+}

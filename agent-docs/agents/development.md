@@ -19,7 +19,7 @@ required by the change.
 | Issues, PRs, roadmap, releases, CI, security, hotfixes, or backports | `agent-docs/agents/github-playbook.md` and `agent-docs/project/ROADMAP.github.md` |
 | Live FL verification | `agent-docs/agents/runtime-usage.md` |
 
-Read `agent-docs/machine/fls_pilot_architecture.json` only when the Architecture
+Read `agent-docs/machine/architecture-governance.snapshot.json` only when the Architecture
 Governance Contract requires it. Do not load it for routine edits.
 
 If a binding contract conflicts with the requested implementation, stop and
@@ -45,7 +45,7 @@ For non-trivial implementation work, state a short plan before editing.
 Before editing an architecture-governed surface:
 
 1. Read `agent-docs/contracts/architecture-governance.md`.
-2. Consult `agent-docs/machine/fls_pilot_architecture.json`.
+2. Consult `agent-docs/machine/architecture-governance.snapshot.json`.
 3. Change source, docs, and tests first.
 4. Update the snapshot, or explicitly explain why it remains unchanged.
 5. Report an Architecture Diff.

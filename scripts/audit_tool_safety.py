@@ -63,7 +63,6 @@ WRITE_CONSTANTS = {
     "CMD_ARRANGE_NEW_PATTERN",
     "CMD_ARRANGE_CLONE_PATTERN",
     "CMD_ARRANGE_ADD_MARKER",
-    "CMD_API_PROBE",  # has marker_add/undo modes; treat user-facing use as review.
 }
 
 SAFETY_CLASS_TO_CONTRACT = {
@@ -104,6 +103,7 @@ READ_CONSTANTS = {
     "CMD_CHANNEL_ROUTING_SUMMARY",
     "CMD_CHANNEL_SELECTED",
     "CMD_MIXER_GET_PEAKS",
+    "CMD_API_PROBE",
 }
 
 SERVER_STATE_TOOLS = {
@@ -113,6 +113,7 @@ SERVER_STATE_TOOLS = {
     "fl_rollback_change",
 }
 EXTERNAL_WRITE_TOOLS = {"fl_export_midi", "fl_export_change_log"}
+APPROVED_SAFE_WRITE_HELPERS = {"safe_set_steps"}
 
 
 @dataclass
@@ -252,6 +253,7 @@ def _function_effects(fn: ast.FunctionDef) -> FunctionEffects:
         name.endswith(
             ("safety.safe_write", "safety.safe_write_group", "safety.safe_piano_roll_write")
         )
+        or name in APPROVED_SAFE_WRITE_HELPERS
         for name in calls
     )
     has_apply_notes = any(name.endswith("apply_notes") for name in calls)

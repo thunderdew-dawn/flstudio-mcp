@@ -6,6 +6,10 @@ REC_Mixer_EQ_Type write variants for one mixer track/band, restores each
 attempt immediately, and reports whether any variant read back as the target
 type.
 
+Stable controller builds disable mutating dev probes. Set
+``_ENABLE_DEV_PROBES = True`` in a dedicated development controller copy
+before running this script.
+
 Default target is mixer track 8 / band 0 / high-pass type value 3, matching the
 Drums high-pass investigation.
 """
@@ -25,7 +29,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from fls_pilot import protocol, safety  # noqa: E402
 from fls_pilot.connection import FLCommandFailed, get_bridge  # noqa: E402
 
-EXPECTED_BUILD = "channels-v39"
+EXPECTED_BUILD = "channels-v40"
 HIGH_PASS_TYPE = 3
 
 

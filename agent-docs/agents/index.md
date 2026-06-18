@@ -37,7 +37,7 @@ safety-posture, protocol/controller, entrypoint, capability, or trust-boundary
 work, also read:
 
 - [Architecture Governance](../contracts/architecture-governance.md)
-- `agent-docs/machine/fls_pilot_architecture.json`
+- `agent-docs/machine/architecture-governance.snapshot.json`
 
 ### GitHub Operations
 

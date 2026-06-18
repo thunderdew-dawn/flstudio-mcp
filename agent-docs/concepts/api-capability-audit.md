@@ -579,6 +579,9 @@ Live evidence and false-positive probes:
   `scripts/probe_native_eq_type_live.py`). The probe tries documented
   REC_Mixer_EQ_Type value/flag variants with immediate rollback and is not
   exposed as a user-facing MCP tool.
+- 2026-06-18, controller `channels-v40`: mutating Native EQ REC-event probes
+  remain in source for dedicated development builds but are excluded from the
+  stable handler registry unless `_ENABLE_DEV_PROBES` is explicitly enabled.
 - 2026-06-01, controller `channels-v38`: Native EQ type mapping probe found no
   working high-pass type write on mixer track 8 `Drums`, band 0. Raw integer,
   update-only, MIDI-scaled, and candidate type values all read back as

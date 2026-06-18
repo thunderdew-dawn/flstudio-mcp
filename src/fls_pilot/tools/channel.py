@@ -16,7 +16,15 @@ from fastmcp import FastMCP
 from pydantic import Field
 
 from .. import operations, protocol, safety
-from ..connection import FLCommandFailed, FLNotRunning, FLTimeout, fetch_all_pages, get_bridge
+from ..connection import (
+    FLCommandFailed,
+    FLNotRunning,
+    FLTimeout,
+    fetch_all_pages,
+    fetch_step_pages,
+    get_bridge,
+)
+from ..step_sequencer import safe_set_steps
 
 
 def register(mcp: FastMCP) -> None:
@@ -51,7 +59,8 @@ def register(mcp: FastMCP) -> None:
                     "  list: {} or {start: int}\n"
                     "  get: {channel: int}\n"
                     "  get_selected: {}\n"
-                    "  get_steps: {channel: int, steps: int (1-64), pattern: int|null}\n"
+                    "  get_steps: {channel: int, steps?: int (1-64), pattern?: int|null, "
+                    "start?: int, count?: int (1-16), include?: list[str]}\n"
                     "  classify: {}\n"
                     "  select: {channel: int}\n"
                     "  set_color: {channel: int, color: int} or {channel, r, g, b}\n"
@@ -111,6 +120,19 @@ def register(mcp: FastMCP) -> None:
                 except operations.OperationValidationError as exc:
                     raise ValueError(str(exc)) from exc
 
+            if action == "set_steps":
+                return safe_set_steps(
+                    bridge,
+                    tool="channel_set_steps",
+                    channel=int(prepared.command.params["channel"]),
+                    pattern=int(prepared.command.params["pattern"]),
+                    steps=list(prepared.command.params["steps"]),
+                    rollback_unit=(
+                        f"step_batch_ch{prepared.command.params['channel']}_"
+                        f"pat{prepared.command.params['pattern']}"
+                    ),
+                )
+
             return safety.safe_write(
                 bridge,
                 **prepared.safe_write_kwargs(tool=f"channel_{prepared.action}"),
@@ -119,6 +141,22 @@ def register(mcp: FastMCP) -> None:
         if prepared.safety_class == "read-only":
             if action == "list":
                 return _bridge_call_paginated(bridge, prepared.command.command, "channels")
+            if action == "get_steps":
+                step_params = prepared.command.params
+                requested_steps = int(step_params.get("steps", 16))
+                start = int(step_params.get("start", 0))
+                read_count = step_params.get("count")
+                if read_count is None:
+                    read_count = requested_steps - start
+                return fetch_step_pages(
+                    bridge,
+                    int(step_params["channel"]),
+                    pattern=step_params.get("pattern"),
+                    steps=requested_steps,
+                    start=start,
+                    read_count=int(read_count),
+                    include=step_params.get("include"),
+                )
             return _bridge_call(bridge, prepared.command.command, prepared.command.params)
 
         raise ValueError(f"unsupported channel safety class: {prepared.safety_class}")

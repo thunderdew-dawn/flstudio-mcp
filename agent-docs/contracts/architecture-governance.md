@@ -5,7 +5,7 @@ protocol/controller, capability, entrypoint, and trust-boundary changes.
 
 ## Governed Snapshot
 
-`agent-docs/machine/fls_pilot_architecture.json` is the governed architecture
+`agent-docs/machine/architecture-governance.snapshot.json` is the governed architecture
 snapshot. It is a compact machine-readable map, not a replacement for source,
 tests, or detailed concept documentation.
 
@@ -35,7 +35,7 @@ For a governed change:
    boundary.
 2. Change source, documentation, and tests first.
 3. Run the smallest relevant checks.
-4. Update `agent-docs/machine/fls_pilot_architecture.json`, or explicitly state
+4. Update `agent-docs/machine/architecture-governance.snapshot.json`, or explicitly state
    why the governed facts remain unchanged.
 5. Include an Architecture Diff in the handoff or PR:
    - components added, removed, or re-owned;

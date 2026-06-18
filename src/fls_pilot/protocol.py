@@ -19,6 +19,9 @@ Wire format (bytes between SysEx F0 and F7):
 
 The framing F0 ... F7 is added by the MIDI library (mido) on send and
 stripped on receive -- protocol-side helpers work on the payload bytes only.
+
+Protocol v3 governs the final message at 1000 bytes including F0/F7. Large
+operations must paginate or split before reaching the MIDI transport.
 """
 
 from __future__ import annotations
@@ -32,7 +35,12 @@ import string
 
 # Bump when the wire format changes incompatibly. Server and FL refuse to
 # talk to a mismatched peer.
-PROTOCOL_VERSION = 2
+PROTOCOL_VERSION = 3
+
+# Empirical MIDI transport limit: approximately 1000 wire bytes are reliable,
+# while responses around 2000 bytes have been observed to disappear. This
+# includes the F0/F7 framing added by the MIDI transport.
+MAX_SYSEX_WIRE_SAFE = 1000
 
 # How long the server waits for a heartbeat before declaring FL not running.
 HEARTBEAT_STALE_SECONDS = 3.0
@@ -140,6 +148,7 @@ CMD_MIXER_SET_ROUTE = "mixer_set_route"  # setRouteTo + afterRoutingChanged
 
 # Level awareness (read) -- meter peaks, meaningful only during playback
 CMD_MIXER_GET_PEAKS = "mixer_get_peaks"  # getTrackPeaks L/R/max
+CMD_MIXER_GET_ALL_PEAKS = "mixer_get_all_peaks"  # bounded/paginated max peaks
 
 # Track / channel color (RGB int 0xRRGGBB). Set accepts r/g/b 0-255 (fresh) or
 # an explicit "color" int (rollback re-sends the exact int FL gave us).
@@ -184,7 +193,10 @@ CMD_MIXER_SET_TRACK_SLOTS = "mixer_set_track_slots"
 CMD_MIXER_SET_SLOT_ENABLED = "mixer_set_slot_enabled"
 CMD_MIXER_GET_EQ = "mixer_get_eq"
 CMD_MIXER_SET_EQ = "mixer_set_eq"
-CMD_MIXER_PROBE_EQ_TYPE = "mixer_probe_eq_type"
+CMD_MIXER_PROBE_EQ_TYPE = "mixer_probe_eq_type"  # dev-only; disabled in stable controller
+CMD_MIXER_PROBE_EQ_GAIN = "mixer_probe_eq_gain"  # dev-only; disabled in stable controller
+CMD_MIXER_PROBE_EQ_FREQ = "mixer_probe_eq_freq"  # dev-only; disabled in stable controller
+CMD_MIXER_PROBE_EQ_Q = "mixer_probe_eq_q"  # dev-only; disabled in stable controller
 CMD_GET_TIME_SIG = "get_time_sig"
 CMD_SET_TIME_SIG = "set_time_sig"
 
@@ -208,6 +220,15 @@ REQUEST_ID_ALPHABET = string.ascii_lowercase + string.digits
 
 # Total header length: 1 (manuf) + 3 (magic) + 1 (dir) + REQUEST_ID_LEN.
 _HEADER_LEN = 1 + 3 + 1 + REQUEST_ID_LEN
+
+
+class SysExWireSizeError(ValueError):
+    """Raised when an encoded message exceeds the governed MIDI wire limit."""
+
+    def __init__(self, wire_size: int, limit: int = MAX_SYSEX_WIRE_SAFE) -> None:
+        self.wire_size = int(wire_size)
+        self.limit = int(limit)
+        super().__init__(f"SysEx message is {self.wire_size} bytes; safe limit is {self.limit}")
 
 
 def new_request_id() -> str:
@@ -235,6 +256,26 @@ def encode_message(direction: int, request_id: str, payload: dict) -> bytes:
     out.extend(rid)
     out.extend(body_b64)
     return bytes(out)
+
+
+def sysex_wire_size(encoded_payload: bytes | bytearray) -> int:
+    """Return final wire bytes including F0/F7 framing."""
+
+    return len(encoded_payload) + 2
+
+
+def payload_wire_size(direction: int, request_id: str, payload: dict) -> int:
+    """Return final wire size for a protocol payload without sending it."""
+
+    return sysex_wire_size(encode_message(direction, request_id, payload))
+
+
+def ensure_wire_safe(encoded_payload: bytes | bytearray) -> None:
+    """Reject a message that exceeds the empirically safe MIDI wire size."""
+
+    size = sysex_wire_size(encoded_payload)
+    if size > MAX_SYSEX_WIRE_SAFE:
+        raise SysExWireSizeError(size)
 
 
 def decode_message(data) -> tuple[int, str, dict] | None:

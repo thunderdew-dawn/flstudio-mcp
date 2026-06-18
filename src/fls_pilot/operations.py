@@ -514,7 +514,7 @@ def _validate_step(params: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def _validate_channel_steps_read(params: Mapping[str, Any]) -> dict[str, Any]:
-    _reject_unknown(params, {"channel", "steps", "pattern"})
+    _reject_unknown(params, {"channel", "steps", "pattern", "start", "count", "include"})
     out = {"channel": _non_bool_int(params, "channel")}
     if "steps" in params:
         steps = _non_bool_int(params, "steps", minimum=1)
@@ -523,6 +523,38 @@ def _validate_channel_steps_read(params: Mapping[str, Any]) -> dict[str, Any]:
         out["steps"] = steps
     if "pattern" in params and params["pattern"] is not None:
         out["pattern"] = _non_bool_int(params, "pattern", minimum=1)
+    if "start" in params:
+        start = _non_bool_int(params, "start")
+        if start > 63:
+            raise OperationValidationError("start must be 0..63")
+        out["start"] = start
+    if "count" in params:
+        count = _non_bool_int(params, "count", minimum=1)
+        if count > 16:
+            raise OperationValidationError("count must be 1..16")
+        out["count"] = count
+    if "include" in params and params["include"] is not None:
+        include = params["include"]
+        if not isinstance(include, list) or not include or not all(
+            isinstance(item, str) for item in include
+        ):
+            raise OperationValidationError("include must be a non-empty list of field names")
+        allowed = {
+            "grid",
+            "vel",
+            "velocity",
+            "pan",
+            "shift",
+            "rep",
+            "repeat",
+            "release",
+            "mod",
+            "pitch",
+        }
+        unknown = [item for item in include if item not in allowed]
+        if unknown:
+            raise OperationValidationError("unknown step fields: " + ", ".join(unknown))
+        out["include"] = list(include)
     return out
 
 
@@ -880,24 +912,25 @@ def _restore_channel_steps(
     params: Mapping[str, Any], before: Mapping[str, Any]
 ) -> OperationCommand:
     steps_list = []
+    start = int(before.get("start", 0))
     rel = before.get("release", [])
     mod = before.get("mod", [])
     pitch = before.get("pitch", [])
-    for step in range(len(before.get("grid", []))):
+    for offset in range(len(before.get("grid", []))):
         row = {
-            "step": step,
-            "value": before["grid"][step],
-            "velocity": before["vel"][step],
-            "pan": before["pan"][step],
-            "shift": before["shift"][step],
-            "repeat": before["rep"][step],
+            "step": start + offset,
+            "value": before["grid"][offset],
+            "velocity": before["vel"][offset],
+            "pan": before["pan"][offset],
+            "shift": before["shift"][offset],
+            "repeat": before["rep"][offset],
         }
-        if step < len(rel) and rel[step] is not None:
-            row["release"] = rel[step]
-        if step < len(mod) and mod[step] is not None:
-            row["mod"] = mod[step]
-        if step < len(pitch) and pitch[step] is not None:
-            row["pitch"] = pitch[step]
+        if offset < len(rel) and rel[offset] is not None:
+            row["release"] = rel[offset]
+        if offset < len(mod) and mod[offset] is not None:
+            row["mod"] = mod[offset]
+        if offset < len(pitch) and pitch[offset] is not None:
+            row["pitch"] = pitch[offset]
         steps_list.append(row)
     return _cmd(
         protocol.CMD_CHANNEL_SET_STEPS,
@@ -1080,6 +1113,7 @@ def _persistent_write_spec(
     snapshot_scope_builder: Callable[[Mapping[str, Any]], str],
     restore_builder: Callable[[Mapping[str, Any], Mapping[str, Any]], OperationCommand],
     verify_builder: Callable[[Mapping[str, Any]], tuple[str, Any] | None] | None = None,
+    batch_eligible: bool = True,
 ) -> OperationSpec:
     return OperationSpec(
         domain=domain,
@@ -1091,8 +1125,8 @@ def _persistent_write_spec(
         restore_builder=restore_builder,
         readback_scope_builder=snapshot_scope_builder,
         verify_builder=verify_builder,
-        batch_eligible=True,
-        batch_category="persistent_write",
+        batch_eligible=batch_eligible,
+        batch_category="persistent_write" if batch_eligible else "excluded",
     )
 
 
@@ -1178,6 +1212,7 @@ _DEFAULT_SPECS = (
         command=protocol.CMD_CHANNEL_SET_STEPS,
         snapshot_scope_builder=_channel_steps_scope,
         restore_builder=_restore_channel_steps,
+        batch_eligible=False,
     ),
     _persistent_write_spec(
         domain="channel",

@@ -63,6 +63,13 @@ class FLPortMissing(FLBridgeError):
     """One of the virtual MIDI ports could not be opened."""
 
 
+class FLPayloadTooLarge(FLCommandFailed):
+    """A request exceeded the governed MIDI SysEx wire limit."""
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message, code="request_too_large")
+
+
 # ---------------------------------------------------------------------------
 # Pending-request slot
 # ---------------------------------------------------------------------------
@@ -226,6 +233,13 @@ class FLBridge:
         request_id = protocol.new_request_id()
         request = protocol.make_request(command, params)
         encoded = protocol.encode_message(DIR_REQUEST, request_id, request)
+        try:
+            protocol.ensure_wire_safe(encoded)
+        except protocol.SysExWireSizeError as exc:
+            raise FLPayloadTooLarge(
+                f"Request {command!r} exceeds the {exc.limit}-byte SysEx wire limit "
+                f"({exc.wire_size} bytes). Paginate or split the operation."
+            ) from exc
 
         slot = _Slot()
         with self._lock:
@@ -573,8 +587,8 @@ def fetch_all_pages(
 ):
     """Drive a payload-budget-paginated list command to completion.
 
-    SysEx payloads above ~1.5 KB are dropped by the MIDI layer, so list
-    commands on the FL side return one bounded page at a time:
+    Final SysEx messages above the governed 1000-byte limit are rejected, so
+    list commands on the FL side return one bounded page at a time:
 
         {"total": int, "start": int, "next_start": int|None, <list_key>: [...]}
 
@@ -601,3 +615,85 @@ def fetch_all_pages(
             break
         start = int(nxt)
     return {"total": total, list_key: items}
+
+
+def fetch_step_pages(
+    bridge,
+    channel: int,
+    *,
+    pattern: int | None = None,
+    steps: int = 64,
+    start: int = 0,
+    read_count: int | None = None,
+    include: list[str] | None = None,
+    page_count: int = 16,
+):
+    """Fetch and merge bounded channel-step pages.
+
+    Step responses contain parallel arrays rather than a list of row objects,
+    so the generic ``fetch_all_pages`` helper cannot merge them safely.
+    """
+
+    requested = max(1, min(int(steps), 64))
+    first = max(0, min(int(start), requested))
+    wanted = requested - first if read_count is None else max(0, int(read_count))
+    wanted = min(wanted, requested - first)
+    requested_fields = list(include) if include is not None else [
+        "grid",
+        "vel",
+        "pan",
+        "shift",
+        "rep",
+        "release",
+        "mod",
+        "pitch",
+    ]
+    aliases = {"velocity": "vel", "repeat": "rep"}
+    fields = []
+    for field in requested_fields:
+        normalized = aliases.get(field, field)
+        if normalized not in fields:
+            fields.append(normalized)
+    base: dict[str, Any] = {
+        "channel": int(channel),
+        "steps": requested,
+        "count": max(1, min(int(page_count), 16)),
+        "include": fields,
+    }
+    if pattern is not None:
+        base["pattern"] = int(pattern)
+
+    merged: dict[str, Any] = {
+        "channel": int(channel),
+        "total": requested,
+        "start": first,
+        "count": 0,
+        "next_start": None,
+    }
+    for field in fields:
+        merged[field] = []
+
+    cursor = first
+    for _ in range(64):
+        remaining = wanted - int(merged["count"])
+        if remaining <= 0:
+            break
+        page = bridge.call(
+            protocol.CMD_CHANNEL_GET_STEPS,
+            {**base, "start": cursor, "count": min(base["count"], remaining)},
+        )
+        if "pattern" in page:
+            merged["pattern"] = page["pattern"]
+        if "capabilities" in page:
+            merged["capabilities"] = page["capabilities"]
+        for field in fields:
+            merged[field].extend(page.get(field) or [])
+        merged["count"] = max((len(merged.get(field) or []) for field in fields), default=0)
+        nxt = page.get("next_start")
+        if merged["count"] >= wanted:
+            merged["next_start"] = int(nxt) if nxt is not None else None
+            break
+        if nxt is None or int(nxt) <= cursor:
+            break
+        cursor = int(nxt)
+    return merged

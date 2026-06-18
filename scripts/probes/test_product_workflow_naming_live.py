@@ -143,7 +143,7 @@ def main() -> int:
     build = ping.get("build")
     fl_version = ping.get("fl_version")
     print(f"FL: {fl_version} | controller={build}")
-    if build != "channels-v39":
+    if build != "channels-v40":
         results["error"] = f"unexpected controller build marker: {build!r}"
         print(json.dumps(results, indent=2, sort_keys=True))
         return 2
