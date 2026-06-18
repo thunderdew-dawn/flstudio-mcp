@@ -3,11 +3,9 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 from typing import Any
 
 from .. import protocol
-from ..analysis.audio_features import FeatureExtractor
 from ..analysis.schema import (
     AnalysisReport,
     Coverage,
@@ -18,7 +16,6 @@ from ..analysis.schema import (
 )
 from ..analysis.scoring import confidence_from_coverage, risk_from_severities
 from ..music import preset_library
-from .audio_worker import sha256_file
 from .core import RuntimeCore
 
 _STATIC_TTL_SECONDS = 120
@@ -518,7 +515,7 @@ def _run_audio_evidence(
     bridge: Any | None,
     inputs: dict[str, Any],
 ) -> AnalysisReport:
-    del runtime, bridge
+    del bridge
     evidence_kind = str(inputs.get("evidence_kind") or "rendered_master")
     workflow_links = tuple(
         str(value)
@@ -526,34 +523,43 @@ def _run_audio_evidence(
         if str(value).strip()
     )
     return build_audio_evidence_report(
-        str(inputs.get("path") or ""),
+        runtime,
+        str(inputs.get("artifact_id") or ""),
         evidence_kind=evidence_kind,
+        stem_role=str(inputs.get("stem_role") or "") or None,
         workflow_links=workflow_links,
+        confirmed_by_user=bool(inputs.get("confirmed_by_user", False)),
     )
 
 
 def build_audio_evidence_report(
-    path_value: str,
+    runtime: RuntimeCore,
+    artifact_id: str,
     *,
     evidence_kind: str = "rendered_master",
+    stem_role: str | None = None,
     workflow_links: tuple[str, ...] = (),
+    confirmed_by_user: bool = False,
 ) -> AnalysisReport:
-    """Build file-hash-scoped rendered-audio evidence without touching FL Studio."""
-    path = Path(path_value).expanduser()
+    """Build project-scoped rendered-audio evidence without touching FL Studio."""
     if evidence_kind not in {"rendered_master", "stem", "candidate"}:
         raise ValueError("audio_evidence evidence_kind must be rendered_master, stem, or candidate")
-    if not path.is_file():
-        raise ValueError(f"audio evidence file not found: {path}")
-
-    digest = sha256_file(path)
-    features, unavailable_metrics = _analyze_audio_file(path)
-    duration = _as_float(features.get("duration_sec"))
+    observation, link = runtime.attach_audio_artifact(
+        artifact_id,
+        evidence_kind=evidence_kind,
+        stem_role=stem_role,
+        workflow_targets=workflow_links,
+        confirmed_by_user=confirmed_by_user,
+    )
+    manifest = runtime.audio_artifacts.read_manifest(artifact_id)
+    features = runtime.audio_artifacts.read_features(artifact_id)
+    summary = dict(features.get("summary") or {})
+    duration = _as_float(summary.get("duration_seconds"))
     if evidence_kind in {"stem", "candidate"} and duration > _SHORT_AUDIO_LIMIT_SECONDS:
         raise ValueError(
             f"{evidence_kind} evidence must be {_SHORT_AUDIO_LIMIT_SECONDS:.0f} seconds or shorter"
         )
     now = _now()
-    observation_id = f"audio:{digest}"
     confidence = 95 if evidence_kind == "rendered_master" else 90
     return AnalysisReport(
         workflow="audio_evidence",
@@ -561,14 +567,20 @@ def build_audio_evidence_report(
         analysis_mode="rendered_audio",
         evidence_mode=evidence_kind,
         created_at=now.isoformat(),
-        project_fingerprint=f"file:{digest}",
-        snapshot_id=f"file:{digest}",
+        runtime_session_id=runtime.project_context.runtime_session_id,
+        project_scope_id=runtime.project_context.project_scope_id,
+        project_fingerprint=runtime.project_context.project_fingerprint,
+        snapshot_id=runtime.project_context.snapshot_id,
+        snapshot_revision=runtime.project_context.snapshot_revision,
         freshness=Freshness(
             status="fresh",
             created_at=now.isoformat(),
-            invalidates_on=("file_hash_change",),
-            source_observation_ids=(observation_id,),
-            details="Valid while the source file hash is unchanged.",
+            invalidates_on=("project_identity_change", "audio_source_hash_changed"),
+            source_observation_ids=(observation.observation_id,),
+            details=(
+                "Valid while the immutable artifact and project evidence link "
+                "remain compatible."
+            ),
         ),
         coverage=Coverage(required=1, available=1),
         prerequisites=(Prerequisite("rendered_audio_features", "ok"),),
@@ -581,32 +593,31 @@ def build_audio_evidence_report(
                 "Rendered-audio features are available",
                 "info",
                 evidence={
-                    "duration_sec": duration,
-                    "rms_db": features.get("rms_db"),
-                    "peak_db": features.get("peak_db"),
-                    "bands_pct": features.get("bands_pct"),
-                    "tempo_bpm": features.get("tempo_bpm"),
-                    "key": features.get("key"),
+                    "artifact_id": artifact_id,
+                    "duration_seconds": duration,
+                    "rms_dbfs": summary.get("rms_dbfs"),
+                    "peak_dbfs": summary.get("peak_dbfs"),
+                    "integrated_lufs": summary.get("integrated_lufs"),
+                    "band_energy": summary.get("band_energy"),
+                    "low_end_energy_ratio": summary.get("low_end_energy_ratio"),
+                    "stereo_correlation_proxy": summary.get(
+                        "stereo_correlation_proxy"
+                    ),
+                    "low_band_stereo_proxy": summary.get("low_band_stereo_proxy"),
                 },
                 confidence=confidence,
                 evidence_mode="rendered_audio",
-                source_observation_ids=(observation_id,),
+                source_observation_ids=(observation.observation_id,),
             ),
         ),
-        assumptions=(
-            "Tempo and key are estimates and may be ambiguous.",
-        ),
+        assumptions=(),
         limitations=(
             "No FL Studio render was triggered.",
-            "True loudness, phase correlation, mono cancellation, and stem "
-            "overlap are not claimed.",
-            *(
-                (f"Unavailable metrics: {', '.join(unavailable_metrics)}.",)
-                if unavailable_metrics
-                else ()
-            ),
+            "Stereo and low-band stereo values are proxies, not "
+            "mono-cancellation proof.",
+            "Tempo, key, onsets, and melody remain separate optional MIR features.",
         ),
-        source_observations=(observation_id,),
+        source_observations=(observation.observation_id,),
         next_actions=tuple(
             {
                 "type": "evidence_upgrade",
@@ -617,16 +628,16 @@ def build_audio_evidence_report(
         ),
         safety={"read_only": True, "project_changes": False, "external_write": False},
         metadata={
-            "file": {
-                "path": str(path),
-                "sha256": digest,
-                "size_bytes": path.stat().st_size,
-                "duration_sec": duration,
+            "artifact": {
+                "artifact_id": artifact_id,
+                "source_basename": manifest.source_basename,
+                "source_sha256_prefix": manifest.source_sha256[:12],
+                "extractor_version": manifest.extractor_version,
             },
-            "features": features,
+            "evidence_link": link.to_dict(),
+            "feature_summary": summary,
             "workflow_links": list(workflow_links),
             "level": "L2" if evidence_kind == "rendered_master" else "L3",
-            "unavailable_metrics": unavailable_metrics,
         },
     )
 
@@ -769,27 +780,6 @@ def _freshness(now: datetime, source_ids: tuple[str, ...]) -> Freshness:
         valid_until=(now + timedelta(seconds=_STATIC_TTL_SECONDS)).isoformat(),
         source_observation_ids=source_ids,
     )
-
-
-def _analyze_audio_file(path: Path) -> tuple[dict[str, Any], list[str]]:
-    extracted = FeatureExtractor().extract(path)
-    summary = extracted["summary"]
-    bands = summary["band_energy"]
-    features = {
-        "path": str(path),
-        "duration_sec": summary["duration_seconds"],
-        "rms_db": summary["rms_dbfs"],
-        "peak_db": summary["peak_dbfs"],
-        "tempo_bpm": None,
-        "key": None,
-        "bands_pct": {
-            "low": round(100 * (bands["sub"] + bands["low"]), 1),
-            "mid": round(100 * bands["mid"], 1),
-            "high": round(100 * bands["high"], 1),
-        },
-        "note": "Tempo and key are separate optional MIR features.",
-    }
-    return features, ["tempo", "key"]
 
 
 def _is_default_name(row: dict[str, Any], prefix: str, index_key: str) -> bool:

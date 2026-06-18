@@ -30,6 +30,11 @@ from .contracts import (
     IncompatibleReportVersionError,
     require_analysis_report_version,
 )
+from .evidence_links import (
+    EVIDENCE_LINK_CONTRACT_VERSION,
+    EvidenceLink,
+    EvidenceLinkStore,
+)
 from .fl_reads import StaticReadSpec, project_fingerprint
 from .observations import Observation, ObservationStore
 from .reports import (
@@ -78,6 +83,9 @@ __all__ = [
     "CanonicalEntity",
     "Coverage",
     "EntityRef",
+    "EVIDENCE_LINK_CONTRACT_VERSION",
+    "EvidenceLink",
+    "EvidenceLinkStore",
     "Finding",
     "FEATURE_EXTRACTOR_VERSION",
     "FeatureExtractor",

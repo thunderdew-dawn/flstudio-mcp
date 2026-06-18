@@ -74,6 +74,7 @@ _bridge: FLBridge | None = None
 _bridge_lock = threading.Lock()
 _audio_artifact_store = AudioArtifactStore()
 _runtime = RuntimeCore(
+    artifact_store=_audio_artifact_store,
     job_result_validator=_audio_artifact_store.validate_result_ref,
 )
 _audio_worker = AudioAnalysisWorker(_audio_artifact_store)

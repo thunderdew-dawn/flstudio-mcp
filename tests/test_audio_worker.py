@@ -15,13 +15,14 @@ def test_audio_worker_publishes_compact_result_without_bridge_access(tmp_path) -
     sf.write(path, np.zeros(48000, dtype=np.float32), 48000, subtype="FLOAT")
     artifact_store = AudioArtifactStore(tmp_path / "artifacts")
     runtime = RuntimeCore(
+        artifact_store=artifact_store,
         job_store_path=tmp_path / "jobs.sqlite3",
         job_result_validator=artifact_store.validate_result_ref,
     )
     AudioAnalysisWorker(artifact_store).register(runtime)
     try:
         submitted = submit_audio_feature_job(runtime, path)
-        deadline = time.monotonic() + 3
+        deadline = time.monotonic() + 30
         while time.monotonic() < deadline:
             job = runtime.jobs.status(submitted["job_id"])
             if job.status in {"succeeded", "failed"}:

@@ -9,6 +9,7 @@ from typing import Any
 
 from .. import project_templates as templates
 from .canonical import mixer_count_policy, pattern_count_policy, playlist_count_policy
+from .evidence_links import EvidenceLink, EvidenceLinkStore
 from .fl_reads import (
     PLAYLIST_TRACKS_SPEC,
     STATIC_INVALIDATION_EVENTS,
@@ -183,6 +184,57 @@ class AnalysisBroker:
             errors=window.errors,
         )
         return window
+
+    def record_rendered_audio_features(
+        self,
+        *,
+        artifact_store: Any,
+        evidence_links: EvidenceLinkStore,
+        artifact_id: str,
+        project_context: Any,
+        evidence_kind: str,
+        stem_role: str | None = None,
+        workflow_targets: tuple[str, ...] = (),
+        confirmed_by_user: bool = False,
+    ) -> tuple[Observation, EvidenceLink]:
+        manifest = artifact_store.read_manifest(artifact_id)
+        features = artifact_store.read_features(artifact_id)
+        link = evidence_links.create(
+            artifact_id=artifact_id,
+            context=project_context,
+            evidence_kind=evidence_kind,
+            stem_role=stem_role,
+            workflow_targets=workflow_targets,
+            confirmed_by_user=confirmed_by_user,
+        )
+        observation = self.observation_store.record(
+            kind="rendered_audio_features",
+            payload={
+                "artifact_id": artifact_id,
+                "evidence_link_id": link.link_id,
+                "evidence_kind": evidence_kind,
+                "stem_role": stem_role,
+                "workflow_targets": list(workflow_targets),
+                "feature_summary": dict(features.get("summary") or {}),
+                "source": {
+                    "basename": manifest.source_basename,
+                    "sha256_prefix": manifest.source_sha256[:12],
+                },
+            },
+            source="audio_artifact_store",
+            ttl_seconds=None,
+            confidence="audio_backed",
+            project_fingerprint=project_context.project_fingerprint,
+            invalidates_on=(
+                "project_identity_change",
+                "audio_source_hash_changed",
+            ),
+            metadata={
+                "evidence_link": link.to_dict(),
+                "artifact_contract_version": manifest.contract_version,
+            },
+        )
+        return observation, link
 
     def _collect_static_project_snapshot(
         self,
