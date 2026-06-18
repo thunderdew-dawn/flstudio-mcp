@@ -100,3 +100,24 @@ def test_daemon_rejects_unknown_params_without_bridge_access(monkeypatch) -> Non
 
     assert response["ok"] is False
     assert response["code"] == "invalid_request"
+
+
+@pytest.mark.parametrize(
+    "report",
+    [
+        {"workflow": "mix_review"},
+        {"contract_version": "fls-pilot.workflow-report.v1", "workflow": "mix_review"},
+        {"contract_version": "fls-pilot.analysis-report.v2", "workflow": "mix_review"},
+    ],
+)
+def test_runtime_rejects_incompatible_report_versions(report: dict) -> None:
+    response = daemon._handle_request(
+        {
+            "op": "runtime",
+            "operation": "analysis.report.add",
+            "params": {"report": report},
+        }
+    )
+
+    assert response["ok"] is False
+    assert response["code"] == "incompatible_report_version"

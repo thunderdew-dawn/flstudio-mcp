@@ -950,10 +950,10 @@ def test_build_mix_review_report_surfaces_playback_limitations_when_stopped():
     analysis_report = control_center._generic_analysis_report_from_legacy(
         legacy_report, "mix_review", "Mix Review"
     )
-    report = control_center.analysis_report_to_control_center_legacy(analysis_report, legacy_report)
+    report = control_center.analysis_report_for_control_center(analysis_report, legacy_report)
 
     assert report["ok"] is True
-    prerequisites = report.get("analysis", {}).get("prerequisites", [])
+    prerequisites = report.get("prerequisites", [])
     assert any(
         req["id"] == "requires_playback"
         and req["status"] in ("missing", "unavailable", "partial", "failed")
@@ -1047,12 +1047,13 @@ def test_low_end_analysis_legacy_report_keeps_ui_shape_and_adds_contract():
     assert report["details"]["low_end"]["findings"]
     assert report["details"]["low_end"]["tracks"][0]["name"] == "Sub Bass"
     assert report["summary"]["low_end_findings"] >= 2
-    assert report["analysis"]["contract_version"] == "fls-pilot.analysis-report.v1"
-    assert report["analysis"]["workflow"] == "low_end_analysis"
-    assert report["analysis"]["analysis_mode"] == "live_runtime"
-    assert report["analysis"]["coverage"]["status"] == "fresh"
-    assert report["analysis"]["confidence_score"] > 0
-    assert report["details"]["analysis_report"]["findings"][0]["rule_id"].startswith("low_end.")
+    assert report["contract_version"] == "fls-pilot.analysis-report.v1"
+    assert report["workflow"] == "low_end_analysis"
+    assert report["analysis_mode"] == "live_runtime"
+    assert report["coverage"]["status"] == "fresh"
+    assert report["confidence_score"] > 0
+    assert report["findings"][0]["rule_id"].startswith("low_end.")
+    assert "analysis_report" not in report["details"]
 
 
 def test_build_routing_audit_report_summarizes_graph_and_findings():
@@ -1121,13 +1122,14 @@ def test_build_routing_audit_report_summarizes_graph_and_findings():
     assert ("track:10", "master", "audio") in links
     assert ("channel:3", "unrouted", "unrouted") in links
     assert ("channel:4", "dead_end", "dead_end") in links
-    assert report["analysis"]["contract_version"] == "fls-pilot.analysis-report.v1"
-    assert report["analysis"]["workflow"] == "routing_audit"
-    assert report["analysis"]["coverage"]["status"] == "fresh"
-    assert report["details"]["analysis_report"]["findings"][0]["rule_id"].startswith("routing.")
+    assert report["contract_version"] == "fls-pilot.analysis-report.v1"
+    assert report["workflow"] == "routing_audit"
+    assert report["coverage"]["status"] == "fresh"
+    assert report["findings"][0]["rule_id"].startswith("routing.")
+    assert "analysis_report" not in report["details"]
     canonical_ids = {
         entity["canonical_id"]
-        for finding in report["details"]["analysis_report"]["findings"]
+        for finding in report["findings"]
         for entity in finding["entities"]
     }
     assert {"channel:1", "mixer:1", "channel:3", "mixer:2", "mixer:9"} <= canonical_ids

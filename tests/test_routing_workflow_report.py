@@ -78,7 +78,7 @@ class RoutingReviewBridge:
         raise AssertionError(f"unexpected command: {command}")
 
 
-def test_fl_review_routing_returns_workflow_report_and_legacy_lists(monkeypatch):
+def test_fl_review_routing_returns_canonical_report_and_ui_lists(monkeypatch):
     mcp = MockMCP()
     routing.register(mcp)
 
@@ -87,15 +87,14 @@ def test_fl_review_routing_returns_workflow_report_and_legacy_lists(monkeypatch)
 
     result = mcp.tools["fl_review_routing"]()
 
-    assert result["contract_version"] == "fls-pilot.workflow-report.v1"
+    assert result["contract_version"] == "fls-pilot.analysis-report.v1"
     assert result["workflow"] == "routing_review"
-    assert result["mode"] == "static_snapshot"
+    assert result["analysis_mode"] == "static_snapshot"
     assert result["unrouted_channels"] == [{"channel": 2, "name": "FX", "type": "audio"}]
     assert result["generators_direct_to_master"][0]["channel"] == 1
-    assert result["metadata"]["analysis_report"]["workflow"] == "routing_review"
-    assert result["metadata"]["analysis_report"]["coverage"]["status"] == "fresh"
+    assert result["coverage"]["status"] == "fresh"
     assert result["metadata"]["legacy_routing_review"]["unrouted_channels"]
-    assert result["diagnostics"][0]["target"]["canonical_id"] == "channel:2"
+    assert result["findings"][0]["entities"][0]["canonical_id"] == "channel:2"
 
 
 def test_fl_plan_routing_cleanup_returns_workflow_report():
@@ -106,7 +105,7 @@ def test_fl_plan_routing_cleanup_returns_workflow_report():
         issues=["issue 1"], proposed_buses=[{"track": 10, "name": "Bus", "sources": [1]}]
     )
 
-    assert plan["contract_version"] == "fls-pilot.workflow-report.v1"
+    assert plan["contract_version"] == "fls-pilot.analysis-report.v1"
     assert plan["workflow"] == "routing_cleanup_plan"
     assert plan["mode"] == "dry_run"
     assert len(plan["proposed_changes"]) == 2

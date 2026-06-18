@@ -1,4 +1,8 @@
-"""Shared workflow report/proposal contract for user-facing diagnostics."""
+"""Canonical AnalysisReport v1 builder for proposal-oriented tools.
+
+The module name remains for internal call-site stability during rc1, but it no
+longer emits the removed ``workflow-report.v1`` envelope.
+"""
 
 from __future__ import annotations
 
@@ -6,7 +10,17 @@ from collections.abc import Mapping
 from copy import deepcopy
 from typing import Any
 
-CONTRACT_VERSION = "fls-pilot.workflow-report.v1"
+from .analysis.schema import (
+    ANALYSIS_REPORT_CONTRACT_VERSION,
+    AnalysisReport,
+    Coverage,
+    Finding,
+    Freshness,
+    Prerequisite,
+)
+from .analysis.scoring import confidence_from_coverage, risk_from_severities
+
+CONTRACT_VERSION = ANALYSIS_REPORT_CONTRACT_VERSION
 RISK_LEVELS = {"read-only", "low", "medium", "high", "unsupported"}
 
 
@@ -181,34 +195,98 @@ def workflow_report(
     safety: Mapping[str, Any] | None = None,
     metadata: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    base: dict[str, Any] = {
-        "ok": bool(ok),
-        "contract_version": CONTRACT_VERSION,
-        "workflow": str(workflow),
-        "title": str(title),
-        "mode": str(mode),
-        "status": str(status),
-        "summary": _compact_value(summary or {}),
-        "diagnostics": diagnostics or [],
-        "proposed_changes": proposed_changes or [],
-        "applied_changes": applied_changes or [],
-        "skipped_changes": skipped_changes or [],
-        "manual_checks": manual_checks or [],
-        "notes": notes or [],
-        "limits": limits or [],
-        "safety": {
+    rows = diagnostics or []
+    analysis_mode = _analysis_mode(mode)
+    coverage = Coverage(required=1, available=int(bool(ok)), missing=(() if ok else ("workflow",)))
+    confidence = confidence_from_coverage(
+        required=coverage.required,
+        available=coverage.available,
+        evidence_mode=analysis_mode,
+    )
+    severities = tuple(str(row.get("severity") or "info") for row in rows)
+    report = AnalysisReport(
+        workflow=str(workflow),
+        title=str(title),
+        analysis_mode=analysis_mode,
+        evidence_mode=_evidence_mode(analysis_mode),
+        freshness=Freshness(status="fresh" if ok else "unavailable"),
+        coverage=coverage,
+        prerequisites=(Prerequisite("workflow_input", "ok" if ok else "unavailable"),),
+        risk_score=risk_from_severities(severities),
+        confidence_score=confidence,
+        findings=tuple(
+            Finding(
+                id=str(row.get("id") or f"{workflow}.finding.{index}"),
+                rule_id=str(row.get("source") or row.get("id") or f"{workflow}.finding"),
+                title=str(row.get("message") or row.get("id") or "Finding"),
+                severity=str(row.get("severity") or "info"),
+                risk_score=risk_from_severities((str(row.get("severity") or "info"),)),
+                confidence_score=confidence,
+                evidence_mode=analysis_mode,
+                evidence=({"value": row.get("evidence"), "target": row.get("target")},),
+                metadata={"diagnostic": _compact_value(row)},
+            )
+            for index, row in enumerate(rows, start=1)
+        ),
+        assumptions=tuple(notes or ()),
+        limitations=tuple(limits or ()),
+        manual_checks=tuple(manual_checks or ()),
+        proposed_changes=tuple(proposed_changes or ()),
+        applied_changes=tuple(applied_changes or ()),
+        safety={
             "read_only": not bool(applied_changes),
             "requires_explicit_approval": bool(proposed_changes),
             "proposal_first": True,
             **dict(safety or {}),
         },
-        "kb_policy_refs": kb_policy_refs or [],
-        "metadata": _compact_value(dict(metadata or {})),
-    }
+        metadata={
+            **dict(metadata or {}),
+            "status": str(status),
+            "summary": _compact_value(summary or {}),
+            "skipped_changes": skipped_changes or [],
+            "kb_policy_refs": kb_policy_refs or [],
+        },
+    )
+    base = report.to_dict()
+    base.update(
+        {
+            "ok": bool(ok),
+            "mode": str(mode),
+            "status": str(status),
+            "summary": _compact_value(summary or {}),
+            "diagnostics": rows,
+            "skipped_changes": skipped_changes or [],
+            "notes": notes or [],
+            "limits": limits or [],
+            "kb_policy_refs": kb_policy_refs or [],
+        }
+    )
     json_report = deepcopy(base)
     base["json_report"] = json_report
     base["markdown_report"] = render_markdown(json_report)
     return base
+
+
+def _analysis_mode(mode: str) -> str:
+    normalized = str(mode or "").strip().lower()
+    if normalized in {
+        "static_snapshot",
+        "live_runtime",
+        "watch_window",
+        "rendered_audio",
+        "manual_check",
+        "hybrid",
+    }:
+        return normalized
+    return "static_snapshot"
+
+
+def _evidence_mode(analysis_mode: str) -> str:
+    return {
+        "static_snapshot": "static_snapshot_only",
+        "live_runtime": "short_live_snapshot",
+        "watch_window": "sufficient_watch_window",
+    }.get(analysis_mode, analysis_mode)
 
 
 def approval_required_report(

@@ -12,12 +12,17 @@ from .canonical import (
     playlist_slot_entity_id,
     plugin_entity_id,
 )
+from .contracts import (
+    ACCEPTED_ANALYSIS_REPORT_VERSIONS,
+    ANALYSIS_REPORT_CONTRACT_VERSION,
+    IncompatibleReportVersionError,
+    require_analysis_report_version,
+)
 from .fl_reads import StaticReadSpec, project_fingerprint
 from .observations import Observation, ObservationStore
 from .reports import (
-    analysis_report_to_control_center_legacy,
-    analysis_report_to_workflow_report,
-    enrich_workflow_report_with_analysis,
+    analysis_report_for_control_center,
+    serialize_analysis_report,
 )
 from .requirements import (
     COMMON_OBSERVATIONS,
@@ -28,7 +33,6 @@ from .requirements import (
 from .routing import routing_analysis_report_from_legacy_payload
 from .runtime import get_analysis_broker, get_report_store
 from .schema import (
-    ANALYSIS_REPORT_CONTRACT_VERSION,
     AnalysisReport,
     Coverage,
     EntityRef,
@@ -52,6 +56,7 @@ from .scoring import (
 
 __all__ = [
     "ANALYSIS_REPORT_CONTRACT_VERSION",
+    "ACCEPTED_ANALYSIS_REPORT_VERSIONS",
     "COMMON_OBSERVATIONS",
     "AnalysisBroker",
     "AnalysisReport",
@@ -62,15 +67,15 @@ __all__ = [
     "Freshness",
     "Observation",
     "ObservationStore",
+    "IncompatibleReportVersionError",
     "Prerequisite",
     "StaticProjectSnapshot",
     "StaticReadSpec",
     "StaticSnapshotPolicy",
     "WorkflowRequirement",
     "WorkflowRequirementSet",
-    "analysis_report_to_control_center_legacy",
-    "analysis_report_to_workflow_report",
-    "enrich_workflow_report_with_analysis",
+    "analysis_report_for_control_center",
+    "serialize_analysis_report",
     "channel_entity_id",
     "clamp_score",
     "confidence_band",
@@ -95,4 +100,5 @@ __all__ = [
     "risk_from_severities",
     "routing_analysis_report_from_legacy_payload",
     "routing_health_score",
+    "require_analysis_report_version",
 ]

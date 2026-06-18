@@ -21,9 +21,9 @@ from pydantic import Field
 from .. import kb_policy, operations, protocol, safety, workflow_report
 from .. import project_templates as templates
 from ..analysis import (
-    analysis_report_to_workflow_report,
     get_analysis_broker,
     routing_analysis_report_from_legacy_payload,
+    serialize_analysis_report,
 )
 from ..connection import fetch_all_pages, get_bridge
 from .registration import RETIRED_LOW_LEVEL_TOOLS, hide_retired_tools
@@ -509,13 +509,12 @@ def register(mcp: FastMCP) -> None:
             ),
             "safety": {"read_only": True, "project_changes": False},
         }
-        report = analysis_report_to_workflow_report(
+        report = serialize_analysis_report(
             routing_analysis_report_from_legacy_payload(
                 legacy_payload,
                 workflow="routing_review",
                 title="Routing Review",
-            ),
-            status="Routing review generated",
+            )
         )
         report["unrouted_channels"] = unrouted
         report["generators_direct_to_master"] = direct_to_master
@@ -528,7 +527,6 @@ def register(mcp: FastMCP) -> None:
             "generators_direct_to_master": direct_to_master,
             "template_context": legacy_payload["template_context"],
         }
-        report["json_report"]["metadata"] = report["metadata"]
         return report
 
     @mcp.tool(annotations={"title": "Plan routing cleanup", **_RO})

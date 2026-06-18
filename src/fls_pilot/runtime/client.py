@@ -14,7 +14,9 @@ from .protocol import validate_runtime_request
 
 
 class RuntimeClientError(RuntimeError):
-    pass
+    def __init__(self, message: str, *, code: str | None = None) -> None:
+        super().__init__(message)
+        self.code = code
 
 
 class RuntimeClient:
@@ -45,7 +47,10 @@ class RuntimeClient:
             ) from exc
         response = RuntimeResponse.from_dict(payload)
         if not response.ok:
-            raise RuntimeClientError(response.error or "Runtime request failed")
+            raise RuntimeClientError(
+                response.error or "Runtime request failed",
+                code=response.code,
+            )
         return response
 
     def session(self) -> RuntimeSession:

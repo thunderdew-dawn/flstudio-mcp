@@ -60,6 +60,7 @@ from .runtime.core import RuntimeCore
 from .runtime.protocol import validate_runtime_request
 from .analysis.broker import StaticProjectSnapshot, StaticSnapshotPolicy
 from .analysis.live import LiveMeterPolicy
+from .analysis.contracts import IncompatibleReportVersionError
 from .analysis.schema import AnalysisReport
 from .workflows.registry import canonical_workflow_id
 from .runtime.workflow_runner import run_workflow
@@ -174,6 +175,13 @@ def _handle_runtime_request(req: dict) -> dict:
         operation, params = validate_runtime_request(req)
         data = _dispatch_runtime_operation(operation, params)
         return RuntimeResponse(ok=True, operation=operation, data=data).to_dict()
+    except IncompatibleReportVersionError as exc:
+        return RuntimeResponse(
+            ok=False,
+            operation=str(req.get("operation") or ""),
+            error=str(exc),
+            code=exc.code,
+        ).to_dict()
     except (KeyError, TypeError, ValueError) as exc:
         return RuntimeResponse(
             ok=False,

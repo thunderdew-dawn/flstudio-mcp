@@ -14,7 +14,7 @@ from pydantic import Field
 from .. import kb_policy, operations, safety
 from .. import project_templates as templates
 from .. import workflow_report as wr
-from ..analysis import enrich_workflow_report_with_analysis, get_analysis_broker
+from ..analysis import get_analysis_broker
 from ..connection import get_bridge
 from .channels import _find_free_mixer_track
 from .color import parse_color
@@ -344,13 +344,9 @@ def register(mcp: FastMCP) -> None:
             },
             safety={"read_only": True, "requires_explicit_approval": False},
         )
-        return enrich_workflow_report_with_analysis(
-            payload,
-            analysis_mode="static_snapshot",
-            evidence_mode="static_snapshot_only",
-            project_fingerprint=snapshot.project_fingerprint,
-            source_observations=snapshot.source_observation_ids,
-        )
+        payload["project_fingerprint"] = snapshot.project_fingerprint
+        payload["source_observations"] = list(snapshot.source_observation_ids)
+        return payload
 
     @mcp.tool(annotations={"title": "Plan Project Cleanup", **_RO})
     def fl_plan_project_cleanup() -> dict:
@@ -453,13 +449,9 @@ def register(mcp: FastMCP) -> None:
             metadata={"template_context": templates.compact_context(template_context)},
             safety={"read_only": True, "requires_explicit_approval": bool(proposed_changes)},
         )
-        return enrich_workflow_report_with_analysis(
-            payload,
-            analysis_mode="static_snapshot",
-            evidence_mode="static_snapshot_only",
-            project_fingerprint=snapshot.project_fingerprint,
-            source_observations=snapshot.source_observation_ids,
-        )
+        payload["project_fingerprint"] = snapshot.project_fingerprint
+        payload["source_observations"] = list(snapshot.source_observation_ids)
+        return payload
 
     @mcp.tool(annotations={"title": "Apply Project Cleanup Step", **_WR})
     def fl_apply_project_cleanup_step(

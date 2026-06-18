@@ -326,7 +326,7 @@ through operation-registry validation and `safety.safe_write` or
 
 The v3 workflow report contract was added on 2026-06-13 without new FL Studio
 API capability claims. Mix Review, Project Health/Preflight, and Project
-Organizer reports now use `fls-pilot.workflow-report.v1`, separating
+Organizer reports now use `fls-pilot.analysis-report.v1`, separating
 `diagnostics`, `proposed_changes`, `applied_changes`, and `manual_checks` while
 embedding `json_report` and `markdown_report` renderings. Project Organizer
 apply tools and `fl_apply_mix_adjustment` now require `approved=True` before

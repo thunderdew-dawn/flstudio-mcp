@@ -1,9 +1,4 @@
-"""Shared analysis report schema primitives.
-
-These dataclasses are intentionally lightweight. They are the internal contract
-that workflow code can adapt into the current MCP and Control Center payloads
-while the migration is in progress.
-"""
+"""Canonical AnalysisReport v1 schema primitives."""
 
 from __future__ import annotations
 
@@ -12,9 +7,11 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
 
+from .contracts import (
+    ANALYSIS_REPORT_CONTRACT_VERSION,
+    require_analysis_report_version,
+)
 from .scoring import clamp_score, coverage_score, health_from_risk, risk_band
-
-ANALYSIS_REPORT_CONTRACT_VERSION = "fls-pilot.analysis-report.v1"
 
 FRESHNESS_STATUSES = {"fresh", "stale", "partial", "unavailable", "unknown"}
 ANALYSIS_MODES = {
@@ -331,6 +328,7 @@ class AnalysisReport:
     @classmethod
     def from_dict(cls, payload: dict[str, Any]) -> AnalysisReport:
         """Restore a report received through the Runtime transport."""
+        require_analysis_report_version(payload)
         freshness = payload.get("freshness") or {}
         coverage = payload.get("coverage") or {}
         return cls(

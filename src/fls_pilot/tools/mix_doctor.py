@@ -21,7 +21,6 @@ from .. import kb_policy, operations, protocol, safety
 from .. import workflow_report as wr
 from ..analysis import (
     StaticSnapshotPolicy,
-    enrich_workflow_report_with_analysis,
     get_analysis_broker,
 )
 from ..analysis.live import LiveMeterPolicy
@@ -273,13 +272,11 @@ def register(mcp: FastMCP) -> None:
         else:
             analysis_mode = "static_snapshot"
             evidence_mode = "static_snapshot_only"
-        return enrich_workflow_report_with_analysis(
-            payload,
-            analysis_mode=analysis_mode,
-            evidence_mode=evidence_mode,
-            project_fingerprint=snap.get("project_fingerprint"),
-            source_observations=tuple(snap.get("source_observation_ids") or ()),
-        )
+        payload["analysis_mode"] = analysis_mode
+        payload["evidence_mode"] = evidence_mode
+        payload["project_fingerprint"] = snap.get("project_fingerprint") or "unknown"
+        payload["source_observations"] = list(snap.get("source_observation_ids") or ())
+        return payload
 
     def _result(snap):
         """Diagnose + plan a gathered snapshot -> the common tool payload."""

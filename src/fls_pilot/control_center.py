@@ -33,7 +33,7 @@ from .analysis import (
     Freshness,
     Prerequisite,
     StaticSnapshotPolicy,
-    analysis_report_to_control_center_legacy,
+    analysis_report_for_control_center,
     confidence_from_coverage,
     low_end_health_score,
     mix_health_score,
@@ -839,7 +839,7 @@ def _run_mix_review(
             analysis = _generic_analysis_report_from_legacy(
                 report, "mix_review", "Mix Review"
             )
-            return analysis_report_to_control_center_legacy(analysis, report)
+            return analysis_report_for_control_center(analysis, report)
     bridge = bridge_override
     owns_bridge = bridge is None
     try:
@@ -865,7 +865,7 @@ def _run_mix_review(
             "Mix Review",
         )
         analysis_report = state.report_store.add_report(analysis_report)
-        return analysis_report_to_control_center_legacy(analysis_report, report_payload)
+        return analysis_report_for_control_center(analysis_report, report_payload)
     except Exception as exc:
         report = _mix_review_unavailable_report(f"{type(exc).__name__}: {exc}")
         analysis_report = _generic_analysis_report_from_legacy(
@@ -874,7 +874,7 @@ def _run_mix_review(
             "Mix Review",
         )
         analysis_report = state.report_store.add_report(analysis_report)
-        return analysis_report_to_control_center_legacy(analysis_report, report)
+        return analysis_report_for_control_center(analysis_report, report)
     finally:
         if owns_bridge and bridge is not None:
             with contextlib.suppress(Exception):
@@ -893,7 +893,7 @@ def _run_low_end_analysis(
         except Exception as exc:
             report = _low_end_unavailable_report(f"{type(exc).__name__}: {exc}")
             analysis = _build_low_end_analysis_report(report)
-            return analysis_report_to_control_center_legacy(analysis, report)
+            return analysis_report_for_control_center(analysis, report)
     bridge = bridge_override
     owns_bridge = bridge is None
     try:
@@ -931,7 +931,7 @@ def _store_low_end_report(
     store = getattr(state, "report_store", None)
     if store is not None:
         analysis_report = store.add_report(analysis_report)
-    return analysis_report_to_control_center_legacy(analysis_report, legacy_report)
+    return analysis_report_for_control_center(analysis_report, legacy_report)
 
 
 def _build_low_end_legacy_report(snapshot: dict[str, Any]) -> dict[str, Any]:
@@ -1773,7 +1773,7 @@ def _run_project_organizer(
             analysis = _generic_analysis_report_from_legacy(
                 report, "project_organizer", "Organizer"
             )
-            return analysis_report_to_control_center_legacy(analysis, report)
+            return analysis_report_for_control_center(analysis, report)
     bridge = bridge_override
     owns_bridge = bridge is None
     try:
@@ -1826,7 +1826,7 @@ def _run_project_organizer(
             "Organizer",
         )
         analysis_report = state.report_store.add_report(analysis_report)
-        return analysis_report_to_control_center_legacy(analysis_report, report_payload)
+        return analysis_report_for_control_center(analysis_report, report_payload)
     except Exception as exc:
         report = _project_organizer_unavailable_report(f"{type(exc).__name__}: {exc}")
         analysis_report = _generic_analysis_report_from_legacy(
@@ -1835,7 +1835,7 @@ def _run_project_organizer(
             "Organizer",
         )
         analysis_report = state.report_store.add_report(analysis_report)
-        return analysis_report_to_control_center_legacy(analysis_report, report)
+        return analysis_report_for_control_center(analysis_report, report)
     finally:
         if owns_bridge and bridge is not None:
             with contextlib.suppress(Exception):
@@ -2904,7 +2904,7 @@ def _run_routing_audit(
                 title="Routing Audit",
                 created_at=report["generated_at"],
             )
-            return analysis_report_to_control_center_legacy(analysis, report)
+            return analysis_report_for_control_center(analysis, report)
     bridge = bridge_override
     owns_bridge = bridge is None
     try:
@@ -2953,7 +2953,7 @@ def _run_routing_audit(
             created_at=report["generated_at"],
         )
         analysis_report = state.report_store.add_report(analysis_report)
-        return analysis_report_to_control_center_legacy(analysis_report, report)
+        return analysis_report_for_control_center(analysis_report, report)
     finally:
         if owns_bridge and bridge is not None:
             with contextlib.suppress(Exception):
@@ -3196,7 +3196,7 @@ def _build_routing_audit_report(
         title="Routing Audit",
         created_at=report["generated_at"],
     )
-    return analysis_report, analysis_report_to_control_center_legacy(
+    return analysis_report, analysis_report_for_control_center(
         analysis_report,
         report,
     )
