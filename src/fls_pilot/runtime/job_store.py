@@ -262,13 +262,27 @@ class JobStore:
                     counts["cancelled"] += 1
                     continue
                 result_ref = _optional_object(row["result_ref"])
-                if result_ref and result_validator and result_validator(result_ref):
-                    self._connection.execute(
-                        "UPDATE jobs SET status = 'succeeded', progress = 1, "
-                        "updated_at = ?, finished_at = ? WHERE job_id = ?",
-                        (now, now, job_id),
-                    )
-                    counts["succeeded"] += 1
+                if result_ref:
+                    if result_validator and result_validator(result_ref):
+                        self._connection.execute(
+                            "UPDATE jobs SET status = 'succeeded', progress = 1, "
+                            "updated_at = ?, finished_at = ? WHERE job_id = ?",
+                            (now, now, job_id),
+                        )
+                        counts["succeeded"] += 1
+                    else:
+                        error = {
+                            "code": "job_recovery_result_invalid",
+                            "message": (
+                                "Interrupted job referenced a missing or corrupt result artifact."
+                            ),
+                        }
+                        self._connection.execute(
+                            "UPDATE jobs SET status = 'failed', error = ?, updated_at = ?, "
+                            "finished_at = ? WHERE job_id = ?",
+                            (_json(error), now, now, job_id),
+                        )
+                        counts["failed"] += 1
                 elif bool(row["idempotent"]) and int(row["retry_count"]) < int(
                     row["max_retries"]
                 ):

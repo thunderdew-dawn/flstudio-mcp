@@ -4,7 +4,7 @@
   "status": "governed",
   "project": {
     "name": "fls-pilot",
-    "package_version": "3.0.0b4",
+    "package_version": "3.0.0rc1",
     "repository": "thunderdew-dawn/fls-pilot",
     "architecture_contract": "agent-docs/contracts/architecture-governance.md",
     "human_overview": "agent-docs/concepts/architecture.md"

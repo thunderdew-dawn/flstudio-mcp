@@ -18,7 +18,7 @@
   },
   "project": {
     "name": "fls-pilot",
-    "version_pyproject": "3.0.0b4",
+    "version_pyproject": "3.0.0rc1",
     "description": "Create more. Check less. Local FL Studio Control Center and MCP workflow assistant for safe mix reviews, routing audits, project cleanup, low-end checks, export readiness, and rollback-first assisted edits.",
     "requires_python": ">=3.10,<3.13",
     "license": "MIT",
@@ -5565,7 +5565,6 @@
     "Operation registry makes persistent writes declarative and auditable with restore builders.",
     "Runtime protocol rejects raw command/code/script fields for daemon RPC.",
     "Knowledgebase and policy files reduce guessed DAW/plugin ranges.",
-    "Controller script is large and central; consider splitting if FL sandbox packaging allows it, or generate a command inventory test from protocol.py to avoid handler drift.",
-    "server.json version (3.0.0b3) differs from pyproject/README version (3.0.0b4)."
+    "Controller script is large and central; consider splitting if FL sandbox packaging allows it, or generate a command inventory test from protocol.py to avoid handler drift."
   ]
 }

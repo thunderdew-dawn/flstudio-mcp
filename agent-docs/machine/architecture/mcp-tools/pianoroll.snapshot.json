@@ -3,7 +3,7 @@
   "slice_id": "mcp_tools.pianoroll",
   "title": "MCP tool module: pianoroll",
   "source_snapshot": "agent-docs/machine/architecture-analysis.snapshot.json",
-  "source_snapshot_sha256": "fb75140a6a821e940d3faa4e1ffc88a89088ee8668ae8cf9d5a472510040cc8d",
+  "source_snapshot_sha256": "ff0d38588b91510a3073e81d885de38f9116cddfbcd95686cbf11c28a6db8d7f",
   "generated_at": "2026-06-19",
   "load_when": [
     "MCP tool implementation or registration changes in the pianoroll tool module",

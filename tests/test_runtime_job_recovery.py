@@ -17,6 +17,33 @@ def _create_running_job(store: JobStore, *, idempotent: bool = True, max_retries
     return job
 
 
+def test_queued_job_remains_queued_during_recovery(tmp_path) -> None:
+    path = tmp_path / "jobs.sqlite3"
+    first = JobStore(path)
+    job, _ = first.create(
+        kind="test.recover",
+        input_payload={"value": 1},
+        input_summary={"value": 1},
+        idempotency_key="recover:queued",
+        idempotent=True,
+        max_retries=1,
+    )
+    first.close()
+
+    queue = RuntimeJobQueue(JobStore(path))
+    try:
+        assert queue.status(job.job_id).status == "queued"
+        assert queue.recovery == {
+            "interrupted": 0,
+            "requeued": 0,
+            "succeeded": 0,
+            "cancelled": 0,
+            "failed": 0,
+        }
+    finally:
+        queue.close()
+
+
 def test_interrupted_idempotent_job_is_requeued(tmp_path) -> None:
     path = tmp_path / "jobs.sqlite3"
     first = JobStore(path)
@@ -61,5 +88,48 @@ def test_non_idempotent_interrupted_job_fails_recovery(tmp_path) -> None:
         restored = queue.status(job.job_id)
         assert restored.status == "failed"
         assert restored.error["code"] == "job_recovery_failed"
+    finally:
+        queue.close()
+
+
+def test_valid_committed_result_is_promoted_during_recovery(tmp_path) -> None:
+    path = tmp_path / "jobs.sqlite3"
+    first = JobStore(path)
+    job = _create_running_job(first)
+    result_ref = {"kind": "audio_features", "artifact_id": "artifact-ok"}
+    first._update(job.job_id, result_ref=result_ref)
+    first.close()
+
+    queue = RuntimeJobQueue(
+        JobStore(path),
+        result_validator=lambda value: value == result_ref,
+    )
+    try:
+        restored = queue.status(job.job_id)
+        assert restored.status == "succeeded"
+        assert restored.result_ref == result_ref
+        assert queue.recovery["succeeded"] == 1
+        assert queue.recovery["requeued"] == 0
+    finally:
+        queue.close()
+
+
+def test_invalid_committed_result_fails_instead_of_requeueing(tmp_path) -> None:
+    path = tmp_path / "jobs.sqlite3"
+    first = JobStore(path)
+    job = _create_running_job(first)
+    first._update(
+        job.job_id,
+        result_ref={"kind": "audio_features", "artifact_id": "missing"},
+    )
+    first.close()
+
+    queue = RuntimeJobQueue(JobStore(path), result_validator=lambda value: False)
+    try:
+        restored = queue.status(job.job_id)
+        assert restored.status == "failed"
+        assert restored.error["code"] == "job_recovery_result_invalid"
+        assert queue.recovery["failed"] == 1
+        assert queue.recovery["requeued"] == 0
     finally:
         queue.close()

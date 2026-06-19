@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "fls-pilot"
-version = "3.0.0b4"
+version = "3.0.0rc1"
 description = "Create more. Check less. Local FL Studio Control Center and MCP workflow assistant for safe mix reviews, routing audits, project cleanup, low-end checks, export readiness, and rollback-first assisted edits."
 readme = "README.md"
 license = { text = "MIT" }

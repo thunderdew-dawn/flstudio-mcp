@@ -13,6 +13,7 @@ from fls_pilot.runtime.core import RuntimeCore
 def test_audio_worker_publishes_compact_result_without_bridge_access(tmp_path) -> None:
     path = tmp_path / "mix.wav"
     sf.write(path, np.zeros(48000, dtype=np.float32), 48000, subtype="FLOAT")
+    original_source = path.read_bytes()
     artifact_store = AudioArtifactStore(tmp_path / "artifacts")
     runtime = RuntimeCore(
         artifact_store=artifact_store,
@@ -36,5 +37,6 @@ def test_audio_worker_publishes_compact_result_without_bridge_access(tmp_path) -
         assert "path" not in job.result_ref
         features = artifact_store.read_features(job.result_ref["artifact_id"])
         assert features["summary"]["duration_seconds"] == 1.0
+        assert path.read_bytes() == original_source
     finally:
         runtime.close()

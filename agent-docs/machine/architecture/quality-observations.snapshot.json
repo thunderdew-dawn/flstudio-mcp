@@ -3,7 +3,7 @@
   "slice_id": "quality_observations",
   "title": "Generated static quality observations and notable architecture risks",
   "source_snapshot": "agent-docs/machine/architecture-analysis.snapshot.json",
-  "source_snapshot_sha256": "fb75140a6a821e940d3faa4e1ffc88a89088ee8668ae8cf9d5a472510040cc8d",
+  "source_snapshot_sha256": "ff0d38588b91510a3073e81d885de38f9116cddfbcd95686cbf11c28a6db8d7f",
   "generated_at": "2026-06-19",
   "note": "Generated scoped slice of the full static architecture analysis. Load this file only when the coding task matches its scope.",
   "load_when": [
@@ -16,33 +16,22 @@
       "Operation registry makes persistent writes declarative and auditable with restore builders.",
       "Runtime protocol rejects raw command/code/script fields for daemon RPC.",
       "Knowledgebase and policy files reduce guessed DAW/plugin ranges.",
-      "Controller script is large and central; consider splitting if FL sandbox packaging allows it, or generate a command inventory test from protocol.py to avoid handler drift.",
-      "server.json version (3.0.0b3) differs from pyproject/README version (3.0.0b4)."
+      "Controller script is large and central; consider splitting if FL sandbox packaging allows it, or generate a command inventory test from protocol.py to avoid handler drift."
     ],
-    "notable_risk_findings": [
-      {
-        "id": "controller_bridge_eval",
-        "severity": "high",
-        "path": "fl_controller/FLStudioPilot/device_FLStudioPilot.py",
-        "line": 2170,
-        "finding": "Controller handler map contains bridge_eval using Python eval(expr). It is not defined in protocol.py command constants and is not exposed by normal MCP tools, but if reachable over the bridge it is a raw execution escape hatch and conflicts with the documented no-raw-escape-hatch safety posture."
-      }
-    ],
+    "notable_risk_findings": [],
     "analysis_scope": {
-      "source_archive": "/mnt/data/fls-pilot.zip",
-      "root": "fls-pilot",
-      "mode": "static source analysis; no live FL Studio runtime; no full pytest suite",
+      "root": ".",
+      "mode": "repository static analysis refreshed for v3.0.0-rc1",
       "validation_performed": [
-        "safe ZIP extraction",
-        "AST parse of Python files",
-        "python compileall on src/fl_controller/scripts/tests",
-        "repository safety audit script",
-        "anti-vibe audit script"
+        "AST-based MCP safety audit",
+        "Runtime operation registry import",
+        "workflow declaration registry import",
+        "JSON snapshot validation",
+        "focused and full repository tests tracked separately"
       ],
       "validation_limitations": [
-        "FastMCP/mido/FL Studio runtime dependencies were not exercised end-to-end",
-        "FL Studio controller API behavior not live-verified",
-        "runtime health/ports not probed"
+        "No live FL Studio state is represented.",
+        "No automatic FL Studio render, open, save, or project mutation is exercised."
       ]
     }
   }

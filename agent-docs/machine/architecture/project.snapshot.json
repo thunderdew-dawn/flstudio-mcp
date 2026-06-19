@@ -3,7 +3,7 @@
   "slice_id": "project",
   "title": "Project, repository and top-level architecture inventory",
   "source_snapshot": "agent-docs/machine/architecture-analysis.snapshot.json",
-  "source_snapshot_sha256": "fb75140a6a821e940d3faa4e1ffc88a89088ee8668ae8cf9d5a472510040cc8d",
+  "source_snapshot_sha256": "ff0d38588b91510a3073e81d885de38f9116cddfbcd95686cbf11c28a6db8d7f",
   "generated_at": "2026-06-19",
   "note": "Generated scoped slice of the full static architecture analysis. Load this file only when the coding task matches its scope.",
   "load_when": [
@@ -13,25 +13,23 @@
   ],
   "payload": {
     "analysis_scope": {
-      "source_archive": "/mnt/data/fls-pilot.zip",
-      "root": "fls-pilot",
-      "mode": "static source analysis; no live FL Studio runtime; no full pytest suite",
+      "root": ".",
+      "mode": "repository static analysis refreshed for v3.0.0-rc1",
       "validation_performed": [
-        "safe ZIP extraction",
-        "AST parse of Python files",
-        "python compileall on src/fl_controller/scripts/tests",
-        "repository safety audit script",
-        "anti-vibe audit script"
+        "AST-based MCP safety audit",
+        "Runtime operation registry import",
+        "workflow declaration registry import",
+        "JSON snapshot validation",
+        "focused and full repository tests tracked separately"
       ],
       "validation_limitations": [
-        "FastMCP/mido/FL Studio runtime dependencies were not exercised end-to-end",
-        "FL Studio controller API behavior not live-verified",
-        "runtime health/ports not probed"
+        "No live FL Studio state is represented.",
+        "No automatic FL Studio render, open, save, or project mutation is exercised."
       ]
     },
     "project": {
       "name": "fls-pilot",
-      "version_pyproject": "3.0.0b4",
+      "version_pyproject": "3.0.0rc1",
       "description": "Create more. Check less. Local FL Studio Control Center and MCP workflow assistant for safe mix reviews, routing audits, project cleanup, low-end checks, export readiness, and rollback-first assisted edits.",
       "requires_python": ">=3.10,<3.13",
       "license": "MIT",
@@ -727,7 +725,7 @@
             "src/fls_pilot/daemon.py",
             "src/fls_pilot/runtime/*.py"
           ],
-          "responsibility": "Long-lived local RPC service with canonical runtime state, snapshots, reports, workflow execution."
+          "responsibility": "Long-lived local RPC service with canonical Runtime state, durable jobs, audio worker execution, snapshots, reports, and workflow execution."
         },
         {
           "id": "control_center",
@@ -737,7 +735,7 @@
             "src/fls_pilot/control_center.py",
             "src/fls_pilot/control_center_static/*"
           ],
-          "responsibility": "Local HTTP UI for setup checks, daemon/SSE lifecycle, reports, workflow panels."
+          "responsibility": "Local HTTP UI for setup, Runtime workflows, durable audio jobs, reports, and evidence linking."
         },
         {
           "id": "analysis_runtime",
@@ -748,7 +746,7 @@
             "src/fls_pilot/workflows/*.py",
             "src/fls_pilot/workflow_report.py"
           ],
-          "responsibility": "Static/live evidence broker, observation store, report schema, scoring, health aggregation, workflow registry."
+          "responsibility": "Canonical strict AnalysisReport v1, observations, rendered-audio evidence, freshness, scoring, health aggregation, and workflow declarations."
         },
         {
           "id": "knowledgebase",
@@ -816,6 +814,35 @@
             "ui"
           ],
           "responsibility": "Host DAW scripting APIs. Sandbox limitations define supported capabilities."
+        },
+        {
+          "id": "audio_worker",
+          "label": "Runtime Audio Analysis Worker",
+          "type": "daemon_worker",
+          "paths": [
+            "src/fls_pilot/runtime/audio_worker.py",
+            "src/fls_pilot/analysis/audio_features.py"
+          ],
+          "responsibility": "Runs deterministic cancellable offline feature extraction through daemon-owned durable Runtime jobs."
+        },
+        {
+          "id": "audio_artifact_store",
+          "label": "Audio Artifact Store",
+          "type": "data",
+          "paths": [
+            "src/fls_pilot/runtime/artifacts.py",
+            "~/.fls-pilot/audio-analysis/artifacts"
+          ],
+          "responsibility": "Atomically publishes versioned feature artifacts and bounded result references."
+        },
+        {
+          "id": "user_audio_files",
+          "label": "User-Provided Audio Files",
+          "type": "external_data",
+          "paths": [
+            "manually selected local audio paths"
+          ],
+          "responsibility": "Read-only source material supplied by the user; never moved, modified, deleted, or rendered automatically from FL Studio."
         }
       ],
       "edges": [
@@ -918,6 +945,31 @@
           "from": "pyscript_bridge",
           "to": "fl_api",
           "label": "user-triggered script execution"
+        },
+        {
+          "from": "tool_surface",
+          "to": "daemon",
+          "label": "Runtime job RPC"
+        },
+        {
+          "from": "control_center",
+          "to": "daemon",
+          "label": "audio job and workflow RPC"
+        },
+        {
+          "from": "user_audio_files",
+          "to": "audio_worker",
+          "label": "read-only local file access"
+        },
+        {
+          "from": "audio_worker",
+          "to": "audio_artifact_store",
+          "label": "atomic publication"
+        },
+        {
+          "from": "audio_artifact_store",
+          "to": "analysis_runtime",
+          "label": "project-scoped rendered audio evidence"
         }
       ]
     }

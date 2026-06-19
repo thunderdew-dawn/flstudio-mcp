@@ -1,7 +1,7 @@
 {
   "schema": "fls-pilot.architecture.mcp-tools.index.v1",
   "source_snapshot": "agent-docs/machine/architecture-analysis.snapshot.json",
-  "source_snapshot_sha256": "fb75140a6a821e940d3faa4e1ffc88a89088ee8668ae8cf9d5a472510040cc8d",
+  "source_snapshot_sha256": "ff0d38588b91510a3073e81d885de38f9116cddfbcd95686cbf11c28a6db8d7f",
   "generated_at": "2026-06-19",
   "default_agent_rule": "For MCP work, read architecture/mcp-surface.snapshot.json first, then load only the affected module slice below.",
   "modules": {
