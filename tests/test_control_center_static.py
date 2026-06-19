@@ -37,6 +37,10 @@ def test_v3_runtime_workflow_copy_exposes_evidence_limits() -> None:
     assert "/api/workflows/plugin-assistant" not in js
     assert "rendered_master: \"Rendered master audio\"" in js
     assert "static_snapshot_only: \"Project metadata\"" in js
+    assert "id=\"producer_audio_evidence\"" in html
+    assert "async function submitAudioAnalysis()" in js
+    assert 'audioAnalysisRequest("cancel"' in js
+    assert 'audioAnalysisRequest("result"' in js
 
 
 def test_control_center_static_runtime_and_disconnect_behaviour() -> None:

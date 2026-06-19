@@ -46,6 +46,8 @@ from .analysis import (
 from .analysis.live import LiveMeterPolicy
 from .connection import DEFAULT_TCP_HOST, DEFAULT_TCP_PORT, TCPBridge, fetch_all_pages
 from .music import mix_doctor as mix_review
+from .runtime.audio_worker import AUDIO_FEATURE_JOB_KIND, build_audio_job_request
+from .runtime.client import RuntimeClient
 from .runtime_config import (
     DEFAULT_CONTROL_CENTER_HOST,
     DEFAULT_CONTROL_CENTER_PORT,
@@ -56,7 +58,6 @@ from .runtime_config import (
     tcp_port_status,
 )
 from .status import collect_status as collect_status_report
-from .runtime.client import RuntimeClient
 from .workflows.registry import DEFAULT_WORKFLOW_REGISTRY
 
 STATIC_PACKAGE = "fls_pilot.control_center_static"
@@ -394,6 +395,79 @@ def _run_runtime_product_workflow(
             "ok": False,
             "error": f"{type(exc).__name__}: {exc}",
         }
+
+
+def _run_audio_analysis_action(
+    state: ControlCenterState,
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    """Run one Control Center audio-job action through canonical Runtime RPCs."""
+    try:
+        action = str(payload.get("action") or "").strip().lower()
+        client = _runtime_client(state)
+        if action == "submit":
+            request = build_audio_job_request(str(payload.get("path") or ""))
+            job = client.submit_job(
+                request["kind"],
+                input=request["input"],
+                input_summary=request["input_summary"],
+                idempotency_key=request["idempotency_key"],
+                idempotent=True,
+                max_retries=2,
+            )
+            return {"ok": True, "job": job}
+        if action == "list":
+            limit = max(1, min(int(payload.get("limit", 20)), 100))
+            offset = max(0, int(payload.get("offset", 0)))
+            return {
+                "ok": True,
+                "jobs": client.list_jobs(
+                    kind=AUDIO_FEATURE_JOB_KIND,
+                    limit=limit,
+                    offset=offset,
+                ),
+                "limit": limit,
+                "offset": offset,
+            }
+        if action not in {"status", "result", "cancel"}:
+            raise ValueError("action must be submit, status, result, cancel, or list")
+        job_id = str(payload.get("job_id") or "").strip()
+        if not job_id:
+            raise ValueError(f"job_id is required for {action}")
+        if action == "status":
+            return {"ok": True, "job": client.job_status(job_id)}
+        if action == "cancel":
+            return {"ok": True, "job": client.cancel_job(job_id)}
+
+        job = client.job_result(job_id)
+        response: dict[str, Any] = {"ok": True, "job": job}
+        artifact_id = str((job.get("result_ref") or {}).get("artifact_id") or "")
+        link_requested = bool(payload.get("link_evidence"))
+        if artifact_id and link_requested:
+            targets = payload.get("workflow_targets") or []
+            if not isinstance(targets, list) or not all(
+                isinstance(item, str) for item in targets
+            ):
+                raise ValueError("workflow_targets must be a list of workflow ids")
+            response["report"] = client.run_workflow(
+                "audio_evidence",
+                inputs={
+                    "artifact_id": artifact_id,
+                    "evidence_kind": str(
+                        payload.get("evidence_kind") or "rendered_master"
+                    ),
+                    "stem_role": (
+                        str(payload["stem_role"]).strip()
+                        if payload.get("stem_role")
+                        else None
+                    ),
+                    "workflow_links": [item.strip() for item in targets if item.strip()],
+                    "confirmed_by_user": bool(payload.get("confirmed_by_user")),
+                },
+            )
+        return response
+    except Exception as exc:
+        return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
 
 
 def _ui_service_detail(
@@ -3705,6 +3779,8 @@ def _handler_factory(state: ControlCenterState):
             elif self.path == "/api/setup/confirm-step":
                 step = str(body.get("step", ""))
                 self._json(_confirm_step(state, step))
+            elif self.path == "/api/audio-analysis":
+                self._json(_run_audio_analysis_action(state, body))
             elif self.path == "/api/workflows/mix-review":
                 self._json(_run_mix_review(state))
             elif self.path == "/api/workflows/low-end-analysis":

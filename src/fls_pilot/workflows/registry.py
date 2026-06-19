@@ -459,7 +459,7 @@ DEFAULT_WORKFLOW_REGISTRY = WorkflowRegistry(
             "audio_evidence",
             "Audio Evidence",
             "evidence_worker",
-            "planned",
+            "active",
             "excluded",
             True,
             requirements=WorkflowRequirementSet(
@@ -471,6 +471,13 @@ DEFAULT_WORKFLOW_REGISTRY = WorkflowRegistry(
                         invalidates_on=("file_hash_change",),
                     ),
                 ),
+            ),
+            panel_id="producer_audio_evidence",
+            endpoint="/api/audio-analysis",
+            action_label="Analyze Audio",
+            safety_note=(
+                "Offline analysis of a user-selected file. Source audio and FL Studio "
+                "projects are not modified."
             ),
             supported_next_actions=("link_evidence_to_workflow",),
             manual_only_actions=("select_audio_file", "render_audio_in_fl_studio"),

@@ -85,6 +85,8 @@ def test_ui_payload_surfaces_catalog_next_action_and_service_actions():
     assert catalog["mix_review"]["enabled"] is True
     assert catalog["preflight"]["enabled"] is True
     assert catalog["preflight"]["endpoint"] == "/api/workflows/preflight"
+    assert catalog["audio_evidence"]["enabled"] is True
+    assert catalog["audio_evidence"]["endpoint"] == "/api/audio-analysis"
     assert catalog["plugin_assistant"]["enabled"] is False
     assert catalog["plugin_assistant"]["endpoint"] is None
     assert catalog["jam_2_project"]["group"] == "Roadmap"

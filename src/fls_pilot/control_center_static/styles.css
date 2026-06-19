@@ -692,13 +692,109 @@ button { font: inherit; }
   font-weight: 700;
 }
 
-.workflow-runtime-input input {
+.workflow-runtime-input input,
+.workflow-runtime-input select {
   min-height: 40px;
   padding: 8px 10px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel);
   color: var(--text);
+}
+
+.audio-job-panel {
+  display: grid;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.audio-job-form {
+  display: flex;
+  gap: 12px;
+  align-items: end;
+  flex-wrap: wrap;
+}
+
+.audio-path-input {
+  flex: 1 1 320px;
+}
+
+.audio-confirmation {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+  flex: 1 1 100%;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.audio-confirmation input {
+  margin-top: 3px;
+}
+
+.audio-job-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 1fr);
+  gap: 20px;
+}
+
+.audio-active-job,
+.audio-job-list {
+  display: grid;
+  gap: 12px;
+}
+
+.audio-job-card {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(8, 18, 35, 0.55);
+}
+
+.audio-job-card-header,
+.audio-job-actions,
+.audio-job-metrics {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.audio-job-card-header {
+  justify-content: space-between;
+}
+
+.audio-job-card p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.audio-job-progress {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.audio-job-progress i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--cyan), var(--violet));
+}
+
+.audio-job-metrics span {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+@media (max-width: 900px) {
+  .audio-job-layout {
+    grid-template-columns: 1fr;
+  }
 }
 
 .workflow-runtime-summary > div,

@@ -88,6 +88,11 @@
             <span aria-hidden="true">&#x25f0;</span><span>Low-End Analysis</span><span
               class="nav-badge badge-ok">Read-only</span>
           </button>
+          <button class="nav-item nav-item-preview" type="button" data-target="producer_audio_evidence"
+            data-workflow-id="audio_evidence" id="nav-audio-evidence">
+            <span aria-hidden="true">&#x25c8;</span><span>Audio Evidence</span><span
+              class="nav-badge badge-ok">Offline</span>
+          </button>
           <button class="nav-item nav-item-preview" type="button" data-target="producer_organizer"
             data-workflow-id="project_organizer" id="nav-organizer">
             <span aria-hidden="true">&#x25f0;</span><span>Organizer</span><span
@@ -589,6 +594,81 @@
       </section>
     </main>
 
+    <!-- ── Audio Evidence ────────────────────────────────────────────────── -->
+    <main class="status-report" id="producer_audio_evidence">
+      <section class="hero">
+        <div>
+          <h1>Audio Evidence <span class="badge badge-ok">Offline</span></h1>
+          <p>Analyze a manually bounced master, stem, or candidate through the durable Runtime job queue.</p>
+        </div>
+        <div class="hero-actions">
+          <button class="ghost-button" id="refresh-audio-jobs" type="button">Refresh Jobs</button>
+        </div>
+      </section>
+
+      <section class="panel audio-job-panel">
+        <div class="panel-heading">
+          <h2>Submit audio analysis</h2>
+          <span class="badge badge-neutral">No FL project changes</span>
+        </div>
+        <p class="panel-note">
+          Enter a local path visible to the Runtime. The source file is read only and is never moved,
+          modified, or deleted.
+        </p>
+        <div class="audio-job-form">
+          <label class="workflow-runtime-input audio-path-input">
+            <span>Audio file path</span>
+            <input id="audio-analysis-path" type="text" placeholder="/path/to/rendered-master.wav" />
+          </label>
+          <label class="workflow-runtime-input">
+            <span>Evidence kind</span>
+            <select id="audio-evidence-kind">
+              <option value="rendered_master">Rendered master</option>
+              <option value="stem">Stem</option>
+              <option value="candidate">Candidate</option>
+            </select>
+          </label>
+          <label class="workflow-runtime-input">
+            <span>Stem role (optional)</span>
+            <input id="audio-stem-role" type="text" placeholder="bass" />
+          </label>
+          <label class="workflow-runtime-input audio-path-input">
+            <span>Workflow links</span>
+            <input id="audio-workflow-targets" type="text"
+              value="mix_review, low_end_analysis, project_health" />
+          </label>
+          <label class="audio-confirmation">
+            <input id="audio-confirm-project" type="checkbox" />
+            <span>Confirm this file belongs to the current project when Runtime identity is ambiguous.</span>
+          </label>
+          <button class="ghost-button primary-action" id="submit-audio-analysis" type="button">
+            Analyze Audio
+          </button>
+        </div>
+        <div id="audio-analysis-feedback" class="workflow-runtime-notice is-info" role="status">
+          <strong>Ready</strong>
+          <p>Submit a manually bounced file. Analysis runs outside FL Studio.</p>
+        </div>
+      </section>
+
+      <section class="audio-job-layout">
+        <article class="panel">
+          <div class="panel-heading">
+            <h2>Active job</h2>
+            <span class="badge badge-neutral" id="audio-active-status">Idle</span>
+          </div>
+          <div id="audio-active-job" class="audio-active-job"></div>
+        </article>
+        <article class="panel">
+          <div class="panel-heading">
+            <h2>Recent jobs</h2>
+            <span class="badge badge-neutral" id="audio-job-count">0</span>
+          </div>
+          <div id="audio-job-list" class="audio-job-list"></div>
+        </article>
+      </section>
+    </main>
+
     <!-- ── Routing Audit ──────────────────────────────────────────────────── -->
     <main class="status-report" id="producer_routing">
       <section class="hero">
@@ -1022,8 +1102,7 @@
       <section class="hero">
         <div>
           <h1>Preflight <span class="badge badge-ok">Read-only</span></h1>
-          <p>Review project metadata before export. Level evidence, render settings, and mastering remain separate
-            checks.</p>
+          <p>Review project metadata before export. Level evidence, render settings, and mastering remain separate checks.</p>
         </div>
       </section>
       <div class="runtime-workflow-content" id="preflight-runtime-content"></div>

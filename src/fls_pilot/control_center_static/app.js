@@ -27,6 +27,14 @@ const state = {
     error: null,
     lastRun: null
   },
+  audioAnalysis: {
+    loading: false,
+    jobs: [],
+    activeJob: null,
+    report: null,
+    error: null,
+    pollTimer: null
+  },
   runtimeWorkflows: {},
   setupFeedback: {},
   actionFeedback: {},
@@ -57,6 +65,7 @@ const DEFAULT_WORKFLOW_CATALOG = [
   { id: "mix_review", panel_id: "producer_mix_review", title: "Mix Review", group: "Project Review", maturity: "read_only", enabled: true, endpoint: "/api/workflows/mix-review", action_label: "Run Mix Review", safety_note: "Read-only mixer review. No project changes are made." },
   { id: "routing_audit", panel_id: "producer_routing", title: "Routing Audit", group: "Project Review", maturity: "read_only", enabled: true, endpoint: "/api/workflows/routing-audit", action_label: "Run Routing Audit", safety_note: "Read-only routing audit. Cleanup remains proposal-first." },
   { id: "low_end_analysis", panel_id: "producer_low_end", title: "Low-End Analysis", group: "Project Review", maturity: "read_only", enabled: true, endpoint: "/api/workflows/low-end-analysis", action_label: "Run Low-End Analysis", safety_note: "Read-only low-end and stereo safety review." },
+  { id: "audio_evidence", panel_id: "producer_audio_evidence", title: "Audio Evidence", group: "Project Review", maturity: "read_only", enabled: true, endpoint: "/api/audio-analysis", action_label: "Analyze Audio", safety_note: "Offline analysis of a user-selected file. Source audio and FL Studio projects are not modified." },
   { id: "project_organizer", panel_id: "producer_organizer", title: "Organizer", group: "Project Review", maturity: "read_only", enabled: true, endpoint: "/api/workflows/project-organizer", action_label: "Run Organizer", safety_note: "Read-only scan. Any cleanup requires an approved safe-write tool." },
   { id: "preflight", panel_id: "producer_preflight", title: "Preflight", group: "Project Review", maturity: "read_only", enabled: true, endpoint: "/api/workflows/preflight", action_label: "Run Preflight", safety_note: "Read-only export-readiness review. Render, save, export, and mastering remain manual." },
   { id: "jam_2_project", panel_id: "producer_jam_2_project", title: "Jam 2 Project", group: "Roadmap", maturity: "planned", enabled: false, endpoint: null, action_label: null, safety_note: "Planned for v3.1+. No Control Center action is available in v3.0." },
@@ -208,6 +217,7 @@ function render() {
   renderProjectData();
   renderMixReview();
   renderLowEndAnalysis();
+  renderAudioAnalysis();
   renderRoutingAudit();
   renderProjectOrganizer();
   renderProjectHealth();
@@ -455,6 +465,233 @@ function evidenceLabel(value) {
     unavailable: "Unavailable"
   };
   return labels[value] || safeString(value).replaceAll("_", " ");
+}
+
+// ─── Audio Analysis Jobs ─────────────────────────────────────────────────────
+async function audioAnalysisRequest(action, payload = {}) {
+  const response = await api("/api/audio-analysis", {
+    method: "POST",
+    body: JSON.stringify({ action, ...payload })
+  });
+  if (response?.ok === false) throw new Error(response.error || "Audio analysis failed.");
+  return response;
+}
+
+function audioWorkflowTargets() {
+  const raw = document.getElementById("audio-workflow-targets")?.value || "";
+  return raw.split(",").map(item => item.trim()).filter(Boolean);
+}
+
+async function submitAudioAnalysis() {
+  const audioState = state.audioAnalysis;
+  const path = document.getElementById("audio-analysis-path")?.value?.trim() || "";
+  audioState.loading = true;
+  audioState.error = null;
+  audioState.report = null;
+  renderAudioAnalysis();
+  try {
+    const response = await audioAnalysisRequest("submit", { path });
+    audioState.activeJob = response.job;
+    await loadAudioAnalysisJobs();
+    scheduleAudioJobPoll(response.job.job_id);
+  } catch (error) {
+    audioState.error = error.message;
+  } finally {
+    audioState.loading = false;
+    renderAudioAnalysis();
+  }
+}
+
+async function loadAudioAnalysisJobs() {
+  try {
+    const response = await audioAnalysisRequest("list", { limit: 20, offset: 0 });
+    state.audioAnalysis.jobs = response.jobs || [];
+    if (!state.audioAnalysis.activeJob && state.audioAnalysis.jobs.length) {
+      state.audioAnalysis.activeJob = state.audioAnalysis.jobs[0];
+    }
+    renderAudioAnalysis();
+    return response;
+  } catch (error) {
+    state.audioAnalysis.error = error.message;
+    renderAudioAnalysis();
+    return null;
+  }
+}
+
+async function refreshAudioAnalysisJob(jobId, { continuePolling = false } = {}) {
+  try {
+    const response = await audioAnalysisRequest("status", { job_id: jobId });
+    state.audioAnalysis.activeJob = response.job;
+    const index = state.audioAnalysis.jobs.findIndex(item => item.job_id === jobId);
+    if (index >= 0) state.audioAnalysis.jobs[index] = response.job;
+    else state.audioAnalysis.jobs.unshift(response.job);
+    state.audioAnalysis.error = null;
+    renderAudioAnalysis();
+    if (continuePolling && ["queued", "running", "interrupted"].includes(response.job.status)) {
+      scheduleAudioJobPoll(jobId);
+    }
+    return response.job;
+  } catch (error) {
+    state.audioAnalysis.error = error.message;
+    renderAudioAnalysis();
+    return null;
+  }
+}
+
+function scheduleAudioJobPoll(jobId) {
+  if (window.__FLS_PILOT_TEST__) return;
+  if (state.audioAnalysis.pollTimer) clearTimeout(state.audioAnalysis.pollTimer);
+  state.audioAnalysis.pollTimer = setTimeout(() => {
+    state.audioAnalysis.pollTimer = null;
+    refreshAudioAnalysisJob(jobId, { continuePolling: true });
+  }, 800);
+}
+
+async function cancelAudioAnalysisJob(jobId) {
+  try {
+    const response = await audioAnalysisRequest("cancel", { job_id: jobId });
+    state.audioAnalysis.activeJob = response.job;
+    await loadAudioAnalysisJobs();
+  } catch (error) {
+    state.audioAnalysis.error = error.message;
+    renderAudioAnalysis();
+  }
+}
+
+async function linkAudioAnalysisResult(jobId) {
+  try {
+    const response = await audioAnalysisRequest("result", {
+      job_id: jobId,
+      link_evidence: true,
+      evidence_kind: document.getElementById("audio-evidence-kind")?.value || "rendered_master",
+      stem_role: document.getElementById("audio-stem-role")?.value?.trim() || null,
+      workflow_targets: audioWorkflowTargets(),
+      confirmed_by_user: Boolean(document.getElementById("audio-confirm-project")?.checked)
+    });
+    state.audioAnalysis.activeJob = response.job;
+    state.audioAnalysis.report = response.report || null;
+    state.audioAnalysis.error = null;
+    renderAudioAnalysis();
+  } catch (error) {
+    state.audioAnalysis.error = error.message;
+    renderAudioAnalysis();
+  }
+}
+
+function renderAudioAnalysis() {
+  const audioState = state.audioAnalysis;
+  const submit = document.getElementById("submit-audio-analysis");
+  if (submit) {
+    submit.disabled = audioState.loading;
+    submit.textContent = audioState.loading ? "Submitting..." : "Analyze Audio";
+  }
+  const feedback = document.getElementById("audio-analysis-feedback");
+  if (feedback) {
+    feedback.className = `workflow-runtime-notice ${audioState.error ? "is-critical" : "is-info"}`;
+    feedback.innerHTML = "";
+    const title = document.createElement("strong");
+    const body = document.createElement("p");
+    if (audioState.error) {
+      title.textContent = "Audio analysis unavailable";
+      body.textContent = audioState.error;
+    } else if (audioState.report) {
+      title.textContent = "Evidence linked";
+      body.textContent = "The Runtime recorded project-scoped rendered audio evidence.";
+    } else {
+      title.textContent = "Offline and non-destructive";
+      body.textContent = "Runtime jobs never render from FL Studio and never modify the source file.";
+    }
+    feedback.append(title, body);
+  }
+  const active = audioState.activeJob;
+  text("audio-active-status", active ? stateLabel(active.status) : "Idle");
+  const activeContainer = document.getElementById("audio-active-job");
+  if (activeContainer) {
+    activeContainer.innerHTML = "";
+    activeContainer.appendChild(
+      active ? audioJobCard(active, { active: true }) : placeholder("No audio analysis job selected.")
+    );
+  }
+  text("audio-job-count", audioState.jobs.length);
+  const list = document.getElementById("audio-job-list");
+  if (list) {
+    list.innerHTML = "";
+    if (!audioState.jobs.length) {
+      list.appendChild(placeholder("No Runtime audio jobs yet."));
+    } else {
+      for (const job of audioState.jobs.slice(0, 20)) {
+        list.appendChild(audioJobCard(job));
+      }
+    }
+  }
+}
+
+function audioJobCard(job, { active = false } = {}) {
+  const card = document.createElement("article");
+  card.className = "audio-job-card";
+  const header = document.createElement("div");
+  header.className = "audio-job-card-header";
+  const name = document.createElement("strong");
+  name.textContent = job.input_summary?.source_basename || job.job_id || "Audio job";
+  const badge = document.createElement("span");
+  badge.className = `badge ${job.status === "succeeded" ? "badge-ok" : "badge-neutral"}`;
+  badge.textContent = stateLabel(job.status);
+  header.append(name, badge);
+  card.appendChild(header);
+
+  const progress = document.createElement("div");
+  progress.className = "audio-job-progress";
+  const bar = document.createElement("i");
+  bar.style.width = `${Math.round(Number(job.progress || 0) * 100)}%`;
+  progress.appendChild(bar);
+  card.appendChild(progress);
+
+  const metrics = document.createElement("div");
+  metrics.className = "audio-job-metrics";
+  const summary = job.result_ref?.summary || {};
+  for (const value of [
+    `${Math.round(Number(job.progress || 0) * 100)}%`,
+    job.cache_hit ? "Cache hit" : null,
+    summary.duration_seconds == null ? null : `${numberValue(summary.duration_seconds, 1)} s`,
+    summary.integrated_lufs == null ? null : `${numberValue(summary.integrated_lufs, 1)} LUFS`
+  ].filter(Boolean)) {
+    const item = document.createElement("span");
+    item.textContent = value;
+    metrics.appendChild(item);
+  }
+  card.appendChild(metrics);
+
+  if (job.error?.message) {
+    const error = document.createElement("p");
+    error.textContent = job.error.message;
+    card.appendChild(error);
+  }
+  const actions = document.createElement("div");
+  actions.className = "audio-job-actions";
+  if (!active) {
+    actions.appendChild(audioJobButton("View", () => {
+      state.audioAnalysis.activeJob = job;
+      renderAudioAnalysis();
+    }));
+  }
+  if (["queued", "running", "interrupted"].includes(job.status)) {
+    actions.appendChild(audioJobButton("Refresh", () => refreshAudioAnalysisJob(job.job_id)));
+    actions.appendChild(audioJobButton("Cancel", () => cancelAudioAnalysisJob(job.job_id)));
+  }
+  if (job.status === "succeeded") {
+    actions.appendChild(audioJobButton("Link Evidence", () => linkAudioAnalysisResult(job.job_id), true));
+  }
+  if (actions.children.length) card.appendChild(actions);
+  return card;
+}
+
+function audioJobButton(label, handler, primary = false) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = `ghost-button${primary ? " primary-action" : ""}`;
+  button.textContent = label;
+  button.addEventListener("click", handler);
+  return button;
 }
 
 function renderNextAction() {
@@ -4317,6 +4554,10 @@ function selectPanel(targetId) {
   }
   if (targetId === "producer_mix_review") renderMixReview();
   if (targetId === "producer_low_end") renderLowEndAnalysis();
+  if (targetId === "producer_audio_evidence") {
+    renderAudioAnalysis();
+    loadAudioAnalysisJobs();
+  }
   if (targetId === "producer_routing") renderRoutingAudit();
   if (targetId === "producer_organizer") renderProjectOrganizer();
   if (targetId === "producer_health") renderProjectHealth();
@@ -4405,6 +4646,12 @@ function wireEvents() {
   const lowEndRefreshButton = document.getElementById("low-end-refresh-status");
   if (lowEndRefreshButton) lowEndRefreshButton.addEventListener("click", refresh);
 
+  const submitAudioButton = document.getElementById("submit-audio-analysis");
+  if (submitAudioButton) submitAudioButton.addEventListener("click", submitAudioAnalysis);
+
+  const refreshAudioButton = document.getElementById("refresh-audio-jobs");
+  if (refreshAudioButton) refreshAudioButton.addEventListener("click", loadAudioAnalysisJobs);
+
   const runRoutingButton = document.getElementById("run-routing-audit");
   if (runRoutingButton) runRoutingButton.addEventListener("click", runRoutingAudit);
 
@@ -4480,6 +4727,11 @@ window.flsPilotControlCenter = {
   runRoutingAudit,
   runProjectOrganizer,
   runProjectHealth,
+  submitAudioAnalysis,
+  loadAudioAnalysisJobs,
+  refreshAudioAnalysisJob,
+  cancelAudioAnalysisJob,
+  linkAudioAnalysisResult,
   runRuntimeProductWorkflow,
   renderMixReview,
   renderLowEndAnalysis,
@@ -4487,6 +4739,7 @@ window.flsPilotControlCenter = {
   renderRoutingAudit,
   renderProjectOrganizer,
   renderProjectHealth,
+  renderAudioAnalysis,
   renderRuntimeProductPanel,
   renderRuntimeProductPanels,
   renderRuntime,
