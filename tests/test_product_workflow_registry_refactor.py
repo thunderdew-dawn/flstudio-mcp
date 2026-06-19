@@ -7,8 +7,6 @@ import sys
 import tempfile
 from pathlib import Path
 
-import pytest
-
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from fls_pilot import protocol, safety  # noqa: E402
@@ -156,9 +154,7 @@ def test_project_organizer_invalid_color_fails_before_mutation() -> None:
     assert any("unknown color" in row.get("message", "") for row in result.get("diagnostics", []))
 
 
-@pytest.mark.skip(reason="project_organizer broken by v3 schema, out of scope")
 def test_project_organizer_cleanup_requires_explicit_approval() -> None:
-    return
     mcp = MockMCP()
     project_organizer.register(mcp)
     original_get_bridge = project_organizer.get_bridge
@@ -182,9 +178,7 @@ def test_project_organizer_cleanup_requires_explicit_approval() -> None:
     assert result["proposed_changes"][0]["proposed_state"]["approved"] is True
 
 
-@pytest.mark.skip(reason="project_organizer broken by v3 schema, out of scope")
 def test_project_organizer_standard_approval_uses_exact_tool() -> None:
-    return
     mcp = MockMCP()
     project_organizer.register(mcp)
     original_get_bridge = project_organizer.get_bridge
@@ -270,11 +264,11 @@ def main() -> int:
     test_project_organizer_invalid_color_fails_before_mutation()
     check("project organizer rejects invalid colors before mutation", True)
 
-    # test_project_organizer_cleanup_requires_explicit_approval()
-    # check("project organizer cleanup requires explicit approval", True)
+    test_project_organizer_cleanup_requires_explicit_approval()
+    check("project organizer cleanup requires explicit approval", True)
 
-    # test_project_organizer_standard_approval_uses_exact_tool()
-    # check("project organizer standard approval uses exact tool", True)
+    test_project_organizer_standard_approval_uses_exact_tool()
+    check("project organizer standard approval uses exact tool", True)
 
     with tempfile.TemporaryDirectory() as tmp:
         _exercise_mix_doctor_trim_volume_uses_registry_safe_write(Path(tmp))
