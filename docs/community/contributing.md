@@ -58,7 +58,6 @@ confirm `[FLStudioPilot] Ready` in FL's Script output, start the bridge with
 - fl_controller/FLStudioPilot/ — the thin controller script that runs inside FL. Keep it cheap: return raw data, do no judgement here.
 - fl_pyscripts/ — the note-bridge pyscript (MCP_Apply).
 - scripts/ — installer and tooling.
-- skills/ — the production skill packaged with the server.
 - docs/ — public user and MCP integration documentation.
 - agent-docs/ — internal agent, engineering, roadmap, and safety contracts.
 

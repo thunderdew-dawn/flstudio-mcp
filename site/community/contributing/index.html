@@ -1,1169 +1,1260 @@
-
 <!doctype html>
 <html lang="en" class="no-js">
-  <head>
-    
-      <meta charset="utf-8">
-      <meta name="viewport" content="width=device-width,initial-scale=1">
-      
-        <meta name="description" content="Create more. Check less. Local FL Studio Control Center and MCP workflow assistant .">
-      
-      
-      
-        <link rel="canonical" href="https://fl-studio-pilot.readthedocs.io/en/latest/community/contributing/">
-      
-      
-        <link rel="prev" href="../security/">
-      
-      
-        <link rel="next" href="../code-of-conduct/">
-      
-      
-        
-      
-      
-      <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
-    
-    
-      
-        <title>Contributing - fls-pilot</title>
-      
-    
-    
-      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
-      
-        
-        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
-      
-      
+
+<head>
+
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+
+  <meta name="description"
+    content="Create more. Check less. Local FL Studio Control Center and MCP workflow assistant .">
 
 
-    
-    
-      
-    
-    
-      
-        
-        
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
-        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
-      
-    
-    
-      <link rel="stylesheet" href="../../stylesheets/extra.css">
-    
-    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
-    
-      
 
-    
-    
-  </head>
-  
-  
-    
-    
-      
-    
-    
-    
-    
-    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="blue-grey" data-md-color-accent="cyan">
-  
-    
-    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
-    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
-    <label class="md-overlay" for="__drawer"></label>
-    <div data-md-component="skip">
-      
-        
-        <a href="#contributing-to-fls-pilot" class="md-skip">
-          Skip to content
-        </a>
-      
-    </div>
-    <div data-md-component="announce">
-      
-    </div>
-    
-    
-      
+  <link rel="canonical" href="https://fl-studio-pilot.readthedocs.io/en/latest/community/contributing/">
 
-  
 
-<header class="md-header md-header--shadow" data-md-component="header">
-  <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../.." title="fls-pilot" class="md-header__button md-logo" aria-label="fls-pilot" data-md-component="logo">
-      
-  
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+  <link rel="prev" href="../security/">
 
+
+  <link rel="next" href="../code-of-conduct/">
+
+
+
+
+
+  <link rel="icon" href="../../assets/images/favicon.png">
+  <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+
+
+
+  <title>Contributing - fls-pilot</title>
+
+
+
+  <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+
+
+  <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+
+
+
+
+
+
+
+
+
+
+
+
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet"
+    href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+  <style>
+    :root {
+      --md-text-font: "Roboto";
+      --md-code-font: "Roboto Mono"
+    }
+  </style>
+
+
+
+  <link rel="stylesheet" href="../../stylesheets/extra.css">
+
+  <script>__md_scope = new URL("../..", location), __md_hash = e => [...e].reduce(((e, _) => (e << 5) - e + _.charCodeAt(0)), 0), __md_get = (e, _ = localStorage, t = __md_scope) => JSON.parse(_.getItem(t.pathname + "." + e)), __md_set = (e, _, t = localStorage, a = __md_scope) => { try { t.setItem(a.pathname + "." + e, JSON.stringify(_)) } catch (e) { } }</script>
+
+
+
+
+
+</head>
+
+
+
+
+
+
+
+
+
+<body dir="ltr" data-md-color-scheme="default" data-md-color-primary="blue-grey" data-md-color-accent="cyan">
+
+
+  <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+  <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+  <label class="md-overlay" for="__drawer"></label>
+  <div data-md-component="skip">
+
+
+    <a href="#contributing-to-fls-pilot" class="md-skip">
+      Skip to content
     </a>
-    <label class="md-header__button md-icon" for="__drawer">
-      
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
-    </label>
-    <div class="md-header__title" data-md-component="header-title">
-      <div class="md-header__ellipsis">
-        <div class="md-header__topic">
-          <span class="md-ellipsis">
-            fls-pilot
-          </span>
-        </div>
-        <div class="md-header__topic" data-md-component="header-topic">
-          <span class="md-ellipsis">
-            
-              Contributing
-            
-          </span>
-        </div>
-      </div>
-    </div>
-    
-      
-        <form class="md-header__option" data-md-component="palette">
-  
-    
-    
-    
-    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="blue-grey" data-md-color-accent="cyan"  aria-hidden="true"  type="radio" name="__palette" id="__palette_0">
-    
-  
-    
-    
-    
-    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="cyan"  aria-hidden="true"  type="radio" name="__palette" id="__palette_1">
-    
-  
-</form>
-      
-    
-    
-      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
-    
-    
-    
-      
-      
-        <label class="md-header__button md-icon" for="__search">
-          
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
-        </label>
-        <div class="md-search" data-md-component="search" role="dialog">
-  <label class="md-search__overlay" for="__search"></label>
-  <div class="md-search__inner" role="search">
-    <form class="md-search__form" name="search">
-      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
-      <label class="md-search__icon md-icon" for="__search">
-        
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
-        
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+
+  </div>
+  <div data-md-component="announce">
+
+  </div>
+
+
+
+
+
+
+  <header class="md-header md-header--shadow" data-md-component="header">
+    <nav class="md-header__inner md-grid" aria-label="Header">
+      <a href="../.." title="fls-pilot" class="md-header__button md-logo" aria-label="fls-pilot"
+        data-md-component="logo">
+
+
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+          <path
+            d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54" />
+        </svg>
+
+      </a>
+      <label class="md-header__button md-icon" for="__drawer">
+
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+          <path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z" />
+        </svg>
       </label>
-      <nav class="md-search__options" aria-label="Search">
-        
-        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
-          
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
-        </button>
-      </nav>
-      
-        <div class="md-search__suggest" data-md-component="search-suggest"></div>
-      
-    </form>
-    <div class="md-search__output">
-      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
-        <div class="md-search-result" data-md-component="search-result">
-          <div class="md-search-result__meta">
-            Initializing search
+      <div class="md-header__title" data-md-component="header-title">
+        <div class="md-header__ellipsis">
+          <div class="md-header__topic">
+            <span class="md-ellipsis">
+              fls-pilot
+            </span>
           </div>
-          <ol class="md-search-result__list" role="presentation"></ol>
+          <div class="md-header__topic" data-md-component="header-topic">
+            <span class="md-ellipsis">
+
+              Contributing
+
+            </span>
+          </div>
         </div>
       </div>
-    </div>
-  </div>
-</div>
-      
-    
-    
-      <div class="md-header__source">
-        <a href="https://github.com/thunderdew-dawn/fls-pilot" title="Go to repository" class="md-source" data-md-component="source">
-  <div class="md-source__icon md-icon">
-    
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
-  </div>
-  <div class="md-source__repository">
-    thunderdew-dawn/fls-pilot
-  </div>
-</a>
-      </div>
-    
-  </nav>
-  
-</header>
-    
-    <div class="md-container" data-md-component="container">
-      
-      
-        
-          
-        
-      
-      <main class="md-main" data-md-component="main">
-        <div class="md-main__inner md-grid">
-          
-            
-              
-              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
-                <div class="md-sidebar__scrollwrap">
-                  <div class="md-sidebar__inner">
-                    
+
+
+      <form class="md-header__option" data-md-component="palette">
 
 
 
-<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
-  <label class="md-nav__title" for="__drawer">
-    <a href="../.." title="fls-pilot" class="md-nav__button md-logo" aria-label="fls-pilot" data-md-component="logo">
-      
-  
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
 
-    </a>
-    fls-pilot
-  </label>
-  
-    <div class="md-nav__source">
-      <a href="https://github.com/thunderdew-dawn/fls-pilot" title="Go to repository" class="md-source" data-md-component="source">
-  <div class="md-source__icon md-icon">
-    
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
-  </div>
-  <div class="md-source__repository">
-    thunderdew-dawn/fls-pilot
-  </div>
-</a>
-    </div>
-  
-  <ul class="md-nav__list" data-md-scrollfix>
-    
-      
-      
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../.." class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Home
-  
+        <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default"
+          data-md-color-primary="blue-grey" data-md-color-accent="cyan" aria-hidden="true" type="radio" name="__palette"
+          id="__palette_0">
 
-    
-  </span>
-  
-  
 
-      </a>
-    </li>
-  
 
-    
-      
-      
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../user-guide/setup/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Setup
-  
 
-    
-  </span>
-  
-  
 
-      </a>
-    </li>
-  
+        <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate"
+          data-md-color-primary="black" data-md-color-accent="cyan" aria-hidden="true" type="radio" name="__palette"
+          id="__palette_1">
 
-    
-      
-      
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../control-center/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Control Center
-  
 
-    
-  </span>
-  
-  
+      </form>
 
-      </a>
-    </li>
-  
 
-    
-      
-      
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../user-guide/workflows/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Workflows
-  
 
-    
-  </span>
-  
-  
+      <script>var palette = __md_get("__palette"); if (palette && palette.color) { if ("(prefers-color-scheme)" === palette.color.media) { var media = matchMedia("(prefers-color-scheme: light)"), input = document.querySelector(media.matches ? "[data-md-color-media='(prefers-color-scheme: light)']" : "[data-md-color-media='(prefers-color-scheme: dark)']"); palette.color.media = input.getAttribute("data-md-color-media"), palette.color.scheme = input.getAttribute("data-md-color-scheme"), palette.color.primary = input.getAttribute("data-md-color-primary"), palette.color.accent = input.getAttribute("data-md-color-accent") } for (var [key, value] of Object.entries(palette.color)) document.body.setAttribute("data-md-color-" + key, value) }</script>
 
-      </a>
-    </li>
-  
 
-    
-      
-      
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../user-guide/prompts/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Prompt Examples
-  
 
-    
-  </span>
-  
-  
 
-      </a>
-    </li>
-  
 
-    
-      
-      
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../safety-limits/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Safety & Limits
-  
+      <label class="md-header__button md-icon" for="__search">
 
-    
-  </span>
-  
-  
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+          <path
+            d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5" />
+        </svg>
+      </label>
+      <div class="md-search" data-md-component="search" role="dialog">
+        <label class="md-search__overlay" for="__search"></label>
+        <div class="md-search__inner" role="search">
+          <form class="md-search__form" name="search">
+            <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search"
+              autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false"
+              data-md-component="search-query" required>
+            <label class="md-search__icon md-icon" for="__search">
 
-      </a>
-    </li>
-  
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                <path
+                  d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5" />
+              </svg>
 
-    
-      
-      
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../mcp-integration/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    MCP Integration
-  
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                <path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z" />
+              </svg>
+            </label>
+            <nav class="md-search__options" aria-label="Search">
 
-    
-  </span>
-  
-  
+              <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
 
-      </a>
-    </li>
-  
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                  <path
+                    d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
+                </svg>
+              </button>
+            </nav>
 
-    
-      
-      
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../mcp-architecture/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Architecture
-  
+            <div class="md-search__suggest" data-md-component="search-suggest"></div>
 
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-    
-      
-      
-  
-  
-    
-  
-  
-  
-    
-    
-      
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-    
-    
-    
-      
-        
-        
-      
-    
-    
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
-      
-        
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" checked>
-        
-          
-          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="">
-            
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Community
-  
-
-    
-  </span>
-  
-  
-
-            <span class="md-nav__icon md-icon"></span>
-          </label>
-        
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_9">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
-    Community
-  
-
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../support/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Support
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../security/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Security
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-    
-  
-  
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Contributing
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Contributing
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#code-of-conduct" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Code of Conduct
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#ways-to-contribute" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Ways to contribute
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#before-you-start" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Before you start
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#development-setup" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Development setup
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#project-layout" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Project layout
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#safety-layer-important" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Safety layer (important)
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#anti-vibe-coding-audits-important" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Anti-Vibe Coding Audits (important)
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#pull-requests" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Pull requests
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#reporting-bugs" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Reporting bugs
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#code-of-conduct_1" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Code of conduct
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#license" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        License
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../code-of-conduct/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Code of Conduct
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../notice/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Notice
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-          </ul>
-        </nav>
-      
-    </li>
-  
-
-    
-  </ul>
-</nav>
-                  </div>
+          </form>
+          <div class="md-search__output">
+            <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+              <div class="md-search-result" data-md-component="search-result">
+                <div class="md-search-result__meta">
+                  Initializing search
                 </div>
+                <ol class="md-search-result__list" role="presentation"></ol>
               </div>
-            
-            
-              
-              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
-                <div class="md-sidebar__scrollwrap">
-                  <div class="md-sidebar__inner">
-                    
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#code-of-conduct" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Code of Conduct
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#ways-to-contribute" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Ways to contribute
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#before-you-start" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Before you start
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#development-setup" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Development setup
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#project-layout" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Project layout
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#safety-layer-important" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Safety layer (important)
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#anti-vibe-coding-audits-important" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Anti-Vibe Coding Audits (important)
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#pull-requests" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Pull requests
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#reporting-bugs" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Reporting bugs
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#code-of-conduct_1" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Code of conduct
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#license" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        License
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-                  </div>
-                </div>
-              </div>
-            
-          
-          
-            <div class="md-content" data-md-component="content">
-              
-              <article class="md-content__inner md-typeset">
-                
-                  
-
-
-  
-  
-
-
-<h1 id="contributing-to-fls-pilot">Contributing to fls-pilot<a class="headerlink" href="#contributing-to-fls-pilot" title="Permanent link">&para;</a></h1>
-<p>Thanks for your interest in improving fls-pilot. This project is a Model
-Context Protocol server that lets an AI assistant drive FL Studio 2025 — mixer, plugins,
-piano roll, routing, and project — through calibrated, safety-checked tools.
-Contributions of all kinds are welcome: bug reports, fixes, new tools, docs,
-and platform support.</p>
-<p>This repository is the maintained <code>thunderdew-dawn/fls-pilot</code> fork of
-<code>rosasynthesiz/flstudio-mcp</code>. The 3.0 line intentionally uses the breaking
-<code>fls-pilot</code> package, command, and import names with no old aliases.
-Contributions should follow this fork's rollback-first safety layer,
-API-evidence discipline, and GitHub roadmap project. The generated roadmap
-snapshot under <code>agent-docs/project/</code> is for repository work; the GitHub project
-board remains the planning source of truth.</p>
-<h2 id="code-of-conduct">Code of Conduct<a class="headerlink" href="#code-of-conduct" title="Permanent link">&para;</a></h2>
-<p>By participating in this project, you agree to abide by our <a href="../code-of-conduct/">Code of Conduct</a>. Please read it to understand the expectations for behavior in our community.</p>
-<h2 id="ways-to-contribute">Ways to contribute<a class="headerlink" href="#ways-to-contribute" title="Permanent link">&para;</a></h2>
-<ul>
-<li><strong>Report a bug</strong> — open an issue with steps to reproduce, your FL Studio build, and the relevant Script output / server log.</li>
-<li><strong>Request or add a tool</strong> — propose a new capability (a mixing intent, an analysis tool, etc.) in an issue first, so we can agree on the shape before you build it.</li>
-<li><strong>Improve docs</strong> — README, setup, troubleshooting, public docs, and internal
-  agent docs are all fair game.</li>
-<li><strong>Port to Linux</strong> — the server is cross-platform Python; the friction is the virtual MIDI ports and the controller-script paths. This is the most valuable open contribution. Open an issue before starting so we can coordinate.</li>
-</ul>
-<h2 id="before-you-start">Before you start<a class="headerlink" href="#before-you-start" title="Permanent link">&para;</a></h2>
-<p>Please read the <strong>Limitations</strong> section of the README. Several things are <em>not</em> bugs — they are constraints of FL Studio's scripting API:</p>
-<ul>
-<li>Plugins, audio files, and rendering are UI-only. The API cannot load a plugin or render audio, so plugin/preset tools suggest; the user loads.</li>
-<li>Note writing is armed once per session via MCP_Apply in the piano roll.</li>
-<li>Micro-tonal scales are rounded to the nearest semitone (12-tone MIDI).</li>
-</ul>
-<p>A PR that tries to "fix" one of these by working around the sandbox will likely be declined unless it's genuinely reliable across FL builds.</p>
-<h2 id="development-setup">Development setup<a class="headerlink" href="#development-setup" title="Permanent link">&para;</a></h2>
-<p>You'll need the same environment as a user, plus an editable install:</p>
-<ul>
-<li>Windows 10/11 or macOS 12+, FL Studio 2025+, Python 3.12</li>
-<li>loopMIDI on Windows or the IAC Driver on macOS, with two ports named exactly
-  FLStudioPilot RX and FLStudioPilot TX</li>
-<li>An MCP client (like Claude Desktop or Cursor) for end-to-end testing</li>
-</ul>
-<p>Install steps: clone the repo, cd into it, run <code>scripts\install_windows.bat</code> or
-<code>./scripts/install_macos.sh</code>, then <code>pip install -e ".[audio]"</code> if you'll touch
-the audio analysis code. Wire the MIDI ports in FL (Options &gt; MIDI Settings),
-confirm <code>[FLStudioPilot] Ready</code> in FL's Script output, start the bridge with
-<code>fls-pilot-daemon</code>, then verify the link by asking your AI assistant to call
-<code>fl_transport(action="ping")</code>.</p>
-<h2 id="project-layout">Project layout<a class="headerlink" href="#project-layout" title="Permanent link">&para;</a></h2>
-<ul>
-<li>src/fls_pilot/ — the MCP server: tool definitions, calibration, diagnosis, planning. Almost all logic lives here.</li>
-<li>fl_controller/FLStudioPilot/ — the thin controller script that runs inside FL. Keep it cheap: return raw data, do no judgement here.</li>
-<li>fl_pyscripts/ — the note-bridge pyscript (MCP_Apply).</li>
-<li>scripts/ — installer and tooling.</li>
-<li>skills/ — the production skill packaged with the server.</li>
-<li>docs/ — public user and MCP integration documentation.</li>
-<li>agent-docs/ — internal agent, engineering, roadmap, and safety contracts.</li>
-</ul>
-<p>The guiding split: the controller returns cheap raw data; all judgement (diagnosis, calibration, planning) happens server-side. New tools should follow this — don't push decision-making into the controller.</p>
-<h2 id="safety-layer-important">Safety layer (important)<a class="headerlink" href="#safety-layer-important" title="Permanent link">&para;</a></h2>
-<p>Every tool that modifies the project must route through the snapshot → write → readback → rollback safety layer and the persisted change log. Tools should be reversible and should show the planned change before applying it. A new write-tool that bypasses this won't be merged. Read-only tools (state, levels, analysis) don't need it.</p>
-<h2 id="anti-vibe-coding-audits-important">Anti-Vibe Coding Audits (important)<a class="headerlink" href="#anti-vibe-coding-audits-important" title="Permanent link">&para;</a></h2>
-<p>To enforce coding discipline and prevent LLM "vibe coding" (undisciplined trial-and-error, unverified knowledge, sandbox violations, or lazy placeholder code), this repository enforces strict static checks. </p>
-<p>You can run the audit manually at any time:
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>.venv/bin/python<span class="w"> </span>scripts/audit_anti_vibe.py
-</code></pre></div></p>
-<p>It is highly recommended to install the pre-commit hook so your commits are blocked if they violate these rules:
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>.venv/bin/python<span class="w"> </span>scripts/install_precommit_anti_vibe.py
-</code></pre></div></p>
-<p>The audit blocks:
-- <strong>Sandbox violations</strong>: Importing <code>os</code> or calling <code>open()</code> inside the FL Studio controller script.
-- <strong>Knowledgebase gaps</strong>: Missing required JSON fields in <code>knowledgebase/</code> entries according to <code>AGENTS.md</code>.
-- <strong>Lazy coding patterns</strong>: Keywords such as <code>TODO: fix later</code>, <code>HACK</code>, <code>print("here")</code>, <code>stub implementation</code>, etc. in source code.</p>
-<h2 id="pull-requests">Pull requests<a class="headerlink" href="#pull-requests" title="Permanent link">&para;</a></h2>
-<ol>
-<li>Open an issue first for anything beyond a small fix, so the approach can be agreed on.</li>
-<li>Branch from main; keep PRs focused on one change.</li>
-<li>Test on a real FL Studio session — note in the PR what you verified and on which FL build. Hardware-tested changes are strongly preferred, since much of this can't be unit-tested without FL.</li>
-<li>Match the existing style: clear tool names, parameters documented, errors returned as structured results rather than raised blindly.</li>
-<li>Update the README / docs if you add or change a tool or its behavior.</li>
-<li>Write clear commit messages describing what changed and why.</li>
-</ol>
-<h2 id="reporting-bugs">Reporting bugs<a class="headerlink" href="#reporting-bugs" title="Permanent link">&para;</a></h2>
-<p>A good report includes:</p>
-<ul>
-<li>FL Studio edition and build (e.g. Producer Edition v25.2.5 [build 5319])</li>
-<li>What you asked the AI assistant to do, and what happened vs. what you expected</li>
-<li>Relevant FL Script output and server/daemon logs</li>
-<li>Whether <code>fl_transport(action="ping")</code> succeeds</li>
-</ul>
-<h2 id="code-of-conduct_1">Code of conduct<a class="headerlink" href="#code-of-conduct_1" title="Permanent link">&para;</a></h2>
-<p>Be respectful and constructive. This is a small project — assume good faith, keep discussion technical, and help newcomers get set up.</p>
-<h2 id="license">License<a class="headerlink" href="#license" title="Permanent link">&para;</a></h2>
-<p>By contributing, you agree that your contributions are licensed under the project's MIT License (see LICENSE).</p>
-
-
-
-
-
-
-
-
-
-
-
-
-                
-              </article>
             </div>
-          
-          
-<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+          </div>
         </div>
-        
-          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
-  
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
-  Back to top
-</button>
-        
-      </main>
-      
-        <footer class="md-footer">
-  
-  <div class="md-footer-meta md-typeset">
-    <div class="md-footer-meta__inner md-grid">
-      <div class="md-copyright">
-  
-  
-    Made with
-    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
-      Material for MkDocs
-    </a>
-  
-</div>
-      
-    </div>
+      </div>
+
+
+
+      <div class="md-header__source">
+        <a href="https://github.com/thunderdew-dawn/fls-pilot" title="Go to repository" class="md-source"
+          data-md-component="source">
+          <div class="md-source__icon md-icon">
+
+            <svg xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.-->
+              <path
+                d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4" />
+            </svg>
+          </div>
+          <div class="md-source__repository">
+            thunderdew-dawn/fls-pilot
+          </div>
+        </a>
+      </div>
+
+    </nav>
+
+  </header>
+
+  <div class="md-container" data-md-component="container">
+
+
+
+
+
+
+    <main class="md-main" data-md-component="main">
+      <div class="md-main__inner md-grid">
+
+
+
+        <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation">
+          <div class="md-sidebar__scrollwrap">
+            <div class="md-sidebar__inner">
+
+
+
+
+              <nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+                <label class="md-nav__title" for="__drawer">
+                  <a href="../.." title="fls-pilot" class="md-nav__button md-logo" aria-label="fls-pilot"
+                    data-md-component="logo">
+
+
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                      <path
+                        d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54" />
+                    </svg>
+
+                  </a>
+                  fls-pilot
+                </label>
+
+                <div class="md-nav__source">
+                  <a href="https://github.com/thunderdew-dawn/fls-pilot" title="Go to repository" class="md-source"
+                    data-md-component="source">
+                    <div class="md-source__icon md-icon">
+
+                      <svg xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.-->
+                        <path
+                          d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4" />
+                      </svg>
+                    </div>
+                    <div class="md-source__repository">
+                      thunderdew-dawn/fls-pilot
+                    </div>
+                  </a>
+                </div>
+
+                <ul class="md-nav__list" data-md-scrollfix>
+
+
+
+
+
+
+
+                  <li class="md-nav__item">
+                    <a href="../.." class="md-nav__link">
+
+
+
+                      <span class="md-ellipsis">
+
+
+                        Home
+
+
+
+                      </span>
+
+
+
+                    </a>
+                  </li>
+
+
+
+
+
+
+
+
+
+                  <li class="md-nav__item">
+                    <a href="../../user-guide/setup/" class="md-nav__link">
+
+
+
+                      <span class="md-ellipsis">
+
+
+                        Setup
+
+
+
+                      </span>
+
+
+
+                    </a>
+                  </li>
+
+
+
+
+
+
+
+
+
+                  <li class="md-nav__item">
+                    <a href="../../control-center/" class="md-nav__link">
+
+
+
+                      <span class="md-ellipsis">
+
+
+                        Control Center
+
+
+
+                      </span>
+
+
+
+                    </a>
+                  </li>
+
+
+
+
+
+
+
+
+
+                  <li class="md-nav__item">
+                    <a href="../../user-guide/workflows/" class="md-nav__link">
+
+
+
+                      <span class="md-ellipsis">
+
+
+                        Workflows
+
+
+
+                      </span>
+
+
+
+                    </a>
+                  </li>
+
+
+
+
+
+
+
+
+
+                  <li class="md-nav__item">
+                    <a href="../../user-guide/prompts/" class="md-nav__link">
+
+
+
+                      <span class="md-ellipsis">
+
+
+                        Prompt Examples
+
+
+
+                      </span>
+
+
+
+                    </a>
+                  </li>
+
+
+
+
+
+
+
+
+
+                  <li class="md-nav__item">
+                    <a href="../../safety-limits/" class="md-nav__link">
+
+
+
+                      <span class="md-ellipsis">
+
+
+                        Safety & Limits
+
+
+
+                      </span>
+
+
+
+                    </a>
+                  </li>
+
+
+
+
+
+
+
+
+
+                  <li class="md-nav__item">
+                    <a href="../../mcp-integration/" class="md-nav__link">
+
+
+
+                      <span class="md-ellipsis">
+
+
+                        MCP Integration
+
+
+
+                      </span>
+
+
+
+                    </a>
+                  </li>
+
+
+
+
+
+
+
+
+
+                  <li class="md-nav__item">
+                    <a href="../../mcp-architecture/" class="md-nav__link">
+
+
+
+                      <span class="md-ellipsis">
+
+
+                        Architecture
+
+
+
+                      </span>
+
+
+
+                    </a>
+                  </li>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                  <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+
+
+
+                    <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" checked>
+
+
+                    <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="">
+
+
+
+                      <span class="md-ellipsis">
+
+
+                        Community
+
+
+
+                      </span>
+
+
+
+                      <span class="md-nav__icon md-icon"></span>
+                    </label>
+
+                    <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="true">
+                      <label class="md-nav__title" for="__nav_9">
+                        <span class="md-nav__icon md-icon"></span>
+
+
+                        Community
+
+
+                      </label>
+                      <ul class="md-nav__list" data-md-scrollfix>
+
+
+
+
+
+
+
+                        <li class="md-nav__item">
+                          <a href="../support/" class="md-nav__link">
+
+
+
+                            <span class="md-ellipsis">
+
+
+                              Support
+
+
+
+                            </span>
+
+
+
+                          </a>
+                        </li>
+
+
+
+
+
+
+
+
+
+
+                        <li class="md-nav__item">
+                          <a href="../security/" class="md-nav__link">
+
+
+
+                            <span class="md-ellipsis">
+
+
+                              Security
+
+
+
+                            </span>
+
+
+
+                          </a>
+                        </li>
+
+
+
+
+
+
+
+
+
+
+
+
+                        <li class="md-nav__item md-nav__item--active">
+
+                          <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+
+
+
+
+
+                          <label class="md-nav__link md-nav__link--active" for="__toc">
+
+
+
+                            <span class="md-ellipsis">
+
+
+                              Contributing
+
+
+
+                            </span>
+
+
+
+                            <span class="md-nav__icon md-icon"></span>
+                          </label>
+
+                          <a href="./" class="md-nav__link md-nav__link--active">
+
+
+
+                            <span class="md-ellipsis">
+
+
+                              Contributing
+
+
+
+                            </span>
+
+
+
+                          </a>
+
+
+
+                          <nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+
+
+
+
+
+
+                            <label class="md-nav__title" for="__toc">
+                              <span class="md-nav__icon md-icon"></span>
+                              Table of contents
+                            </label>
+                            <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+
+                              <li class="md-nav__item">
+                                <a href="#code-of-conduct" class="md-nav__link">
+                                  <span class="md-ellipsis">
+
+                                    Code of Conduct
+
+                                  </span>
+                                </a>
+
+                              </li>
+
+                              <li class="md-nav__item">
+                                <a href="#ways-to-contribute" class="md-nav__link">
+                                  <span class="md-ellipsis">
+
+                                    Ways to contribute
+
+                                  </span>
+                                </a>
+
+                              </li>
+
+                              <li class="md-nav__item">
+                                <a href="#before-you-start" class="md-nav__link">
+                                  <span class="md-ellipsis">
+
+                                    Before you start
+
+                                  </span>
+                                </a>
+
+                              </li>
+
+                              <li class="md-nav__item">
+                                <a href="#development-setup" class="md-nav__link">
+                                  <span class="md-ellipsis">
+
+                                    Development setup
+
+                                  </span>
+                                </a>
+
+                              </li>
+
+                              <li class="md-nav__item">
+                                <a href="#project-layout" class="md-nav__link">
+                                  <span class="md-ellipsis">
+
+                                    Project layout
+
+                                  </span>
+                                </a>
+
+                              </li>
+
+                              <li class="md-nav__item">
+                                <a href="#safety-layer-important" class="md-nav__link">
+                                  <span class="md-ellipsis">
+
+                                    Safety layer (important)
+
+                                  </span>
+                                </a>
+
+                              </li>
+
+                              <li class="md-nav__item">
+                                <a href="#anti-vibe-coding-audits-important" class="md-nav__link">
+                                  <span class="md-ellipsis">
+
+                                    Anti-Vibe Coding Audits (important)
+
+                                  </span>
+                                </a>
+
+                              </li>
+
+                              <li class="md-nav__item">
+                                <a href="#pull-requests" class="md-nav__link">
+                                  <span class="md-ellipsis">
+
+                                    Pull requests
+
+                                  </span>
+                                </a>
+
+                              </li>
+
+                              <li class="md-nav__item">
+                                <a href="#reporting-bugs" class="md-nav__link">
+                                  <span class="md-ellipsis">
+
+                                    Reporting bugs
+
+                                  </span>
+                                </a>
+
+                              </li>
+
+                              <li class="md-nav__item">
+                                <a href="#code-of-conduct_1" class="md-nav__link">
+                                  <span class="md-ellipsis">
+
+                                    Code of conduct
+
+                                  </span>
+                                </a>
+
+                              </li>
+
+                              <li class="md-nav__item">
+                                <a href="#license" class="md-nav__link">
+                                  <span class="md-ellipsis">
+
+                                    License
+
+                                  </span>
+                                </a>
+
+                              </li>
+
+                            </ul>
+
+                          </nav>
+
+                        </li>
+
+
+
+
+
+
+
+
+
+
+                        <li class="md-nav__item">
+                          <a href="../code-of-conduct/" class="md-nav__link">
+
+
+
+                            <span class="md-ellipsis">
+
+
+                              Code of Conduct
+
+
+
+                            </span>
+
+
+
+                          </a>
+                        </li>
+
+
+
+
+
+
+
+
+
+
+                        <li class="md-nav__item">
+                          <a href="../notice/" class="md-nav__link">
+
+
+
+                            <span class="md-ellipsis">
+
+
+                              Notice
+
+
+
+                            </span>
+
+
+
+                          </a>
+                        </li>
+
+
+
+
+                      </ul>
+                    </nav>
+
+                  </li>
+
+
+
+                </ul>
+              </nav>
+            </div>
+          </div>
+        </div>
+
+
+
+        <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc">
+          <div class="md-sidebar__scrollwrap">
+            <div class="md-sidebar__inner">
+
+
+              <nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+
+
+
+
+
+
+                <label class="md-nav__title" for="__toc">
+                  <span class="md-nav__icon md-icon"></span>
+                  Table of contents
+                </label>
+                <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+
+                  <li class="md-nav__item">
+                    <a href="#code-of-conduct" class="md-nav__link">
+                      <span class="md-ellipsis">
+
+                        Code of Conduct
+
+                      </span>
+                    </a>
+
+                  </li>
+
+                  <li class="md-nav__item">
+                    <a href="#ways-to-contribute" class="md-nav__link">
+                      <span class="md-ellipsis">
+
+                        Ways to contribute
+
+                      </span>
+                    </a>
+
+                  </li>
+
+                  <li class="md-nav__item">
+                    <a href="#before-you-start" class="md-nav__link">
+                      <span class="md-ellipsis">
+
+                        Before you start
+
+                      </span>
+                    </a>
+
+                  </li>
+
+                  <li class="md-nav__item">
+                    <a href="#development-setup" class="md-nav__link">
+                      <span class="md-ellipsis">
+
+                        Development setup
+
+                      </span>
+                    </a>
+
+                  </li>
+
+                  <li class="md-nav__item">
+                    <a href="#project-layout" class="md-nav__link">
+                      <span class="md-ellipsis">
+
+                        Project layout
+
+                      </span>
+                    </a>
+
+                  </li>
+
+                  <li class="md-nav__item">
+                    <a href="#safety-layer-important" class="md-nav__link">
+                      <span class="md-ellipsis">
+
+                        Safety layer (important)
+
+                      </span>
+                    </a>
+
+                  </li>
+
+                  <li class="md-nav__item">
+                    <a href="#anti-vibe-coding-audits-important" class="md-nav__link">
+                      <span class="md-ellipsis">
+
+                        Anti-Vibe Coding Audits (important)
+
+                      </span>
+                    </a>
+
+                  </li>
+
+                  <li class="md-nav__item">
+                    <a href="#pull-requests" class="md-nav__link">
+                      <span class="md-ellipsis">
+
+                        Pull requests
+
+                      </span>
+                    </a>
+
+                  </li>
+
+                  <li class="md-nav__item">
+                    <a href="#reporting-bugs" class="md-nav__link">
+                      <span class="md-ellipsis">
+
+                        Reporting bugs
+
+                      </span>
+                    </a>
+
+                  </li>
+
+                  <li class="md-nav__item">
+                    <a href="#code-of-conduct_1" class="md-nav__link">
+                      <span class="md-ellipsis">
+
+                        Code of conduct
+
+                      </span>
+                    </a>
+
+                  </li>
+
+                  <li class="md-nav__item">
+                    <a href="#license" class="md-nav__link">
+                      <span class="md-ellipsis">
+
+                        License
+
+                      </span>
+                    </a>
+
+                  </li>
+
+                </ul>
+
+              </nav>
+            </div>
+          </div>
+        </div>
+
+
+
+        <div class="md-content" data-md-component="content">
+
+          <article class="md-content__inner md-typeset">
+
+
+
+
+
+
+
+
+            <h1 id="contributing-to-fls-pilot">Contributing to fls-pilot<a class="headerlink"
+                href="#contributing-to-fls-pilot" title="Permanent link">&para;</a></h1>
+            <p>Thanks for your interest in improving fls-pilot. This project is a Model
+              Context Protocol server that lets an AI assistant drive FL Studio 2025 — mixer, plugins,
+              piano roll, routing, and project — through calibrated, safety-checked tools.
+              Contributions of all kinds are welcome: bug reports, fixes, new tools, docs,
+              and platform support.</p>
+            <p>This repository is the maintained <code>thunderdew-dawn/fls-pilot</code> fork of
+              <code>rosasynthesiz/flstudio-mcp</code>. The 3.0 line intentionally uses the breaking
+              <code>fls-pilot</code> package, command, and import names with no old aliases.
+              Contributions should follow this fork's rollback-first safety layer,
+              API-evidence discipline, and GitHub roadmap project. The generated roadmap
+              snapshot under <code>agent-docs/project/</code> is for repository work; the GitHub project
+              board remains the planning source of truth.
+            </p>
+            <h2 id="code-of-conduct">Code of Conduct<a class="headerlink" href="#code-of-conduct"
+                title="Permanent link">&para;</a></h2>
+            <p>By participating in this project, you agree to abide by our <a href="../code-of-conduct/">Code of
+                Conduct</a>. Please read it to understand the expectations for behavior in our community.</p>
+            <h2 id="ways-to-contribute">Ways to contribute<a class="headerlink" href="#ways-to-contribute"
+                title="Permanent link">&para;</a></h2>
+            <ul>
+              <li><strong>Report a bug</strong> — open an issue with steps to reproduce, your FL Studio build, and the
+                relevant Script output / server log.</li>
+              <li><strong>Request or add a tool</strong> — propose a new capability (a mixing intent, an analysis tool,
+                etc.) in an issue first, so we can agree on the shape before you build it.</li>
+              <li><strong>Improve docs</strong> — README, setup, troubleshooting, public docs, and internal
+                agent docs are all fair game.</li>
+              <li><strong>Port to Linux</strong> — the server is cross-platform Python; the friction is the virtual MIDI
+                ports and the controller-script paths. This is the most valuable open contribution. Open an issue before
+                starting so we can coordinate.</li>
+            </ul>
+            <h2 id="before-you-start">Before you start<a class="headerlink" href="#before-you-start"
+                title="Permanent link">&para;</a></h2>
+            <p>Please read the <strong>Limitations</strong> section of the README. Several things are <em>not</em> bugs
+              — they are constraints of FL Studio's scripting API:</p>
+            <ul>
+              <li>Plugins, audio files, and rendering are UI-only. The API cannot load a plugin or render audio, so
+                plugin/preset tools suggest; the user loads.</li>
+              <li>Note writing is armed once per session via MCP_Apply in the piano roll.</li>
+              <li>Micro-tonal scales are rounded to the nearest semitone (12-tone MIDI).</li>
+            </ul>
+            <p>A PR that tries to "fix" one of these by working around the sandbox will likely be declined unless it's
+              genuinely reliable across FL builds.</p>
+            <h2 id="development-setup">Development setup<a class="headerlink" href="#development-setup"
+                title="Permanent link">&para;</a></h2>
+            <p>You'll need the same environment as a user, plus an editable install:</p>
+            <ul>
+              <li>Windows 10/11 or macOS 12+, FL Studio 2025+, Python 3.12</li>
+              <li>loopMIDI on Windows or the IAC Driver on macOS, with two ports named exactly
+                FLStudioPilot RX and FLStudioPilot TX</li>
+              <li>An MCP client (like Claude Desktop or Cursor) for end-to-end testing</li>
+            </ul>
+            <p>Install steps: clone the repo, cd into it, run <code>scripts\install_windows.bat</code> or
+              <code>./scripts/install_macos.sh</code>, then <code>pip install -e ".[audio]"</code> if you'll touch
+              the audio analysis code. Wire the MIDI ports in FL (Options &gt; MIDI Settings),
+              confirm <code>[FLStudioPilot] Ready</code> in FL's Script output, start the bridge with
+              <code>fls-pilot-daemon</code>, then verify the link by asking your AI assistant to call
+              <code>fl_transport(action="ping")</code>.
+            </p>
+            <h2 id="project-layout">Project layout<a class="headerlink" href="#project-layout"
+                title="Permanent link">&para;</a></h2>
+            <ul>
+              <li>src/fls_pilot/ — the MCP server: tool definitions, calibration, diagnosis, planning. Almost all logic
+                lives here.</li>
+              <li>fl_controller/FLStudioPilot/ — the thin controller script that runs inside FL. Keep it cheap: return
+                raw data, do no judgement here.</li>
+              <li>fl_pyscripts/ — the note-bridge pyscript (MCP_Apply).</li>
+              <li>scripts/ — installer and tooling.</li>
+              <li>docs/ — public user and MCP integration documentation.</li>
+              <li>agent-docs/ — internal agent, engineering, roadmap, and safety contracts.</li>
+            </ul>
+            <p>The guiding split: the controller returns cheap raw data; all judgement (diagnosis, calibration,
+              planning) happens server-side. New tools should follow this — don't push decision-making into the
+              controller.</p>
+            <h2 id="safety-layer-important">Safety layer (important)<a class="headerlink" href="#safety-layer-important"
+                title="Permanent link">&para;</a></h2>
+            <p>Every tool that modifies the project must route through the snapshot → write → readback → rollback safety
+              layer and the persisted change log. Tools should be reversible and should show the planned change before
+              applying it. A new write-tool that bypasses this won't be merged. Read-only tools (state, levels,
+              analysis) don't need it.</p>
+            <h2 id="anti-vibe-coding-audits-important">Anti-Vibe Coding Audits (important)<a class="headerlink"
+                href="#anti-vibe-coding-audits-important" title="Permanent link">&para;</a></h2>
+            <p>To enforce coding discipline and prevent LLM "vibe coding" (undisciplined trial-and-error, unverified
+              knowledge, sandbox violations, or lazy placeholder code), this repository enforces strict static checks.
+            </p>
+            <p>You can run the audit manually at any time:
+            <div class="highlight">
+              <pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>.venv/bin/python<span class="w"> </span>scripts/audit_anti_vibe.py
+</code></pre>
+            </div>
+            </p>
+            <p>It is highly recommended to install the pre-commit hook so your commits are blocked if they violate these
+              rules:
+            <div class="highlight">
+              <pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>.venv/bin/python<span class="w"> </span>scripts/install_precommit_anti_vibe.py
+</code></pre>
+            </div>
+            </p>
+            <p>The audit blocks:
+              - <strong>Sandbox violations</strong>: Importing <code>os</code> or calling <code>open()</code> inside the
+              FL Studio controller script.
+              - <strong>Knowledgebase gaps</strong>: Missing required JSON fields in <code>knowledgebase/</code> entries
+              according to <code>AGENTS.md</code>.
+              - <strong>Lazy coding patterns</strong>: Keywords such as <code>TODO: fix later</code>, <code>HACK</code>,
+              <code>print("here")</code>, <code>stub implementation</code>, etc. in source code.</p>
+            <h2 id="pull-requests">Pull requests<a class="headerlink" href="#pull-requests"
+                title="Permanent link">&para;</a></h2>
+            <ol>
+              <li>Open an issue first for anything beyond a small fix, so the approach can be agreed on.</li>
+              <li>Branch from main; keep PRs focused on one change.</li>
+              <li>Test on a real FL Studio session — note in the PR what you verified and on which FL build.
+                Hardware-tested changes are strongly preferred, since much of this can't be unit-tested without FL.</li>
+              <li>Match the existing style: clear tool names, parameters documented, errors returned as structured
+                results rather than raised blindly.</li>
+              <li>Update the README / docs if you add or change a tool or its behavior.</li>
+              <li>Write clear commit messages describing what changed and why.</li>
+            </ol>
+            <h2 id="reporting-bugs">Reporting bugs<a class="headerlink" href="#reporting-bugs"
+                title="Permanent link">&para;</a></h2>
+            <p>A good report includes:</p>
+            <ul>
+              <li>FL Studio edition and build (e.g. Producer Edition v25.2.5 [build 5319])</li>
+              <li>What you asked the AI assistant to do, and what happened vs. what you expected</li>
+              <li>Relevant FL Script output and server/daemon logs</li>
+              <li>Whether <code>fl_transport(action="ping")</code> succeeds</li>
+            </ul>
+            <h2 id="code-of-conduct_1">Code of conduct<a class="headerlink" href="#code-of-conduct_1"
+                title="Permanent link">&para;</a></h2>
+            <p>Be respectful and constructive. This is a small project — assume good faith, keep discussion technical,
+              and help newcomers get set up.</p>
+            <h2 id="license">License<a class="headerlink" href="#license" title="Permanent link">&para;</a></h2>
+            <p>By contributing, you agree that your contributions are licensed under the project's MIT License (see
+              LICENSE).</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+          </article>
+        </div>
+
+
+        <script>var target = document.getElementById(location.hash.slice(1)); target && target.name && (target.checked = target.name.startsWith("__tabbed_"))</script>
+      </div>
+
+      <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+          <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z" />
+        </svg>
+        Back to top
+      </button>
+
+    </main>
+
+    <footer class="md-footer">
+
+      <div class="md-footer-meta md-typeset">
+        <div class="md-footer-meta__inner md-grid">
+          <div class="md-copyright">
+
+
+            Made with
+            <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+              Material for MkDocs
+            </a>
+
+          </div>
+
+        </div>
+      </div>
+    </footer>
+
   </div>
-</footer>
-      
-    </div>
-    <div class="md-dialog" data-md-component="dialog">
-      <div class="md-dialog__inner md-typeset"></div>
-    </div>
-    
-    
-    
-      
-      
-      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.expand", "navigation.indexes", "navigation.top", "search.suggest", "search.highlight", "content.code.copy"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
-    
-    
-      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
-      
-    
-  </body>
+  <div class="md-dialog" data-md-component="dialog">
+    <div class="md-dialog__inner md-typeset"></div>
+  </div>
+
+
+
+
+
+  <script id="__config"
+    type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.expand", "navigation.indexes", "navigation.top", "search.suggest", "search.highlight", "content.code.copy"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+
+
+  <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+
+
+</body>
+
 </html>
