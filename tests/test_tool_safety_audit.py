@@ -153,3 +153,12 @@ def fl_unknown_effect():
 
     assert result.status == "needs-review"
     assert result.contract_safety_class == "needs-review"
+
+
+def test_audio_analysis_tool_is_server_state() -> None:
+    audio_path = ROOT / "src" / "fls_pilot" / "tools" / "audio.py"
+
+    result = next(item for item in audit.audit_file(audio_path) if item.name == "fl_audio_analysis")
+
+    assert result.status == "server-state"
+    assert result.contract_safety_class == "server-state"

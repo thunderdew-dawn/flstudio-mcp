@@ -107,6 +107,7 @@ READ_CONSTANTS = {
 }
 
 SERVER_STATE_TOOLS = {
+    "fl_audio_analysis",
     "fl_set_dry_run",
     "fl_take_snapshot",
     "fl_rollback_last_change",
