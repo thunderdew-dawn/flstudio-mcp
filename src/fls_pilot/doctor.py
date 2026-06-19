@@ -70,6 +70,20 @@ class TCPDaemonConfig:
     port_error: str | None = None
 
 
+@dataclass(frozen=True)
+class FLStudioProcessProbeResult:
+    """Result of the read-only FL Studio process presence probe.
+
+    ``found`` is ``True`` when an FL Studio process was detected, ``False``
+    when the probe ran successfully but found nothing, and ``None`` when the
+    outcome is uncertain (unsupported platform, timeout, or unexpected error).
+    """
+
+    found: bool | None
+    platform_supported: bool
+    evidence: str
+
+
 def _check_importable(module_name: str) -> bool:
     import importlib.util
 
@@ -295,6 +309,152 @@ def check_optional_dependencies() -> list[Finding]:
     )
 
     return findings
+
+
+# ---------------------------------------------------------------------------
+# FL Studio application process probe
+# ---------------------------------------------------------------------------
+
+_FL_WINDOWS_NAMES = frozenset(["fl.exe", "fl64.exe", "fl studio.exe"])
+
+
+def _probe_fl_studio_windows() -> FLStudioProcessProbeResult:
+    """Probe for a running FL Studio process on Windows via tasklist."""
+    try:
+        result = subprocess.run(
+            ["tasklist", "/FO", "CSV", "/NH"],
+            capture_output=True,
+            text=True,
+            timeout=1.0,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return FLStudioProcessProbeResult(
+            found=None,
+            platform_supported=True,
+            evidence=f"tasklist probe failed: {exc}",
+        )
+
+    for line in result.stdout.splitlines():
+        # CSV rows: "ImageName","PID","Session","SessionNum","MemUsage"
+        image = line.split(",")[0].strip('"').lower()
+        if image in _FL_WINDOWS_NAMES or image.startswith("fl studio"):
+            return FLStudioProcessProbeResult(
+                found=True,
+                platform_supported=True,
+                evidence=f"FL Studio process detected: {image}",
+            )
+    return FLStudioProcessProbeResult(
+        found=False,
+        platform_supported=True,
+        evidence="No FL Studio process found in tasklist output.",
+    )
+
+
+def _probe_fl_studio_macos() -> FLStudioProcessProbeResult:
+    """Probe for a running FL Studio process on macOS via pgrep."""
+    try:
+        result = subprocess.run(
+            ["pgrep", "-fl", "FL Studio"],
+            capture_output=True,
+            text=True,
+            timeout=1.0,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return FLStudioProcessProbeResult(
+            found=None,
+            platform_supported=True,
+            evidence=f"pgrep probe failed: {exc}",
+        )
+
+    # pgrep exits 0 when matches found, 1 when none found.
+    matching_lines = [
+        line
+        for line in result.stdout.splitlines()
+        if "fl studio" in line.lower()
+    ]
+    if matching_lines:
+        return FLStudioProcessProbeResult(
+            found=True,
+            platform_supported=True,
+            evidence=f"FL Studio process detected: {matching_lines[0]}",
+        )
+    return FLStudioProcessProbeResult(
+        found=False,
+        platform_supported=True,
+        evidence="No FL Studio process found via pgrep.",
+    )
+
+
+_FL_APP_REMEDIATION = (
+    "Open FL Studio, load or create a project, wait until it is responsive, "
+    "then rerun Setup Doctor or click Re-check in Control Center."
+)
+
+
+def check_fl_studio_application() -> list[Finding]:
+    """Read-only check for a running FL Studio process.
+
+    Uses stdlib subprocess only (no psutil).  Returns ``ok`` when a process is
+    found, ``failed`` (blocker) when the probe ran on a supported OS and found
+    nothing, or ``manual_check`` (warning) when the outcome is uncertain.
+    """
+    plat = sys.platform
+    if plat == "win32":
+        probe = _probe_fl_studio_windows()
+    elif plat == "darwin":
+        probe = _probe_fl_studio_macos()
+    else:
+        return [
+            Finding(
+                component="FL Studio Application",
+                severity="warning",
+                status="manual_check",
+                evidence=(
+                    f"Process probe is not implemented for platform {plat!r}. "
+                    "Confirm FL Studio is running manually."
+                ),
+                remediation=_FL_APP_REMEDIATION,
+                config_source="system",
+            )
+        ]
+
+    if probe.found is True:
+        return [
+            Finding(
+                component="FL Studio Application",
+                severity="blocker",
+                status="ok",
+                evidence=probe.evidence,
+                remediation="",
+                config_source="system",
+            )
+        ]
+
+    if probe.found is False:
+        return [
+            Finding(
+                component="FL Studio Application",
+                severity="blocker",
+                status="failed",
+                evidence=probe.evidence,
+                remediation=_FL_APP_REMEDIATION,
+                config_source="system",
+            )
+        ]
+
+    # found is None — uncertain
+    return [
+        Finding(
+            component="FL Studio Application",
+            severity="warning",
+            status="manual_check",
+            evidence=probe.evidence,
+            remediation=_FL_APP_REMEDIATION,
+            config_source="system",
+        )
+    ]
 
 
 def check_midi_ports(
@@ -1031,7 +1191,19 @@ def run_all_checks(
             )
 
     core_skip = "Core dependencies missing; run 'pip install fls-pilot' first."
+    fl_app_skip = "FL Studio application is not running."
+
     if core_ok:
+        fl_app_findings = check_fl_studio_application()
+        findings.extend(fl_app_findings)
+        # True = detected, False = not running (blocker), None = uncertain (warning only)
+        fl_app_blocker = any(
+            f.component == "FL Studio Application"
+            and f.severity == "blocker"
+            and f.status == "failed"
+            for f in fl_app_findings
+        )
+
         midi_findings = (
             check_midi_ports(severity="advisory", failed_status="manual_check")
             if is_tcp_configured
@@ -1044,6 +1216,7 @@ def run_all_checks(
         findings.extend(tcp_findings)
         tcp_ok = all(f.status == "ok" for f in tcp_findings)
     else:
+        fl_app_blocker = False
         findings.append(_deferred_finding("MIDI/IAC/loopMIDI Ports", "blocker", core_skip))
         findings.append(_deferred_finding("TCP Daemon / Bridge", "warning", core_skip))
         midi_ok = False
@@ -1051,6 +1224,15 @@ def run_all_checks(
 
     if not core_ok:
         findings.append(_deferred_finding("FL Studio Controller Script", "blocker", core_skip))
+    elif fl_app_blocker:
+        # FL Studio is confirmed not running — skip controller check entirely.
+        findings.append(
+            _deferred_finding(
+                "FL Studio Controller Script",
+                "blocker",
+                fl_app_skip,
+            )
+        )
     elif is_tcp_configured:
         if tcp_ok and tcp_config.port is not None:
             findings.extend(

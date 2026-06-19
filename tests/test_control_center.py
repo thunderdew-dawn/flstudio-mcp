@@ -67,6 +67,69 @@ def test_status_groups_doctor_findings(monkeypatch):
     assert status["readiness"]["read_only_review_ready"] is True
 
 
+def test_status_groups_fl_studio_application_separately(monkeypatch):
+    """FL Studio Application finding must land in the fl_app group, not controller."""
+    findings = [
+        _finding("FL Studio Application", "blocker", "failed"),
+        _finding("FL Studio Controller Script", "blocker", "probe_needed"),
+    ]
+    monkeypatch.setattr(control_center.doctor, "run_all_checks", lambda **_: findings)
+    state = _state()
+
+    status = control_center.collect_status(state)
+
+    assert status["groups"]["fl_app"][0]["component"] == "FL Studio Application"
+    assert not any(
+        f["component"] == "FL Studio Application"
+        for f in status["groups"]["controller"]
+    )
+    assert not any(
+        f["component"] == "FL Studio Application"
+        for f in status["groups"]["other"]
+    )
+
+
+def test_setup_guidance_prompts_to_open_fl_studio():
+    """Open FL Studio card must appear and precede the controller card."""
+    groups = {
+        "environment": [],
+        "fl_app": [
+            _finding("FL Studio Application", "blocker", "failed").to_dict()
+        ],
+        "midi": [],
+        "controller": [
+            _finding("FL Studio Controller Script", "blocker", "probe_needed").to_dict()
+        ],
+        "daemon": [],
+        "mcp_stdio": [],
+        "mcp_sse": [],
+        "mcp_apply": [],
+        "optional_dependencies": [],
+        "other": [],
+    }
+
+    guidance = control_center._setup_guidance(
+        groups=groups,
+        readiness={},
+        processes={"daemon": {"state": "running", "running": True}},
+        ports={"daemon": {"host": "127.0.0.1", "selected_port": 9787}},
+        daemon_autostart={"state": "started", "message": "Started."},
+        sse_probe={},
+    )
+
+    titles = [item["title"] for item in guidance]
+    assert "Open FL Studio" in titles
+    open_idx = titles.index("Open FL Studio")
+    fl_app_items = [item for item in guidance if item["title"] == "Open FL Studio"]
+    assert len(fl_app_items) == 1
+    assert fl_app_items[0]["action_path"] == "/api/refresh"
+    assert fl_app_items[0]["action_label"] == "Re-check"
+    # Controller card (if present) must come after the Open FL Studio card.
+    for i, item in enumerate(guidance):
+        if item["title"] == "Connect FL Studio to the controller":
+            assert i > open_idx
+
+
 def test_ui_payload_surfaces_catalog_next_action_and_service_actions():
     payload = control_center._ui_payload(
         status_report={"bridge": {"state": "live"}},

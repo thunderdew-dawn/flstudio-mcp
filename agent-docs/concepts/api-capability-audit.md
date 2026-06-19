@@ -158,12 +158,16 @@ removed as behavior-preserving registration cleanup.
 
 The `fls-pilot-doctor` CLI was added for v3/alpha first-run diagnostics. It is
 not a public MCP tool and does not add FL Studio write capability. Its allowed
-runtime actions are read-only setup probes only: Python/dependency inspection,
-MCP stdio/SSE session smoke tests, TCP daemon health, MIDI port listing,
-heartbeat freshness, controller ping/build-marker readback, and local
-`MCP_Apply.pyscript` file detection. It must keep MCP server transports, the
-TCP daemon/bridge, and the FL Studio controller script as separate findings so
-transport success is not treated as project readiness.
+runtime actions are read-only setup probes only: FL Studio application process
+detection (stdlib subprocess; no psutil; returns `ok` / `failed` / `manual_check`),
+Python/dependency inspection, MCP stdio/SSE session smoke tests, TCP daemon
+health, MIDI port listing, heartbeat freshness, controller ping/build-marker
+readback, and local `MCP_Apply.pyscript` file detection. It must keep MCP server
+transports, the TCP daemon/bridge, and the FL Studio controller script as separate
+findings so transport success is not treated as project readiness. The application
+probe gates the controller check: if FL Studio is confirmed not running (blocker),
+the controller script check is deferred rather than reporting a misleading
+heartbeat failure.
 
 The `fls-pilot-status` CLI was added for v3/alpha as a read-only local
 status page export. It is not a public MCP tool and does not add FL Studio

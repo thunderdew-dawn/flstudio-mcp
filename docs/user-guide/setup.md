@@ -61,7 +61,11 @@ Then open **View > Script output** and confirm the controller is ready.
 
 ## 3. Open Control Center
 
-Control Center stays read-only against the FL Studio project while it checks the environment and displays the correct MCP client snippets.
+Control Center stays read-only against the FL Studio project while it checks
+the environment and displays the correct MCP client snippets. It first checks
+whether FL Studio is running — if not, it prompts you to open FL Studio before
+testing the controller heartbeat or bridge. This prevents a missing heartbeat
+from being confused with a controller configuration issue.
 
 === "Windows"
     ```batchfile
@@ -106,6 +110,7 @@ Read-only workflows such as Mix Review, Routing Audit, Project Health, and Prefl
 
 Verify these steps before starting your first workflow:
 
+- [ ] FL Studio is open with a project loaded
 - [ ] Virtual MIDI Ports created and named correctly
 - [ ] FL Studio MIDI settings configured (Controller type and Port 42)
 - [ ] Controller heartbeat visible in FL Studio script output
@@ -116,6 +121,7 @@ Verify these steps before starting your first workflow:
 
 | Symptom | Fix |
 |---|---|
+| Setup Doctor shows "FL Studio Application" failed | Open FL Studio, load or create a project, wait until it is responsive, then click Re-check in Control Center. |
 | MIDI ports are not detected | Recreate the ports with the exact names `FLStudioPilot RX` and `FLStudioPilot TX`. |
 | No ready message in Script output | Confirm the controller type is `FLStudioPilot`, then restart FL Studio. |
 | MCP client cannot reach FL Studio | Open Control Center, check daemon/SSE status, and verify `fl_transport(action="ping")`. |

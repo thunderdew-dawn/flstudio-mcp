@@ -222,8 +222,64 @@ def _fail(component: str, severity: str = "blocker") -> list[doctor.Finding]:
     return [doctor.Finding(component, severity, "failed", "evidence", "", "src")]
 
 
+def _manual(component: str, severity: str = "warning") -> list[doctor.Finding]:
+    return [doctor.Finding(component, severity, "manual_check", "evidence", "", "src")]
+
+
 def _p(name: str, **kw):  # noqa: ANN001, ANN202
     return mock.patch(f"fls_pilot.doctor.{name}", **kw)
+
+
+# ---------------------------------------------------------------------------
+# FL Studio application probe unit tests
+# ---------------------------------------------------------------------------
+
+
+@mock.patch("subprocess.run")
+@mock.patch("sys.platform", "darwin")
+def test_fl_studio_application_detected(mock_run):
+    mock_run.return_value = mock.Mock(
+        returncode=0,
+        stdout="12345 /Applications/FL Studio.app/Contents/MacOS/FL Studio\n",
+        stderr="",
+    )
+    findings = doctor.check_fl_studio_application()
+    assert len(findings) == 1
+    assert findings[0].component == "FL Studio Application"
+    assert findings[0].status == "ok"
+    assert findings[0].severity == "blocker"
+
+
+@mock.patch("subprocess.run")
+@mock.patch("sys.platform", "darwin")
+def test_fl_studio_application_missing_is_blocker(mock_run):
+    mock_run.return_value = mock.Mock(returncode=1, stdout="", stderr="")
+    findings = doctor.check_fl_studio_application()
+    assert len(findings) == 1
+    assert findings[0].status == "failed"
+    assert findings[0].severity == "blocker"
+    assert "Open FL Studio" in findings[0].remediation
+
+
+@mock.patch(
+    "subprocess.run",
+    side_effect=OSError("pgrep not found"),
+)
+@mock.patch("sys.platform", "darwin")
+def test_fl_studio_application_unknown_is_manual_check(mock_run):
+    findings = doctor.check_fl_studio_application()
+    assert len(findings) == 1
+    assert findings[0].status == "manual_check"
+    assert findings[0].severity == "warning"
+
+
+@mock.patch("sys.platform", "linux")
+def test_fl_studio_application_unsupported_platform_is_manual_check():
+    findings = doctor.check_fl_studio_application()
+    assert len(findings) == 1
+    assert findings[0].status == "manual_check"
+    assert findings[0].severity == "warning"
+
 
 
 def test_orchestration_core_fail_defers_midi_tcp_fl():
@@ -235,6 +291,7 @@ def test_orchestration_core_fail_defers_midi_tcp_fl():
         _p("check_mcp_server_entrypoint", return_value=_ok("MCP Server Entrypoint")),
         _p("check_mcp_stdio_transport", return_value=[]),
         _p("check_piano_roll_bridge", return_value=[]),
+        _p("check_fl_studio_application") as mock_app,
         _p("check_midi_ports") as mock_midi,
         _p("check_tcp_daemon") as mock_tcp,
         _p("check_fl_controller") as mock_fl,
@@ -245,6 +302,7 @@ def test_orchestration_core_fail_defers_midi_tcp_fl():
     assert statuses["MIDI/IAC/loopMIDI Ports"] == "probe_needed"
     assert statuses["TCP Daemon / Bridge"] == "probe_needed"
     assert statuses["FL Studio Controller Script"] == "probe_needed"
+    mock_app.assert_not_called()
     mock_midi.assert_not_called()
     mock_tcp.assert_not_called()
     mock_fl.assert_not_called()
@@ -257,6 +315,7 @@ def test_orchestration_server_fail_defers_configured_stdio_transport():
         _p("check_optional_dependencies", return_value=[]),
         _p("check_mcp_client_hints", return_value=[]),
         _p("check_mcp_server_entrypoint", return_value=_fail("MCP Server Entrypoint")),
+        _p("check_fl_studio_application", return_value=_ok("FL Studio Application")),
         _p("check_midi_ports", return_value=_ok("MIDI/IAC/loopMIDI Ports")),
         _p("check_tcp_daemon", return_value=[]),
         _p("check_fl_controller", return_value=[]),
@@ -280,6 +339,7 @@ def test_orchestration_respects_sse_transport_env():
         _p("check_optional_dependencies", return_value=[]),
         _p("check_mcp_client_hints", return_value=[]),
         _p("check_mcp_server_entrypoint", return_value=_ok("MCP Server Entrypoint")),
+        _p("check_fl_studio_application", return_value=_ok("FL Studio Application")),
         _p("check_midi_ports", return_value=_ok("MIDI/IAC/loopMIDI Ports")),
         _p("check_tcp_daemon", return_value=[]),
         _p("check_fl_controller", return_value=[]),
@@ -299,6 +359,7 @@ def test_orchestration_all_transports_runs_stdio_and_sse():
         _p("check_optional_dependencies", return_value=[]),
         _p("check_mcp_client_hints", return_value=[]),
         _p("check_mcp_server_entrypoint", return_value=_ok("MCP Server Entrypoint")),
+        _p("check_fl_studio_application", return_value=_ok("FL Studio Application")),
         _p("check_midi_ports", return_value=_ok("MIDI/IAC/loopMIDI Ports")),
         _p("check_tcp_daemon", return_value=[]),
         _p("check_fl_controller", return_value=[]),
@@ -320,6 +381,7 @@ def test_orchestration_midi_fail_defers_fl_controller():
         _p("check_mcp_client_hints", return_value=[]),
         _p("check_mcp_server_entrypoint", return_value=_ok("MCP Server Entrypoint")),
         _p("check_mcp_stdio_transport", return_value=[]),
+        _p("check_fl_studio_application", return_value=_ok("FL Studio Application")),
         _p("check_midi_ports", return_value=_fail("MIDI/IAC/loopMIDI Ports")),
         _p("check_tcp_daemon", return_value=[]),
         _p("check_piano_roll_bridge", return_value=[]),
@@ -341,6 +403,7 @@ def test_orchestration_tcp_fail_defers_fl_controller():
         _p("check_mcp_client_hints", return_value=[]),
         _p("check_mcp_server_entrypoint", return_value=_ok("MCP Server Entrypoint")),
         _p("check_mcp_stdio_transport", return_value=[]),
+        _p("check_fl_studio_application", return_value=_ok("FL Studio Application")),
         _p("check_midi_ports", return_value=_ok("MIDI/IAC/loopMIDI Ports")),
         _p("check_tcp_daemon", return_value=_fail("TCP Daemon / Bridge")),
         _p("check_piano_roll_bridge", return_value=[]),
@@ -366,6 +429,7 @@ def test_orchestration_tcp_mode_uses_explicit_daemon_and_advisory_local_midi():
         _p("check_mcp_client_hints", return_value=[]),
         _p("check_mcp_server_entrypoint", return_value=_ok("MCP Server Entrypoint")),
         _p("check_mcp_stdio_transport", return_value=[]),
+        _p("check_fl_studio_application", return_value=_ok("FL Studio Application")),
         _p(
             "check_midi_ports",
             return_value=[
@@ -410,6 +474,7 @@ def test_orchestration_all_ok_no_deferrals():
         _p("check_mcp_client_hints", return_value=[]),
         _p("check_mcp_server_entrypoint", return_value=_ok("MCP Server Entrypoint")),
         _p("check_mcp_stdio_transport", return_value=[]) as mock_stdio,
+        _p("check_fl_studio_application", return_value=_ok("FL Studio Application")),
         _p("check_midi_ports", return_value=_ok("MIDI/IAC/loopMIDI Ports")),
         _p("check_tcp_daemon", return_value=[]),
         _p("check_fl_controller", return_value=[]) as mock_fl,
@@ -419,4 +484,57 @@ def test_orchestration_all_ok_no_deferrals():
 
     assert not any(f.status == "probe_needed" for f in findings)
     mock_stdio.assert_called_once()
+    mock_fl.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# FL Studio app probe gate orchestration tests
+# ---------------------------------------------------------------------------
+
+
+def test_orchestration_fl_app_missing_defers_controller():
+    """When FL Studio is confirmed not running, controller check is skipped."""
+    with (
+        _p("check_python_environment", return_value=_ok("Python Environment")),
+        _p("check_core_dependencies", return_value=_ok("Core Dependencies")),
+        _p("check_optional_dependencies", return_value=[]),
+        _p("check_mcp_client_hints", return_value=[]),
+        _p("check_mcp_server_entrypoint", return_value=_ok("MCP Server Entrypoint")),
+        _p("check_mcp_stdio_transport", return_value=[]),
+        _p("check_fl_studio_application", return_value=_fail("FL Studio Application")),
+        _p("check_midi_ports", return_value=_ok("MIDI/IAC/loopMIDI Ports")),
+        _p("check_tcp_daemon", return_value=[]),
+        _p("check_fl_controller") as mock_fl,
+        _p("check_piano_roll_bridge", return_value=[]),
+    ):
+        findings = doctor.run_all_checks()
+
+    statuses = {f.component: f.status for f in findings}
+    assert statuses["FL Studio Application"] == "failed"
+    assert statuses["FL Studio Controller Script"] == "probe_needed"
+    assert "FL Studio application is not running" in next(
+        f.evidence for f in findings if f.component == "FL Studio Controller Script"
+    )
+    mock_fl.assert_not_called()
+
+
+def test_orchestration_fl_app_unknown_does_not_block_controller():
+    """When the app probe is uncertain (manual_check), controller still runs."""
+    with (
+        _p("check_python_environment", return_value=_ok("Python Environment")),
+        _p("check_core_dependencies", return_value=_ok("Core Dependencies")),
+        _p("check_optional_dependencies", return_value=[]),
+        _p("check_mcp_client_hints", return_value=[]),
+        _p("check_mcp_server_entrypoint", return_value=_ok("MCP Server Entrypoint")),
+        _p("check_mcp_stdio_transport", return_value=[]),
+        _p("check_fl_studio_application", return_value=_manual("FL Studio Application")),
+        _p("check_midi_ports", return_value=_ok("MIDI/IAC/loopMIDI Ports")),
+        _p("check_tcp_daemon", return_value=[]),
+        _p("check_fl_controller", return_value=[]) as mock_fl,
+        _p("check_piano_roll_bridge", return_value=[]),
+    ):
+        findings = doctor.run_all_checks()
+
+    statuses = {f.component: f.status for f in findings}
+    assert statuses["FL Studio Application"] == "manual_check"
     mock_fl.assert_called_once()

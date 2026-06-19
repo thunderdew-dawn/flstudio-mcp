@@ -11,15 +11,24 @@ project, and shows the ports and MCP snippets your client should use.
 ## Guided Setup
 
 Use the guided setup before connecting an MCP client or starting write-capable
-workflows. It checks Python, dependencies, virtual MIDI ports, the FL Studio
-controller heartbeat, daemon status, SSE status, and the Piano Roll script
-bridge separately.
+workflows. It checks Python, dependencies, whether FL Studio is running,
+virtual MIDI ports, the FL Studio controller heartbeat, daemon status, SSE
+status, and the Piano Roll script bridge separately.
 
 ![Control Center setup doctor](assets/control-center-setup-doctor.png)
 
-The checks are intentionally separated. A working MCP server does not prove
-that FL Studio is connected, and a running daemon does not prove that the
-controller script is receiving MIDI.
+The checks are intentionally separated and ordered. Setup Doctor and Control
+Center distinguish between three distinct states:
+
+1. **FL Studio is not running** — the "Open FL Studio" action is shown first.
+   The controller script check is skipped until FL Studio is open, so a missing
+   heartbeat is never mistaken for a controller configuration problem.
+2. **FL Studio is running but the controller is not connected** — the controller
+   and heartbeat checks run and report the actual issue.
+3. **Bridge or MIDI is not reachable** — reported as a separate finding.
+
+A working MCP server does not prove that FL Studio is connected, and a running
+daemon does not prove that the controller script is receiving MIDI.
 
 ## Dynamic Ports
 

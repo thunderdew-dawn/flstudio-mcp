@@ -4092,6 +4092,7 @@ def _port_state(
 def _group_findings(findings: list[doctor.Finding]) -> dict[str, list[dict[str, Any]]]:
     groups = {
         "environment": [],
+        "fl_app": [],
         "midi": [],
         "controller": [],
         "daemon": [],
@@ -4113,6 +4114,8 @@ def _finding_group(component: str) -> str:
         return "environment"
     if "optional" in lowered:
         return "optional_dependencies"
+    if "fl studio application" in lowered:
+        return "fl_app"
     if "midi" in lowered or "loopmidi" in lowered or "iac" in lowered:
         return "midi"
     if "daemon" in lowered or "bridge" in lowered:
@@ -4244,6 +4247,21 @@ def _setup_guidance(
                 groups=["midi"],
                 checkpoint="created_midi_ports",
                 action_label="I did this",
+            )
+        )
+
+    if _group_needs_action(groups, "fl_app"):
+        guidance.append(
+            _guidance_item(
+                title="Open FL Studio",
+                status=_group_status(groups, "fl_app"),
+                text=(
+                    "Open FL Studio, load or create a project, wait until it is "
+                    "responsive, then re-check setup."
+                ),
+                groups=["fl_app"],
+                action_label="Re-check",
+                action_path="/api/refresh",
             )
         )
 

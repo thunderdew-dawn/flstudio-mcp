@@ -86,9 +86,12 @@ macOS:
 .venv/bin/fls-pilot-control-center --open
 ```
 
-Follow the local Control Center. It checks MIDI ports, FL Studio controller
-heartbeat, daemon/SSE status, MCP client snippets, and the Piano Roll script
-bridge without changing the FL Studio project.
+Follow the local Control Center. It checks whether FL Studio is running,
+MIDI ports, FL Studio controller heartbeat, daemon/SSE status, MCP client
+snippets, and the Piano Roll script bridge without changing the FL Studio
+project. Setup Doctor and Control Center distinguish between FL Studio not
+running, the controller not connected, and the bridge not reachable — so the
+first prompt is always "Open FL Studio" when the application is not running.
 
 After setup, ask your assistant:
 
