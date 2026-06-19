@@ -16,7 +16,7 @@ required by the change.
 | Analysis workflows, reports, scoring, freshness, or Control Center panels | `agent-docs/concepts/analysis-workflow-contract.md` |
 | Analysis report versioning or compatibility | `agent-docs/contracts/report-versioning.md` |
 | Runtime jobs, recovery, audio artifacts, or audio evidence | `agent-docs/contracts/runtime-job-model.md`, `agent-docs/contracts/audio-evidence.md`, and `agent-docs/contracts/degraded-mode.md` |
-| Architecture, MCP surface, resources/prompts, registry, protocol, controller, entrypoints, capabilities, or trust boundaries | `agent-docs/contracts/architecture-governance.md` |
+| Architecture, MCP surface, resources/prompts, registry, protocol, controller, entrypoints, capabilities, trust boundaries, workflow behavior, public tool selection, or user-facing agent behavior | `agent-docs/contracts/architecture-governance.md`, `evals/evals.json`, and the relevant workflow/safety/capability contract docs |
 | FL API values, ranges, mappings, MIDI, automation, or reusable findings | `agent-docs/agents/knowledgebase-protocol.md` |
 | Issues, PRs, roadmap, releases, CI, security, hotfixes, or backports | `agent-docs/agents/github-playbook.md` and `agent-docs/project/ROADMAP.github.md` |
 | Live FL verification | `agent-docs/agents/runtime-usage.md` |
@@ -92,6 +92,8 @@ Run the smallest meaningful checks for the changed area:
 - Missing-safety-doc audit when public tool annotations change.
 - Tool registration baseline when the FastMCP surface changes.
 - Analysis contract tests for workflow/report changes.
+- Validate `evals/evals.json` when prompt/tool-surface expectations change.
+- If the change affects MCP tools, workflows, safety behavior, capability exposure, prompt/resource templates, public API limits, or user-facing agent behavior, either update `evals/evals.json` or document in the PR why the existing evals remain valid.
 - Rollback-safe live smoke tests only when live behavior changed and FL Studio
   is available.
 - `git diff --check` for every change.

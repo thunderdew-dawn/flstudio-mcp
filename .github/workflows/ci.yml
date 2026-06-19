@@ -44,6 +44,9 @@ jobs:
       - name: Check tool registration baseline
         run: python scripts/check_tool_registration_baseline.py
 
+      - name: Check evals contract
+        run: python scripts/check_evals_contract.py
+
       - name: Audit tool safety
         run: python scripts/audit_tool_safety.py --fail-on-gaps
 

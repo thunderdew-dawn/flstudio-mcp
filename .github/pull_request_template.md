@@ -41,3 +41,4 @@ Closes # (issue number)
 - [ ] I linked the relevant GitHub issue, milestone, or project-board item if feature status changed.
 - [ ] I have checked GitHub Project #7 and release planning issue #66 when this affects release scope, package naming, or versioning.
 - [ ] I updated GitHub source metadata rather than manually editing generated roadmap/changelog snapshots.
+- [ ] If this PR changes MCP tools, workflow behavior, capability exposure, safety/rollback behavior, public API limits, prompt/resource templates, or user-facing agent expectations, `evals/evals.json` has been updated or the PR body explicitly explains why the existing evals remain valid.

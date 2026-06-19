@@ -102,3 +102,4 @@ For live FL Studio verification, also follow:
   protocol/controller, supported-capability, or trust-boundary changes.
 - Preserve all user and uncommitted changes. Never revert unrelated work.
 - Use English for commits, code comments, docstrings, and repository docs.
+- For repository-development changes, treat `evals/evals.json` as a prompt/tool-surface contract. Whenever MCP tools, workflow behavior, capability exposure, safety/rollback behavior, public API limits, prompt/resource templates, or user-facing agent expectations change, update the evals or explicitly state why no eval update is required.
