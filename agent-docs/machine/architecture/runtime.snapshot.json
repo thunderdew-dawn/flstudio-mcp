@@ -3,8 +3,8 @@
   "slice_id": "runtime",
   "title": "Runtime host, daemon RPC, report store, workflow execution and transport assumptions",
   "source_snapshot": "agent-docs/machine/architecture-analysis.snapshot.json",
-  "source_snapshot_sha256": "9fe6631a08edc80c5dd9f6d6d99bd7bf0b5c07706068972c32ad311a5a0af338",
-  "generated_at": "2026-06-18",
+  "source_snapshot_sha256": "fb75140a6a821e940d3faa4e1ffc88a89088ee8668ae8cf9d5a472510040cc8d",
+  "generated_at": "2026-06-19",
   "note": "Generated scoped slice of the full static architecture analysis. Load this file only when the coding task matches its scope.",
   "load_when": [
     "daemon, RuntimeCore, runtime RPC, report store, or workflow execution changes",
@@ -31,10 +31,10 @@
         "request_id": "8 ASCII [a-z0-9]",
         "payload": "base64 encoded UTF-8 JSON"
       },
-      "protocol_version": 2,
+      "protocol_version": 3,
       "heartbeat_seconds": 0.5,
       "stale_threshold_seconds": 3.0,
-      "safe_payload_strategy": "controller paginates list responses to about 600 JSON bytes because larger SysEx payloads can be dropped"
+      "safe_payload_strategy": "host rejects requests and controller replaces responses above 1000 final wire bytes; expensive step, peak, plugin, and list operations use bounded pages or grouped writes"
     },
     "runtime": {
       "operations": [
@@ -44,6 +44,11 @@
         "analysis.report.latest",
         "analysis.report.list",
         "analysis.workflow.run",
+        "job.cancel",
+        "job.list",
+        "job.result",
+        "job.status",
+        "job.submit",
         "project.current",
         "project.snapshot.get",
         "project.snapshot.refresh",
@@ -103,13 +108,45 @@
           "enabled": true,
           "analysis_report_required": true,
           "health_inclusion_policy": "included_when_current_report_available",
-          "requirements": null,
+          "requirements": {
+            "workflow_id": "mix_review",
+            "required": [
+              {
+                "id": "fl_session_alive",
+                "observation_kind": "fl_session_alive",
+                "required": true,
+                "evidence_mode": "static_snapshot",
+                "invalidates_on": [],
+                "ttl_seconds": 2
+              },
+              {
+                "id": "static_project_snapshot",
+                "observation_kind": "static_project_snapshot",
+                "required": true,
+                "evidence_mode": "static_snapshot",
+                "invalidates_on": [],
+                "ttl_seconds": 60
+              }
+            ],
+            "optional": [
+              {
+                "id": "rendered_audio_features",
+                "observation_kind": "rendered_audio_features",
+                "required": false,
+                "evidence_mode": "rendered_audio",
+                "invalidates_on": [
+                  "project_identity_change",
+                  "audio_source_hash_changed"
+                ]
+              }
+            ]
+          },
           "parent_workflow_id": null,
           "panel_id": "producer_mix_review",
           "group": "Project Review",
           "endpoint": "/api/workflows/mix-review",
           "action_label": "Run Mix Review",
-          "safety_note": "Read-only mixer review. No project changes are made.",
+          "safety_note": "Read-only mixer review. Static execution remains available; audio-backed conclusions require a linked rendered master.",
           "supported_next_actions": [],
           "manual_only_actions": [],
           "forbidden_actions": [],
@@ -143,13 +180,45 @@
           "enabled": true,
           "analysis_report_required": true,
           "health_inclusion_policy": "included_when_current_report_available",
-          "requirements": null,
+          "requirements": {
+            "workflow_id": "low_end_analysis",
+            "required": [
+              {
+                "id": "fl_session_alive",
+                "observation_kind": "fl_session_alive",
+                "required": true,
+                "evidence_mode": "static_snapshot",
+                "invalidates_on": [],
+                "ttl_seconds": 2
+              },
+              {
+                "id": "static_project_snapshot",
+                "observation_kind": "static_project_snapshot",
+                "required": true,
+                "evidence_mode": "static_snapshot",
+                "invalidates_on": [],
+                "ttl_seconds": 60
+              }
+            ],
+            "optional": [
+              {
+                "id": "rendered_audio_features",
+                "observation_kind": "rendered_audio_features",
+                "required": false,
+                "evidence_mode": "rendered_audio",
+                "invalidates_on": [
+                  "project_identity_change",
+                  "audio_source_hash_changed"
+                ]
+              }
+            ]
+          },
           "parent_workflow_id": null,
           "panel_id": "producer_low_end",
           "group": "Project Review",
           "endpoint": "/api/workflows/low-end-analysis",
           "action_label": "Run Low-End Safety Check",
-          "safety_note": "Metadata-based read-only low-end safety review.",
+          "safety_note": "Read-only low-end review. Metadata raises suspicions; rendered audio is required for audio-backed energy and stereo proxy claims.",
           "supported_next_actions": [],
           "manual_only_actions": [],
           "forbidden_actions": [],
@@ -446,8 +515,8 @@
           "id": "audio_evidence",
           "title": "Audio Evidence",
           "kind": "evidence_worker",
-          "status": "planned",
-          "enabled": false,
+          "status": "active",
+          "enabled": true,
           "analysis_report_required": true,
           "health_inclusion_policy": "excluded",
           "requirements": {
@@ -466,11 +535,11 @@
             "optional": []
           },
           "parent_workflow_id": null,
-          "panel_id": null,
+          "panel_id": "producer_audio_evidence",
           "group": "Project Review",
-          "endpoint": null,
-          "action_label": null,
-          "safety_note": "",
+          "endpoint": "/api/audio-analysis",
+          "action_label": "Analyze Audio",
+          "safety_note": "Offline analysis of a user-selected file. Source audio and FL Studio projects are not modified.",
           "supported_next_actions": [
             "link_evidence_to_workflow"
           ],
@@ -498,7 +567,10 @@
         "ObservationStore",
         "AnalysisBroker",
         "ReportStore",
-        "WorkflowRegistry"
+        "WorkflowRegistry",
+        "JobStore",
+        "RuntimeJobQueue",
+        "AudioArtifactStore"
       ],
       "rpc_transport": "line-delimited JSON over local TCP to daemon, validated by runtime.protocol"
     },
@@ -521,7 +593,7 @@
           "src/fls_pilot/daemon.py",
           "src/fls_pilot/runtime/*.py"
         ],
-        "responsibility": "Long-lived local RPC service with canonical runtime state, snapshots, reports, workflow execution."
+        "responsibility": "Long-lived local RPC service with canonical Runtime state, durable jobs, audio worker execution, snapshots, reports, and workflow execution."
       },
       {
         "id": "virtual_midi",
@@ -531,6 +603,26 @@
           "loopMIDI/IAC Driver ports: FLStudioPilot RX/TX"
         ],
         "responsibility": "Bidirectional MIDI device layer carrying private-use SysEx payloads."
+      },
+      {
+        "id": "audio_worker",
+        "label": "Runtime Audio Analysis Worker",
+        "type": "daemon_worker",
+        "paths": [
+          "src/fls_pilot/runtime/audio_worker.py",
+          "src/fls_pilot/analysis/audio_features.py"
+        ],
+        "responsibility": "Runs deterministic cancellable offline feature extraction through daemon-owned durable Runtime jobs."
+      },
+      {
+        "id": "audio_artifact_store",
+        "label": "Audio Artifact Store",
+        "type": "data",
+        "paths": [
+          "src/fls_pilot/runtime/artifacts.py",
+          "~/.fls-pilot/audio-analysis/artifacts"
+        ],
+        "responsibility": "Atomically publishes versioned feature artifacts and bounded result references."
       }
     ]
   }

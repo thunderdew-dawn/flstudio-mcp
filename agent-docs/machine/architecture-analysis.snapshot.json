@@ -1,21 +1,19 @@
 {
   "schema": "fls-pilot.architecture.static-analysis.v1",
-  "generated_at": "2026-06-18",
+  "generated_at": "2026-06-19",
   "analysis_scope": {
-    "source_archive": "/mnt/data/fls-pilot.zip",
-    "root": "fls-pilot",
-    "mode": "static source analysis; no live FL Studio runtime; no full pytest suite",
+    "root": ".",
+    "mode": "repository static analysis refreshed for v3.0.0-rc1",
     "validation_performed": [
-      "safe ZIP extraction",
-      "AST parse of Python files",
-      "python compileall on src/fl_controller/scripts/tests",
-      "repository safety audit script",
-      "anti-vibe audit script"
+      "AST-based MCP safety audit",
+      "Runtime operation registry import",
+      "workflow declaration registry import",
+      "JSON snapshot validation",
+      "focused and full repository tests tracked separately"
     ],
     "validation_limitations": [
-      "FastMCP/mido/FL Studio runtime dependencies were not exercised end-to-end",
-      "FL Studio controller API behavior not live-verified",
-      "runtime health/ports not probed"
+      "No live FL Studio state is represented.",
+      "No automatic FL Studio render, open, save, or project mutation is exercised."
     ]
   },
   "project": {
@@ -716,7 +714,7 @@
           "src/fls_pilot/daemon.py",
           "src/fls_pilot/runtime/*.py"
         ],
-        "responsibility": "Long-lived local RPC service with canonical runtime state, snapshots, reports, workflow execution."
+        "responsibility": "Long-lived local RPC service with canonical Runtime state, durable jobs, audio worker execution, snapshots, reports, and workflow execution."
       },
       {
         "id": "control_center",
@@ -726,7 +724,7 @@
           "src/fls_pilot/control_center.py",
           "src/fls_pilot/control_center_static/*"
         ],
-        "responsibility": "Local HTTP UI for setup checks, daemon/SSE lifecycle, reports, workflow panels."
+        "responsibility": "Local HTTP UI for setup, Runtime workflows, durable audio jobs, reports, and evidence linking."
       },
       {
         "id": "analysis_runtime",
@@ -737,7 +735,7 @@
           "src/fls_pilot/workflows/*.py",
           "src/fls_pilot/workflow_report.py"
         ],
-        "responsibility": "Static/live evidence broker, observation store, report schema, scoring, health aggregation, workflow registry."
+        "responsibility": "Canonical strict AnalysisReport v1, observations, rendered-audio evidence, freshness, scoring, health aggregation, and workflow declarations."
       },
       {
         "id": "knowledgebase",
@@ -805,6 +803,35 @@
           "ui"
         ],
         "responsibility": "Host DAW scripting APIs. Sandbox limitations define supported capabilities."
+      },
+      {
+        "id": "audio_worker",
+        "label": "Runtime Audio Analysis Worker",
+        "type": "daemon_worker",
+        "paths": [
+          "src/fls_pilot/runtime/audio_worker.py",
+          "src/fls_pilot/analysis/audio_features.py"
+        ],
+        "responsibility": "Runs deterministic cancellable offline feature extraction through daemon-owned durable Runtime jobs."
+      },
+      {
+        "id": "audio_artifact_store",
+        "label": "Audio Artifact Store",
+        "type": "data",
+        "paths": [
+          "src/fls_pilot/runtime/artifacts.py",
+          "~/.fls-pilot/audio-analysis/artifacts"
+        ],
+        "responsibility": "Atomically publishes versioned feature artifacts and bounded result references."
+      },
+      {
+        "id": "user_audio_files",
+        "label": "User-Provided Audio Files",
+        "type": "external_data",
+        "paths": [
+          "manually selected local audio paths"
+        ],
+        "responsibility": "Read-only source material supplied by the user; never moved, modified, deleted, or rendered automatically from FL Studio."
       }
     ],
     "edges": [
@@ -907,6 +934,31 @@
         "from": "pyscript_bridge",
         "to": "fl_api",
         "label": "user-triggered script execution"
+      },
+      {
+        "from": "tool_surface",
+        "to": "daemon",
+        "label": "Runtime job RPC"
+      },
+      {
+        "from": "control_center",
+        "to": "daemon",
+        "label": "audio job and workflow RPC"
+      },
+      {
+        "from": "user_audio_files",
+        "to": "audio_worker",
+        "label": "read-only local file access"
+      },
+      {
+        "from": "audio_worker",
+        "to": "audio_artifact_store",
+        "label": "atomic publication"
+      },
+      {
+        "from": "audio_artifact_store",
+        "to": "analysis_runtime",
+        "label": "project-scoped rendered audio evidence"
       }
     ]
   },
@@ -951,8 +1003,8 @@
   "mcp_surface": {
     "tool_safety_summary": {
       "external-write": 2,
-      "read-only": 71,
-      "server-state": 4,
+      "read-only": 70,
+      "server-state": 5,
       "transient": 6,
       "write-safe-required": 84
     },
@@ -1014,30 +1066,30 @@
       ],
       "audio": [
         {
-          "contract_safety_class": "read-only",
-          "destructive_hint": null,
-          "evidence": "annotation readOnlyHint=True destructiveHint=None; helper_calls=audio_analyze; safetyClass='read-only'; doc_safety=True",
-          "has_safety_doc": true,
-          "line": 338,
-          "name": "fl_analyze_audio",
+          "name": "fl_audio_analysis",
+          "title": "Audio analysis jobs",
           "path": "src/fls_pilot/tools/audio.py",
-          "read_only_hint": true,
-          "safety_class_annotation": "read-only",
-          "status": "read-only",
-          "title": "Analyze audio (tempo/key)"
+          "line": 339,
+          "read_only_hint": false,
+          "destructive_hint": false,
+          "safety_class_annotation": "server-state",
+          "contract_safety_class": "server-state",
+          "has_safety_doc": true,
+          "status": "server-state",
+          "evidence": "annotation readOnlyHint=False destructiveHint=False; safetyClass='server-state'; doc_safety=True"
         },
         {
-          "contract_safety_class": "read-only",
-          "destructive_hint": null,
-          "evidence": "annotation readOnlyHint=True destructiveHint=None; helper_calls=audio_extract_melody; safetyClass='read-only'; doc_safety=True",
-          "has_safety_doc": true,
-          "line": 358,
           "name": "fl_extract_melody",
+          "title": "Extract melody from audio (pyin/CREPE)",
           "path": "src/fls_pilot/tools/audio.py",
+          "line": 478,
           "read_only_hint": true,
+          "destructive_hint": null,
           "safety_class_annotation": "read-only",
+          "contract_safety_class": "read-only",
+          "has_safety_doc": true,
           "status": "read-only",
-          "title": "Extract melody from audio (pyin/CREPE)"
+          "evidence": "annotation readOnlyHint=True destructiveHint=None; helper_calls=audio_extract_melody; safetyClass='read-only'; doc_safety=True"
         }
       ],
       "batch": [
@@ -4462,6 +4514,11 @@
       "analysis.report.latest",
       "analysis.report.list",
       "analysis.workflow.run",
+      "job.cancel",
+      "job.list",
+      "job.result",
+      "job.status",
+      "job.submit",
       "project.current",
       "project.snapshot.get",
       "project.snapshot.refresh",
@@ -4521,13 +4578,45 @@
         "enabled": true,
         "analysis_report_required": true,
         "health_inclusion_policy": "included_when_current_report_available",
-        "requirements": null,
+        "requirements": {
+          "workflow_id": "mix_review",
+          "required": [
+            {
+              "id": "fl_session_alive",
+              "observation_kind": "fl_session_alive",
+              "required": true,
+              "evidence_mode": "static_snapshot",
+              "invalidates_on": [],
+              "ttl_seconds": 2
+            },
+            {
+              "id": "static_project_snapshot",
+              "observation_kind": "static_project_snapshot",
+              "required": true,
+              "evidence_mode": "static_snapshot",
+              "invalidates_on": [],
+              "ttl_seconds": 60
+            }
+          ],
+          "optional": [
+            {
+              "id": "rendered_audio_features",
+              "observation_kind": "rendered_audio_features",
+              "required": false,
+              "evidence_mode": "rendered_audio",
+              "invalidates_on": [
+                "project_identity_change",
+                "audio_source_hash_changed"
+              ]
+            }
+          ]
+        },
         "parent_workflow_id": null,
         "panel_id": "producer_mix_review",
         "group": "Project Review",
         "endpoint": "/api/workflows/mix-review",
         "action_label": "Run Mix Review",
-        "safety_note": "Read-only mixer review. No project changes are made.",
+        "safety_note": "Read-only mixer review. Static execution remains available; audio-backed conclusions require a linked rendered master.",
         "supported_next_actions": [],
         "manual_only_actions": [],
         "forbidden_actions": [],
@@ -4561,13 +4650,45 @@
         "enabled": true,
         "analysis_report_required": true,
         "health_inclusion_policy": "included_when_current_report_available",
-        "requirements": null,
+        "requirements": {
+          "workflow_id": "low_end_analysis",
+          "required": [
+            {
+              "id": "fl_session_alive",
+              "observation_kind": "fl_session_alive",
+              "required": true,
+              "evidence_mode": "static_snapshot",
+              "invalidates_on": [],
+              "ttl_seconds": 2
+            },
+            {
+              "id": "static_project_snapshot",
+              "observation_kind": "static_project_snapshot",
+              "required": true,
+              "evidence_mode": "static_snapshot",
+              "invalidates_on": [],
+              "ttl_seconds": 60
+            }
+          ],
+          "optional": [
+            {
+              "id": "rendered_audio_features",
+              "observation_kind": "rendered_audio_features",
+              "required": false,
+              "evidence_mode": "rendered_audio",
+              "invalidates_on": [
+                "project_identity_change",
+                "audio_source_hash_changed"
+              ]
+            }
+          ]
+        },
         "parent_workflow_id": null,
         "panel_id": "producer_low_end",
         "group": "Project Review",
         "endpoint": "/api/workflows/low-end-analysis",
         "action_label": "Run Low-End Safety Check",
-        "safety_note": "Metadata-based read-only low-end safety review.",
+        "safety_note": "Read-only low-end review. Metadata raises suspicions; rendered audio is required for audio-backed energy and stereo proxy claims.",
         "supported_next_actions": [],
         "manual_only_actions": [],
         "forbidden_actions": [],
@@ -4864,8 +4985,8 @@
         "id": "audio_evidence",
         "title": "Audio Evidence",
         "kind": "evidence_worker",
-        "status": "planned",
-        "enabled": false,
+        "status": "active",
+        "enabled": true,
         "analysis_report_required": true,
         "health_inclusion_policy": "excluded",
         "requirements": {
@@ -4884,11 +5005,11 @@
           "optional": []
         },
         "parent_workflow_id": null,
-        "panel_id": null,
+        "panel_id": "producer_audio_evidence",
         "group": "Project Review",
-        "endpoint": null,
-        "action_label": null,
-        "safety_note": "",
+        "endpoint": "/api/audio-analysis",
+        "action_label": "Analyze Audio",
+        "safety_note": "Offline analysis of a user-selected file. Source audio and FL Studio projects are not modified.",
         "supported_next_actions": [
           "link_evidence_to_workflow"
         ],
@@ -4916,7 +5037,10 @@
       "ObservationStore",
       "AnalysisBroker",
       "ReportStore",
-      "WorkflowRegistry"
+      "WorkflowRegistry",
+      "JobStore",
+      "RuntimeJobQueue",
+      "AudioArtifactStore"
     ],
     "rpc_transport": "line-delimited JSON over local TCP to daemon, validated by runtime.protocol"
   },
@@ -4958,6 +5082,27 @@
         "generated .pyscript paths"
       ],
       "purpose": "Manual/user-triggered Piano Roll changes"
+    },
+    {
+      "name": "Runtime job store",
+      "paths": [
+        "~/.fls-pilot/runtime/jobs.sqlite3"
+      ],
+      "purpose": "Durable WAL-backed Runtime job state and recovery metadata"
+    },
+    {
+      "name": "Audio feature artifacts",
+      "paths": [
+        "~/.fls-pilot/audio-analysis/artifacts"
+      ],
+      "purpose": "Atomic content-addressed feature JSON and artifact manifests"
+    },
+    {
+      "name": "Audio evidence links",
+      "paths": [
+        "Runtime observation and report state"
+      ],
+      "purpose": "Project-scoped links from immutable audio artifacts to workflows"
     }
   ],
   "safety_model": {
@@ -4989,15 +5134,7 @@
       "broad UI automation",
       "full-FLP restore claims"
     ],
-    "notable_risk_findings": [
-      {
-        "id": "controller_bridge_eval",
-        "severity": "high",
-        "path": "fl_controller/FLStudioPilot/device_FLStudioPilot.py",
-        "line": 2170,
-        "finding": "Controller handler map contains bridge_eval using Python eval(expr). It is not defined in protocol.py command constants and is not exposed by normal MCP tools, but if reachable over the bridge it is a raw execution escape hatch and conflicts with the documented no-raw-escape-hatch safety posture."
-      }
-    ]
+    "notable_risk_findings": []
   },
   "import_graph_top": [
     {

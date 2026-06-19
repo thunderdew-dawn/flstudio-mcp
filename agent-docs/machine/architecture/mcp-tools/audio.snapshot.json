@@ -3,8 +3,8 @@
   "slice_id": "mcp_tools.audio",
   "title": "MCP tool module: audio",
   "source_snapshot": "agent-docs/machine/architecture-analysis.snapshot.json",
-  "source_snapshot_sha256": "9fe6631a08edc80c5dd9f6d6d99bd7bf0b5c07706068972c32ad311a5a0af338",
-  "generated_at": "2026-06-18",
+  "source_snapshot_sha256": "fb75140a6a821e940d3faa4e1ffc88a89088ee8668ae8cf9d5a472510040cc8d",
+  "generated_at": "2026-06-19",
   "load_when": [
     "MCP tool implementation or registration changes in the audio tool module",
     "safety annotations, doc safety, destructive hints, or protocol usage change for audio tools"
@@ -13,37 +13,38 @@
     "module": "audio",
     "tools_total": 2,
     "safety_class_counts": {
-      "read-only": 2
+      "read-only": 1,
+      "server-state": 1
     },
     "destructive_hint_true_count": 0,
-    "first_line": 338
+    "first_line": 339
   },
   "tools": [
     {
-      "contract_safety_class": "read-only",
-      "destructive_hint": null,
-      "evidence": "annotation readOnlyHint=True destructiveHint=None; helper_calls=audio_analyze; safetyClass='read-only'; doc_safety=True",
-      "has_safety_doc": true,
-      "line": 338,
-      "name": "fl_analyze_audio",
+      "name": "fl_audio_analysis",
+      "title": "Audio analysis jobs",
       "path": "src/fls_pilot/tools/audio.py",
-      "read_only_hint": true,
-      "safety_class_annotation": "read-only",
-      "status": "read-only",
-      "title": "Analyze audio (tempo/key)"
+      "line": 339,
+      "read_only_hint": false,
+      "destructive_hint": false,
+      "safety_class_annotation": "server-state",
+      "contract_safety_class": "server-state",
+      "has_safety_doc": true,
+      "status": "server-state",
+      "evidence": "annotation readOnlyHint=False destructiveHint=False; safetyClass='server-state'; doc_safety=True"
     },
     {
-      "contract_safety_class": "read-only",
-      "destructive_hint": null,
-      "evidence": "annotation readOnlyHint=True destructiveHint=None; helper_calls=audio_extract_melody; safetyClass='read-only'; doc_safety=True",
-      "has_safety_doc": true,
-      "line": 358,
       "name": "fl_extract_melody",
+      "title": "Extract melody from audio (pyin/CREPE)",
       "path": "src/fls_pilot/tools/audio.py",
+      "line": 478,
       "read_only_hint": true,
+      "destructive_hint": null,
       "safety_class_annotation": "read-only",
+      "contract_safety_class": "read-only",
+      "has_safety_doc": true,
       "status": "read-only",
-      "title": "Extract melody from audio (pyin/CREPE)"
+      "evidence": "annotation readOnlyHint=True destructiveHint=None; helper_calls=audio_extract_melody; safetyClass='read-only'; doc_safety=True"
     }
   ]
 }

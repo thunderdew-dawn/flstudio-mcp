@@ -3,8 +3,8 @@
   "slice_id": "data_state",
   "title": "Knowledgebase, packaged context, templates, report stores and other data/state locations",
   "source_snapshot": "agent-docs/machine/architecture-analysis.snapshot.json",
-  "source_snapshot_sha256": "9fe6631a08edc80c5dd9f6d6d99bd7bf0b5c07706068972c32ad311a5a0af338",
-  "generated_at": "2026-06-18",
+  "source_snapshot_sha256": "fb75140a6a821e940d3faa4e1ffc88a89088ee8668ae8cf9d5a472510040cc8d",
+  "generated_at": "2026-06-19",
   "note": "Generated scoped slice of the full static architecture analysis. Load this file only when the coding task matches its scope.",
   "load_when": [
     "knowledgebase, packaged MCP context docs/prompts, report storage, templates, audio/export scratch paths, or project state paths change",
@@ -49,6 +49,27 @@
           "generated .pyscript paths"
         ],
         "purpose": "Manual/user-triggered Piano Roll changes"
+      },
+      {
+        "name": "Runtime job store",
+        "paths": [
+          "~/.fls-pilot/runtime/jobs.sqlite3"
+        ],
+        "purpose": "Durable WAL-backed Runtime job state and recovery metadata"
+      },
+      {
+        "name": "Audio feature artifacts",
+        "paths": [
+          "~/.fls-pilot/audio-analysis/artifacts"
+        ],
+        "purpose": "Atomic content-addressed feature JSON and artifact manifests"
+      },
+      {
+        "name": "Audio evidence links",
+        "paths": [
+          "Runtime observation and report state"
+        ],
+        "purpose": "Project-scoped links from immutable audio artifacts to workflows"
       }
     ],
     "external_imports_observed": {

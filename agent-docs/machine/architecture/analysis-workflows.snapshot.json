@@ -3,8 +3,8 @@
   "slice_id": "analysis_workflows",
   "title": "Analysis workflows, reports, scoring, evidence, health aggregation and Control Center workflow panels",
   "source_snapshot": "agent-docs/machine/architecture-analysis.snapshot.json",
-  "source_snapshot_sha256": "9fe6631a08edc80c5dd9f6d6d99bd7bf0b5c07706068972c32ad311a5a0af338",
-  "generated_at": "2026-06-18",
+  "source_snapshot_sha256": "fb75140a6a821e940d3faa4e1ffc88a89088ee8668ae8cf9d5a472510040cc8d",
+  "generated_at": "2026-06-19",
   "note": "Generated scoped slice of the full static architecture analysis. Load this file only when the coding task matches its scope.",
   "load_when": [
     "workflow registry, report schema, scoring, evidence, freshness, prerequisites, or health aggregation changes",
@@ -61,13 +61,45 @@
         "enabled": true,
         "analysis_report_required": true,
         "health_inclusion_policy": "included_when_current_report_available",
-        "requirements": null,
+        "requirements": {
+          "workflow_id": "mix_review",
+          "required": [
+            {
+              "id": "fl_session_alive",
+              "observation_kind": "fl_session_alive",
+              "required": true,
+              "evidence_mode": "static_snapshot",
+              "invalidates_on": [],
+              "ttl_seconds": 2
+            },
+            {
+              "id": "static_project_snapshot",
+              "observation_kind": "static_project_snapshot",
+              "required": true,
+              "evidence_mode": "static_snapshot",
+              "invalidates_on": [],
+              "ttl_seconds": 60
+            }
+          ],
+          "optional": [
+            {
+              "id": "rendered_audio_features",
+              "observation_kind": "rendered_audio_features",
+              "required": false,
+              "evidence_mode": "rendered_audio",
+              "invalidates_on": [
+                "project_identity_change",
+                "audio_source_hash_changed"
+              ]
+            }
+          ]
+        },
         "parent_workflow_id": null,
         "panel_id": "producer_mix_review",
         "group": "Project Review",
         "endpoint": "/api/workflows/mix-review",
         "action_label": "Run Mix Review",
-        "safety_note": "Read-only mixer review. No project changes are made.",
+        "safety_note": "Read-only mixer review. Static execution remains available; audio-backed conclusions require a linked rendered master.",
         "supported_next_actions": [],
         "manual_only_actions": [],
         "forbidden_actions": [],
@@ -101,13 +133,45 @@
         "enabled": true,
         "analysis_report_required": true,
         "health_inclusion_policy": "included_when_current_report_available",
-        "requirements": null,
+        "requirements": {
+          "workflow_id": "low_end_analysis",
+          "required": [
+            {
+              "id": "fl_session_alive",
+              "observation_kind": "fl_session_alive",
+              "required": true,
+              "evidence_mode": "static_snapshot",
+              "invalidates_on": [],
+              "ttl_seconds": 2
+            },
+            {
+              "id": "static_project_snapshot",
+              "observation_kind": "static_project_snapshot",
+              "required": true,
+              "evidence_mode": "static_snapshot",
+              "invalidates_on": [],
+              "ttl_seconds": 60
+            }
+          ],
+          "optional": [
+            {
+              "id": "rendered_audio_features",
+              "observation_kind": "rendered_audio_features",
+              "required": false,
+              "evidence_mode": "rendered_audio",
+              "invalidates_on": [
+                "project_identity_change",
+                "audio_source_hash_changed"
+              ]
+            }
+          ]
+        },
         "parent_workflow_id": null,
         "panel_id": "producer_low_end",
         "group": "Project Review",
         "endpoint": "/api/workflows/low-end-analysis",
         "action_label": "Run Low-End Safety Check",
-        "safety_note": "Metadata-based read-only low-end safety review.",
+        "safety_note": "Read-only low-end review. Metadata raises suspicions; rendered audio is required for audio-backed energy and stereo proxy claims.",
         "supported_next_actions": [],
         "manual_only_actions": [],
         "forbidden_actions": [],
@@ -404,8 +468,8 @@
         "id": "audio_evidence",
         "title": "Audio Evidence",
         "kind": "evidence_worker",
-        "status": "planned",
-        "enabled": false,
+        "status": "active",
+        "enabled": true,
         "analysis_report_required": true,
         "health_inclusion_policy": "excluded",
         "requirements": {
@@ -424,11 +488,11 @@
           "optional": []
         },
         "parent_workflow_id": null,
-        "panel_id": null,
+        "panel_id": "producer_audio_evidence",
         "group": "Project Review",
-        "endpoint": null,
-        "action_label": null,
-        "safety_note": "",
+        "endpoint": "/api/audio-analysis",
+        "action_label": "Analyze Audio",
+        "safety_note": "Offline analysis of a user-selected file. Source audio and FL Studio projects are not modified.",
         "supported_next_actions": [
           "link_evidence_to_workflow"
         ],
@@ -461,6 +525,27 @@
     "analysis_architecture": {
       "nodes": [
         {
+          "id": "ai_clients",
+          "label": "MCP/AI Clients",
+          "type": "external",
+          "paths": [
+            "Claude Desktop",
+            "ChatGPT Desktop/SSE",
+            "Cursor",
+            "other MCP hosts"
+          ],
+          "responsibility": "User-facing AI host calls MCP tools/resources/prompts."
+        },
+        {
+          "id": "mcp_server",
+          "label": "FastMCP Server",
+          "type": "process",
+          "paths": [
+            "src/fls_pilot/server.py"
+          ],
+          "responsibility": "Registers tool modules, resources and prompts; exposes stdio or SSE MCP transports."
+        },
+        {
           "id": "tool_surface",
           "label": "MCP Tool Surface",
           "type": "module_cluster",
@@ -470,6 +555,34 @@
           "responsibility": "Domain tools for transport, mixer, channel, pattern, playlist, effects, plugins, routing, mix review, project health, KB, audio, MIDI export."
         },
         {
+          "id": "operation_registry",
+          "label": "Operation Registry",
+          "type": "module",
+          "paths": [
+            "src/fls_pilot/operations.py"
+          ],
+          "responsibility": "Declarative safety classes, validation, command mapping, snapshots/readback/restore builders."
+        },
+        {
+          "id": "safety_layer",
+          "label": "Safety & Rollback Layer",
+          "type": "module",
+          "paths": [
+            "src/fls_pilot/safety.py"
+          ],
+          "responsibility": "Persistent-write contract: scoped snapshot, dry-run, readback verification, changelog, rollback units."
+        },
+        {
+          "id": "bridge",
+          "label": "Bridge Client",
+          "type": "module",
+          "paths": [
+            "src/fls_pilot/connection.py",
+            "src/fls_pilot/protocol.py"
+          ],
+          "responsibility": "MIDI SysEx or TCP bridge, request correlation, heartbeat tracking, pagination/retry."
+        },
+        {
           "id": "daemon",
           "label": "TCP Daemon + Runtime Host",
           "type": "process",
@@ -477,7 +590,7 @@
             "src/fls_pilot/daemon.py",
             "src/fls_pilot/runtime/*.py"
           ],
-          "responsibility": "Long-lived local RPC service with canonical runtime state, snapshots, reports, workflow execution."
+          "responsibility": "Long-lived local RPC service with canonical Runtime state, durable jobs, audio worker execution, snapshots, reports, and workflow execution."
         },
         {
           "id": "control_center",
@@ -487,7 +600,7 @@
             "src/fls_pilot/control_center.py",
             "src/fls_pilot/control_center_static/*"
           ],
-          "responsibility": "Local HTTP UI for setup checks, daemon/SSE lifecycle, reports, workflow panels."
+          "responsibility": "Local HTTP UI for setup, Runtime workflows, durable audio jobs, reports, and evidence linking."
         },
         {
           "id": "analysis_runtime",
@@ -498,7 +611,7 @@
             "src/fls_pilot/workflows/*.py",
             "src/fls_pilot/workflow_report.py"
           ],
-          "responsibility": "Static/live evidence broker, observation store, report schema, scoring, health aggregation, workflow registry."
+          "responsibility": "Canonical strict AnalysisReport v1, observations, rendered-audio evidence, freshness, scoring, health aggregation, and workflow declarations."
         },
         {
           "id": "knowledgebase",
@@ -510,9 +623,99 @@
             "src/fls_pilot/kb_policy.py"
           ],
           "responsibility": "Calibration, FL API limits, safety policies, recipes, templates and workflow guidance."
+        },
+        {
+          "id": "music_logic",
+          "label": "Music Logic",
+          "type": "module_cluster",
+          "paths": [
+            "src/fls_pilot/music/*.py",
+            "src/fls_pilot/project_templates.py"
+          ],
+          "responsibility": "Scale/raga, plugin/preset libraries, mix doctor rules, MIDI generation, level/curve helpers."
+        },
+        {
+          "id": "pyscript_bridge",
+          "label": "Piano Roll .pyscript Bridge",
+          "type": "bridge",
+          "paths": [
+            "src/fls_pilot/pyscript_gen.py",
+            "src/fls_pilot/pyscript_trigger.py",
+            "fl_pyscripts/*.pyscript"
+          ],
+          "responsibility": "Generates/triggers FL Piano Roll scripts for note-writing operations where controller API is insufficient."
+        },
+        {
+          "id": "virtual_midi",
+          "label": "Virtual MIDI Loopback",
+          "type": "transport",
+          "paths": [
+            "loopMIDI/IAC Driver ports: FLStudioPilot RX/TX"
+          ],
+          "responsibility": "Bidirectional MIDI device layer carrying private-use SysEx payloads."
+        },
+        {
+          "id": "fl_controller",
+          "label": "FLStudioPilot Controller Script",
+          "type": "fl_script",
+          "paths": [
+            "fl_controller/FLStudioPilot/device_FLStudioPilot.py"
+          ],
+          "responsibility": "Always-on FL controller script; decodes SysEx commands, calls FL Studio API modules, sends responses and heartbeat."
+        },
+        {
+          "id": "fl_api",
+          "label": "FL Studio API",
+          "type": "external",
+          "paths": [
+            "channels",
+            "mixer",
+            "patterns",
+            "playlist",
+            "plugins",
+            "transport",
+            "general",
+            "device",
+            "ui"
+          ],
+          "responsibility": "Host DAW scripting APIs. Sandbox limitations define supported capabilities."
+        },
+        {
+          "id": "audio_worker",
+          "label": "Runtime Audio Analysis Worker",
+          "type": "daemon_worker",
+          "paths": [
+            "src/fls_pilot/runtime/audio_worker.py",
+            "src/fls_pilot/analysis/audio_features.py"
+          ],
+          "responsibility": "Runs deterministic cancellable offline feature extraction through daemon-owned durable Runtime jobs."
+        },
+        {
+          "id": "audio_artifact_store",
+          "label": "Audio Artifact Store",
+          "type": "data",
+          "paths": [
+            "src/fls_pilot/runtime/artifacts.py",
+            "~/.fls-pilot/audio-analysis/artifacts"
+          ],
+          "responsibility": "Atomically publishes versioned feature artifacts and bounded result references."
+        },
+        {
+          "id": "user_audio_files",
+          "label": "User-Provided Audio Files",
+          "type": "external_data",
+          "paths": [
+            "manually selected local audio paths"
+          ],
+          "responsibility": "Read-only source material supplied by the user; never moved, modified, deleted, or rendered automatically from FL Studio."
         }
       ],
       "edges": [
+        {
+          "from": "ai_clients",
+          "to": "mcp_server",
+          "label": "MCP stdio/SSE"
+        },
         {
           "from": "mcp_server",
           "to": "tool_surface",
@@ -527,6 +730,16 @@
           "from": "tool_surface",
           "to": "safety_layer",
           "label": "write-safe tools"
+        },
+        {
+          "from": "safety_layer",
+          "to": "bridge",
+          "label": "snapshot/write/readback/rollback"
+        },
+        {
+          "from": "operation_registry",
+          "to": "bridge",
+          "label": "protocol command names"
         },
         {
           "from": "tool_surface",
@@ -559,6 +772,21 @@
           "label": "central bridge ownership"
         },
         {
+          "from": "bridge",
+          "to": "virtual_midi",
+          "label": "SysEx request/response/heartbeat"
+        },
+        {
+          "from": "virtual_midi",
+          "to": "fl_controller",
+          "label": "FL MIDI engine routes by port"
+        },
+        {
+          "from": "fl_controller",
+          "to": "fl_api",
+          "label": "controller-script API calls"
+        },
+        {
           "from": "tool_surface",
           "to": "knowledgebase",
           "label": "policy/calibration lookups"
@@ -577,10 +805,48 @@
           "from": "tool_surface",
           "to": "pyscript_bridge",
           "label": "Piano Roll note workflows"
+        },
+        {
+          "from": "pyscript_bridge",
+          "to": "fl_api",
+          "label": "user-triggered script execution"
+        },
+        {
+          "from": "tool_surface",
+          "to": "daemon",
+          "label": "Runtime job RPC"
+        },
+        {
+          "from": "control_center",
+          "to": "daemon",
+          "label": "audio job and workflow RPC"
+        },
+        {
+          "from": "user_audio_files",
+          "to": "audio_worker",
+          "label": "read-only local file access"
+        },
+        {
+          "from": "audio_worker",
+          "to": "audio_artifact_store",
+          "label": "atomic publication"
+        },
+        {
+          "from": "audio_artifact_store",
+          "to": "analysis_runtime",
+          "label": "project-scoped rendered audio evidence"
         }
       ]
     },
     "data_and_state": [
+      {
+        "name": "Knowledgebase",
+        "paths": [
+          "knowledgebase/**/*.md",
+          "knowledgebase/**/*.json"
+        ],
+        "purpose": "Human and structured policy/calibration/template source of truth"
+      },
       {
         "name": "MCP context docs/prompts",
         "paths": [
@@ -588,6 +854,49 @@
           "src/fls_pilot/context/prompts"
         ],
         "purpose": "Packaged agent resources/prompts"
+      },
+      {
+        "name": "Change log",
+        "paths": [
+          "~/.fls-pilot/changelog.jsonl"
+        ],
+        "purpose": "Rollback and audit history for persistent writes"
+      },
+      {
+        "name": "Control Center static assets",
+        "paths": [
+          "src/fls_pilot/control_center_static"
+        ],
+        "purpose": "Browser UI"
+      },
+      {
+        "name": "Piano Roll bridge files",
+        "paths": [
+          "fl_pyscripts/*.pyscript",
+          "generated .pyscript paths"
+        ],
+        "purpose": "Manual/user-triggered Piano Roll changes"
+      },
+      {
+        "name": "Runtime job store",
+        "paths": [
+          "~/.fls-pilot/runtime/jobs.sqlite3"
+        ],
+        "purpose": "Durable WAL-backed Runtime job state and recovery metadata"
+      },
+      {
+        "name": "Audio feature artifacts",
+        "paths": [
+          "~/.fls-pilot/audio-analysis/artifacts"
+        ],
+        "purpose": "Atomic content-addressed feature JSON and artifact manifests"
+      },
+      {
+        "name": "Audio evidence links",
+        "paths": [
+          "Runtime observation and report state"
+        ],
+        "purpose": "Project-scoped links from immutable audio artifacts to workflows"
       }
     ]
   }

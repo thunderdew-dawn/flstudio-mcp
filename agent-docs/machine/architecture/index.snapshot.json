@@ -1,8 +1,8 @@
 {
   "schema": "fls-pilot.architecture.static-analysis.index.v1",
-  "generated_at": "2026-06-18",
+  "generated_at": "2026-06-19",
   "source_snapshot": "agent-docs/machine/architecture-analysis.snapshot.json",
-  "source_snapshot_sha256": "9fe6631a08edc80c5dd9f6d6d99bd7bf0b5c07706068972c32ad311a5a0af338",
+  "source_snapshot_sha256": "fb75140a6a821e940d3faa4e1ffc88a89088ee8668ae8cf9d5a472510040cc8d",
   "governed_snapshot": "agent-docs/machine/architecture-governance.snapshot.json",
   "default_agent_rule": "Start with the governed snapshot. Load scoped generated slices only when the coding task matches load_when.",
   "full_snapshot_rule": "Do not load the full architecture-analysis.snapshot.json by default. Prefer the scoped files under agent-docs/machine/architecture/.",

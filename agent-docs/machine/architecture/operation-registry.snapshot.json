@@ -3,8 +3,8 @@
   "slice_id": "operation_registry",
   "title": "Declarative operation registry, safety classes and write orchestration inventory",
   "source_snapshot": "agent-docs/machine/architecture-analysis.snapshot.json",
-  "source_snapshot_sha256": "9fe6631a08edc80c5dd9f6d6d99bd7bf0b5c07706068972c32ad311a5a0af338",
-  "generated_at": "2026-06-18",
+  "source_snapshot_sha256": "fb75140a6a821e940d3faa4e1ffc88a89088ee8668ae8cf9d5a472510040cc8d",
+  "generated_at": "2026-06-19",
   "note": "Generated scoped slice of the full static architecture analysis. Load this file only when the coding task matches its scope.",
   "load_when": [
     "operation registry entries, command mapping, snapshot/readback/restore builder, or batch eligibility change",

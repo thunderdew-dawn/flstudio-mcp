@@ -1,8 +1,8 @@
 {
   "schema": "fls-pilot.architecture.mcp-tools.index.v1",
   "source_snapshot": "agent-docs/machine/architecture-analysis.snapshot.json",
-  "source_snapshot_sha256": "9fe6631a08edc80c5dd9f6d6d99bd7bf0b5c07706068972c32ad311a5a0af338",
-  "generated_at": "2026-06-18",
+  "source_snapshot_sha256": "fb75140a6a821e940d3faa4e1ffc88a89088ee8668ae8cf9d5a472510040cc8d",
+  "generated_at": "2026-06-19",
   "default_agent_rule": "For MCP work, read architecture/mcp-surface.snapshot.json first, then load only the affected module slice below.",
   "modules": {
     "arrange": {
@@ -17,7 +17,8 @@
       "path": "agent-docs/machine/architecture/mcp-tools/audio.snapshot.json",
       "tools_total": 2,
       "safety_class_counts": {
-        "read-only": 2
+        "read-only": 1,
+        "server-state": 1
       },
       "destructive_hint_true_count": 0
     },
@@ -74,8 +75,8 @@
       "path": "agent-docs/machine/architecture/mcp-tools/compose.snapshot.json",
       "tools_total": 4,
       "safety_class_counts": {
-        "write-safe-required": 2,
-        "read-only": 2
+        "read-only": 2,
+        "write-safe-required": 2
       },
       "destructive_hint_true_count": 2
     },
@@ -125,10 +126,10 @@
       "path": "agent-docs/machine/architecture/mcp-tools/mixer_core.snapshot.json",
       "tools_total": 30,
       "safety_class_counts": {
+        "external-write": 1,
         "read-only": 9,
-        "write-safe-required": 16,
         "server-state": 4,
-        "external-write": 1
+        "write-safe-required": 16
       },
       "destructive_hint_true_count": 2
     },
@@ -136,8 +137,8 @@
       "path": "agent-docs/machine/architecture/mcp-tools/mixing.snapshot.json",
       "tools_total": 5,
       "safety_class_counts": {
-        "write-safe-required": 4,
-        "read-only": 1
+        "read-only": 1,
+        "write-safe-required": 4
       },
       "destructive_hint_true_count": 0
     },
@@ -162,8 +163,8 @@
       "path": "agent-docs/machine/architecture/mcp-tools/pianoroll.snapshot.json",
       "tools_total": 15,
       "safety_class_counts": {
-        "write-safe-required": 13,
-        "read-only": 2
+        "read-only": 2,
+        "write-safe-required": 13
       },
       "destructive_hint_true_count": 3
     },
@@ -231,8 +232,8 @@
       "tools_total": 14,
       "safety_class_counts": {
         "read-only": 5,
-        "write-safe-required": 3,
-        "transient": 6
+        "transient": 6,
+        "write-safe-required": 3
       },
       "destructive_hint_true_count": 2
     }

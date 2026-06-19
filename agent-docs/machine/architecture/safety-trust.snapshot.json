@@ -3,8 +3,8 @@
   "slice_id": "safety_trust",
   "title": "Safety classes, persistent-write contract, forbidden capabilities and trust boundaries",
   "source_snapshot": "agent-docs/machine/architecture-analysis.snapshot.json",
-  "source_snapshot_sha256": "9fe6631a08edc80c5dd9f6d6d99bd7bf0b5c07706068972c32ad311a5a0af338",
-  "generated_at": "2026-06-18",
+  "source_snapshot_sha256": "fb75140a6a821e940d3faa4e1ffc88a89088ee8668ae8cf9d5a472510040cc8d",
+  "generated_at": "2026-06-19",
   "note": "Generated scoped slice of the full static architecture analysis. Load this file only when the coding task matches its scope.",
   "load_when": [
     "safety classes, approval gates, rollback, readback, persistent write contract, or forbidden/manual-only capability changes",
@@ -41,15 +41,7 @@
         "broad UI automation",
         "full-FLP restore claims"
       ],
-      "notable_risk_findings": [
-        {
-          "id": "controller_bridge_eval",
-          "severity": "high",
-          "path": "fl_controller/FLStudioPilot/device_FLStudioPilot.py",
-          "line": 2170,
-          "finding": "Controller handler map contains bridge_eval using Python eval(expr). It is not defined in protocol.py command constants and is not exposed by normal MCP tools, but if reachable over the bridge it is a raw execution escape hatch and conflicts with the documented no-raw-escape-hatch safety posture."
-        }
-      ]
+      "notable_risk_findings": []
     },
     "trust_boundary_edges": [
       {
@@ -58,9 +50,54 @@
         "label": "MCP stdio/SSE"
       },
       {
+        "from": "mcp_server",
+        "to": "tool_surface",
+        "label": "registers calls"
+      },
+      {
+        "from": "tool_surface",
+        "to": "operation_registry",
+        "label": "domain validation / command preparation"
+      },
+      {
+        "from": "tool_surface",
+        "to": "safety_layer",
+        "label": "write-safe tools"
+      },
+      {
+        "from": "safety_layer",
+        "to": "bridge",
+        "label": "snapshot/write/readback/rollback"
+      },
+      {
+        "from": "operation_registry",
+        "to": "bridge",
+        "label": "protocol command names"
+      },
+      {
         "from": "tool_surface",
         "to": "bridge",
         "label": "read-only/transient bridge calls"
+      },
+      {
+        "from": "tool_surface",
+        "to": "analysis_runtime",
+        "label": "workflow reports / health"
+      },
+      {
+        "from": "analysis_runtime",
+        "to": "daemon",
+        "label": "runtime-owned state"
+      },
+      {
+        "from": "control_center",
+        "to": "daemon",
+        "label": "JSON-over-TCP runtime RPC"
+      },
+      {
+        "from": "control_center",
+        "to": "mcp_server",
+        "label": "starts SSE/stdio probes"
       },
       {
         "from": "daemon",
@@ -83,9 +120,54 @@
         "label": "controller-script API calls"
       },
       {
+        "from": "tool_surface",
+        "to": "knowledgebase",
+        "label": "policy/calibration lookups"
+      },
+      {
+        "from": "analysis_runtime",
+        "to": "knowledgebase",
+        "label": "rule references / limits"
+      },
+      {
+        "from": "tool_surface",
+        "to": "music_logic",
+        "label": "composition/mix/plugin logic"
+      },
+      {
+        "from": "tool_surface",
+        "to": "pyscript_bridge",
+        "label": "Piano Roll note workflows"
+      },
+      {
         "from": "pyscript_bridge",
         "to": "fl_api",
         "label": "user-triggered script execution"
+      },
+      {
+        "from": "tool_surface",
+        "to": "daemon",
+        "label": "Runtime job RPC"
+      },
+      {
+        "from": "control_center",
+        "to": "daemon",
+        "label": "audio job and workflow RPC"
+      },
+      {
+        "from": "user_audio_files",
+        "to": "audio_worker",
+        "label": "read-only local file access"
+      },
+      {
+        "from": "audio_worker",
+        "to": "audio_artifact_store",
+        "label": "atomic publication"
+      },
+      {
+        "from": "audio_artifact_store",
+        "to": "analysis_runtime",
+        "label": "project-scoped rendered audio evidence"
       }
     ],
     "safety_architecture_nodes": [
@@ -155,7 +237,7 @@
           "src/fls_pilot/daemon.py",
           "src/fls_pilot/runtime/*.py"
         ],
-        "responsibility": "Long-lived local RPC service with canonical runtime state, snapshots, reports, workflow execution."
+        "responsibility": "Long-lived local RPC service with canonical Runtime state, durable jobs, audio worker execution, snapshots, reports, and workflow execution."
       },
       {
         "id": "pyscript_bridge",
@@ -202,6 +284,35 @@
           "ui"
         ],
         "responsibility": "Host DAW scripting APIs. Sandbox limitations define supported capabilities."
+      },
+      {
+        "id": "audio_worker",
+        "label": "Runtime Audio Analysis Worker",
+        "type": "daemon_worker",
+        "paths": [
+          "src/fls_pilot/runtime/audio_worker.py",
+          "src/fls_pilot/analysis/audio_features.py"
+        ],
+        "responsibility": "Runs deterministic cancellable offline feature extraction through daemon-owned durable Runtime jobs."
+      },
+      {
+        "id": "audio_artifact_store",
+        "label": "Audio Artifact Store",
+        "type": "data",
+        "paths": [
+          "src/fls_pilot/runtime/artifacts.py",
+          "~/.fls-pilot/audio-analysis/artifacts"
+        ],
+        "responsibility": "Atomically publishes versioned feature artifacts and bounded result references."
+      },
+      {
+        "id": "user_audio_files",
+        "label": "User-Provided Audio Files",
+        "type": "external_data",
+        "paths": [
+          "manually selected local audio paths"
+        ],
+        "responsibility": "Read-only source material supplied by the user; never moved, modified, deleted, or rendered automatically from FL Studio."
       }
     ]
   }

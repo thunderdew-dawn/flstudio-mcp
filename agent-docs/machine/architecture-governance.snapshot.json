@@ -1,6 +1,6 @@
 {
   "snapshot_version": 1,
-  "as_of": "2026-06-18",
+  "as_of": "2026-06-19",
   "status": "governed",
   "project": {
     "name": "fls-pilot",
@@ -193,6 +193,31 @@
         "agent-docs/concepts/api-capability-audit.md",
         "knowledgebase/fl_api/"
       ]
+    },
+    {
+      "id": "runtime_job_queue",
+      "responsibility": "Own durable daemon-hosted submit, status, result, cancel, list, idempotency, cancellation, and restart recovery.",
+      "source_paths": [
+        "src/fls_pilot/runtime/jobs.py",
+        "src/fls_pilot/runtime/job_store.py",
+        "src/fls_pilot/runtime/protocol.py"
+      ]
+    },
+    {
+      "id": "audio_analysis_worker",
+      "responsibility": "Extract deterministic offline audio features without bridge or FL Studio access.",
+      "source_paths": [
+        "src/fls_pilot/runtime/audio_worker.py",
+        "src/fls_pilot/analysis/audio_features.py"
+      ]
+    },
+    {
+      "id": "audio_artifact_store",
+      "responsibility": "Atomically publish versioned audio feature artifacts and compact result references.",
+      "source_paths": [
+        "src/fls_pilot/runtime/artifacts.py",
+        "src/fls_pilot/analysis/audio_schema.py"
+      ]
     }
   ],
   "public_surfaces": {
@@ -224,12 +249,22 @@
         "fls://capabilities/write-safety"
       ],
       "resource_source": "src/fls_pilot/tools/resources.py",
-      "prompt_source": "src/fls_pilot/prompts.py"
+      "prompt_source": "src/fls_pilot/prompts.py",
+      "audio_analysis_tool": "fl_audio_analysis"
     },
     "runtime_rpc": {
       "owner": "daemon_runtime_host",
       "source": "src/fls_pilot/runtime/protocol.py",
-      "raw_command_code_script_fields_forbidden": true
+      "raw_command_code_script_fields_forbidden": true,
+      "contract": "fls-pilot.runtime-job.v1",
+      "job_operations": [
+        "job.submit",
+        "job.status",
+        "job.result",
+        "job.cancel",
+        "job.list"
+      ],
+      "durable_store": "~/.fls-pilot/runtime/jobs.sqlite3"
     },
     "controller_protocol": {
       "protocol_version": 3,
@@ -253,7 +288,9 @@
       "source": "src/fls_pilot/control_center.py",
       "workflow_registry": "src/fls_pilot/workflows/registry.py",
       "runtime_client": "src/fls_pilot/runtime/client.py",
-      "state_ownership": "runtime"
+      "state_ownership": "runtime",
+      "audio_evidence_panel": "producer_audio_evidence",
+      "audio_job_endpoint": "/api/audio-analysis"
     }
   },
   "runtime_transports": {
@@ -290,7 +327,12 @@
       "preset_assistant",
       "audio_evidence"
     ],
-    "control_center_must_not_invent_workflow_state": true
+    "control_center_must_not_invent_workflow_state": true,
+    "report_contract_version": "fls-pilot.analysis-report.v1",
+    "legacy_report_compatibility": "unsupported",
+    "audio_features_contract": "fls-pilot.audio-features.v1",
+    "audio_artifact_contract": "fls-pilot.audio-artifact.v1",
+    "evidence_link_contract": "fls-pilot.evidence-link.v1"
   },
   "safety": {
     "contract": "agent-docs/concepts/safety-contract.md",
@@ -364,9 +406,24 @@
       "mechanism": "generated_file_and_os_hotkey"
     },
     {
+      "from": "user_audio_files",
+      "to": "daemon_audio_worker",
+      "mechanism": "validated_read_only_local_file_path"
+    },
+    {
+      "from": "daemon_audio_worker",
+      "to": "audio_artifact_store",
+      "mechanism": "atomic_content_addressed_publication"
+    },
+    {
+      "from": "audio_artifact_store",
+      "to": "analysis_runtime",
+      "mechanism": "project_scoped_evidence_link"
+    },
+    {
       "from": "user_files",
-      "to": "offline_analysis_or_midi_export",
-      "mechanism": "validated_local_file_paths"
+      "to": "midi_export",
+      "mechanism": "validated_local_file_path"
     }
   ],
   "source_of_truth": {
