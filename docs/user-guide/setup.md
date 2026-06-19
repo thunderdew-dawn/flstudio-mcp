@@ -1,63 +1,54 @@
 ![fls-pilot logo](../assets/fls-pilot-logo.svg)
 # Setup
 
-This guide covers the normal setup path for FL Studio, the controller script,
-the local fls-pilot server, and MCP clients.
+This guide covers the normal setup path for FL Studio, the controller script, the local fls-pilot server, and MCP clients.
 
-## 1. Create Virtual MIDI Ports
+## 1. Create Virtual MIDI Ports & Install
 
 Create two virtual MIDI ports named exactly:
 
 - `FLStudioPilot RX`
 - `FLStudioPilot TX`
 
-On Windows, use loopMIDI — for the two virtual MIDI ports ([download](https://www.tobias-erichsen.de/software/loopmidi.html)). On macOS, use the built-in IAC Driver.
+=== "Windows"
 
-![macOS IAC Driver setup](../assets/setup-macos-midi-driver.png)
+    1. Use loopMIDI ([download](https://www.tobias-erichsen.de/software/loopmidi.html)) to create the two ports.
+    
+    ![Windows loopMIDI setup](../assets/loopmidi-setup.svg)
 
-## 2. Install fls-pilot
+    2. Clone and install:
+    ```batchfile
+    git clone https://github.com/thunderdew-dawn/fls-pilot
+    cd fls-pilot
+    scripts\install_windows.bat
+    ```
+    *(Optional: Install `ffmpeg` on PATH for MP3 analysis)*
 
-Default editable installation:
+=== "macOS"
 
-```shell
-git clone https://github.com/thunderdew-dawn/fls-pilot
-cd fls-pilot
-```
+    1. Use the built-in **Audio MIDI Setup > IAC Driver** to create the two ports.
+    
+    ![macOS IAC Driver setup](../assets/setup-macos-midi-driver.png)
 
-**Optional Requirements (Windows):**
-- ffmpeg on PATH (for MP3 analysis)
+    2. Clone and install:
+    ```shell
+    git clone https://github.com/thunderdew-dawn/fls-pilot
+    cd fls-pilot
+    chmod +x scripts/install_macos.sh
+    ./scripts/install_macos.sh
+    ```
+    *For a global CLI install, use `./scripts/install_macos.sh --pipx`*
 
-Windows:
+The installer copies the FL Studio controller script, installs the Python server into `.venv`, checks the MIDI ports, and installs the Piano Roll `MCP_Apply` script.
 
-```batchfile
-scripts\install_windows.bat
-```
+## 2. Configure FL Studio
 
-macOS:
-
-```shell
-chmod +x scripts/install_macos.sh
-./scripts/install_macos.sh
-```
-
-The installer copies the FL Studio controller script, installs the Python
-server into `.venv`, checks the MIDI ports, and installs the Piano Roll
-`MCP_Apply` script.
-
-For a global CLI install, use `--pipx`:
-
-```shell
-./scripts/install_macos.sh --pipx
-```
-
-## 3. Configure FL Studio
-
-Open **Options > MIDI Settings** and configure both ports with the same FL
-Studio port number.
+Open **Options > MIDI Settings** and configure both ports with the same FL Studio port number.
 
 ![FL Studio MIDI settings](../assets/setup-flstudio-midi.png)
 
-Use this setup:
+!!! important "Port Configuration"
+    Use the exact port number `42` as standard practice for the connection.
 
 | FL Studio list | Device | Required setting |
 |---|---|---|
@@ -68,48 +59,58 @@ Then open **View > Script output** and confirm the controller is ready.
 
 ![FL Studio script output](../assets/setup-flstudio-script-output.png)
 
-## 4. Open Control Center
+## 3. Open Control Center
 
-Recommended first-run command:
+Control Center stays read-only against the FL Studio project while it checks the environment and displays the correct MCP client snippets.
 
-Windows:
+=== "Windows"
+    ```batchfile
+    .venv\Scripts\fls-pilot-control-center --open
+    ```
+=== "macOS"
+    ```shell
+    .venv/bin/fls-pilot-control-center --open
+    ```
+*(If installed with pipx, run `fls-pilot-control-center --open`)*
 
-```batchfile
-.venv\Scripts\fls-pilot-control-center --open
-```
+!!! note "Dynamic Port Fallback"
+    If the default port is busy, Control Center will dynamically select a fallback port and display it in the UI.
+    
+    ![Control Center dynamic port fallback](../assets/port-fallback.svg)
 
-macOS:
+## 4. Connect an MCP Client
 
-```shell
-.venv/bin/fls-pilot-control-center --open
-```
+Use the configuration snippets from the Control Center for your specific client.
 
-If installed with pipx, run:
+=== "Claude Desktop / Cursor"
 
-```shell
-fls-pilot-control-center --open
-```
+    For stdio clients, configure the `fls-pilot` command and set `FLS_PILOT_TRANSPORT=tcp` when using the daemon.
+    
+    ![stdio config dummy](../assets/stdio-setup.svg)
 
-Control Center stays read-only against the FL Studio project while it checks
-the environment and displays the correct MCP client snippets.
+=== "ChatGPT Desktop"
 
-## 5. Connect an MCP Client
+    Start the SSE server from Control Center and use the displayed URL (e.g. `http://127.0.0.1:42042/sse`).
+    
+    ![ChatGPT SSE connection](../assets/chatgpt-sse-setup.svg)
 
-For stdio clients such as Claude Desktop or Cursor, configure the `fls-pilot`
-command and set `FLS_PILOT_TRANSPORT=tcp` when using the daemon.
+## 5. Arm Piano Roll Writes
 
-For ChatGPT Desktop, start the SSE server from Control Center and use the
-displayed `http://localhost:<port>/sse` URL.
-
-## 6. Arm Piano Roll Writes
-
-Only composition tools need the Piano Roll bridge. Open the Piano Roll, choose
-the script menu, and run **MCP_Apply** once per FL Studio session.
+Only composition tools need the Piano Roll bridge. Open the Piano Roll, choose the script menu, and run **MCP_Apply** once per FL Studio session.
 
 ![Piano Roll MCP Apply script](../assets/setup-flstudio-piano-roll-mcpapply.png)
 
-Read-only workflows such as Mix Review, Routing Audit, Project Health, and
-Preflight do not require this step.
+Read-only workflows such as Mix Review, Routing Audit, Project Health, and Preflight do not require this step.
+
+## Setup Success Checklist
+
+Verify these steps before starting your first workflow:
+
+- [ ] Virtual MIDI Ports created and named correctly
+- [ ] FL Studio MIDI settings configured (Controller type and Port 42)
+- [ ] Controller heartbeat visible in FL Studio script output
+- [ ] Control Center (Daemon/SSE) running without errors
+- [ ] MCP Client successfully connected
 
 ## Troubleshooting
 

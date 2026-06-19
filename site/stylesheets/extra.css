@@ -1,0 +1,73 @@
+/* Control Center Branding */
+
+:root {
+  --cc-bg: #030713;
+  --cc-cyan: #27d7ff;
+  --cc-violet: #9d75ff;
+  --cc-green: #55ef87;
+  --cc-amber: #ffb23e;
+  --cc-red: #ff5f72;
+}
+
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color: #050b19;
+  --md-primary-fg-color--light: #0a162b;
+  --md-primary-fg-color--dark: #030713;
+  --md-default-bg-color: #030713;
+  --md-accent-fg-color: var(--cc-cyan);
+  --md-typeset-a-color: var(--cc-cyan);
+}
+
+[data-md-color-scheme="default"] {
+  --md-accent-fg-color: #0096c7;
+  --md-typeset-a-color: #0096c7;
+}
+
+/* Admonitions styling based on Control Center */
+.md-typeset .admonition.important,
+.md-typeset details.important {
+  border-color: var(--cc-violet);
+}
+.md-typeset .important > .admonition-title,
+.md-typeset .important > summary {
+  background-color: rgba(157, 117, 255, 0.1);
+}
+.md-typeset .important > .admonition-title::before,
+.md-typeset .important > summary::before {
+  background-color: var(--cc-violet);
+}
+
+.md-typeset .admonition.warning,
+.md-typeset details.warning {
+  border-color: var(--cc-amber);
+}
+.md-typeset .warning > .admonition-title,
+.md-typeset .warning > summary {
+  background-color: rgba(255, 178, 62, 0.1);
+}
+.md-typeset .warning > .admonition-title::before,
+.md-typeset .warning > summary::before {
+  background-color: var(--cc-amber);
+}
+
+.md-typeset .admonition.tip,
+.md-typeset details.tip {
+  border-color: var(--cc-green);
+}
+.md-typeset .tip > .admonition-title,
+.md-typeset .tip > summary {
+  background-color: rgba(85, 239, 135, 0.1);
+}
+.md-typeset .tip > .admonition-title::before,
+.md-typeset .tip > summary::before {
+  background-color: var(--cc-green);
+}
+
+/* Buttons */
+.md-typeset .md-button {
+  border-radius: 8px;
+}
+.md-typeset .md-button--primary {
+  background-color: var(--cc-cyan);
+  color: #030713;
+}

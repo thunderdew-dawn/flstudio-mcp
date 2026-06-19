@@ -10,18 +10,23 @@ generated architecture context.
 
 ## System Flow
 
-```text
-AI Client
-  -> FastMCP Server
-     -> MCP Resources, Prompts, and Tool Surface
-     -> Operation Registry
-     -> Safety and Rollback Layer
-     -> Bridge Client
-        -> direct MIDI SysEx, or
-        -> localhost TCP Daemon -> MIDI SysEx
-           -> Virtual MIDI Loopback
-              -> FL Controller Script
-                 -> FL Studio MIDI Scripting API
+```mermaid
+flowchart TD
+    Client[AI Client] --> FastMCP[FastMCP Server]
+    
+    subgraph fls-pilot process
+        FastMCP --> Surface[MCP Tool Surface]
+        Surface --> Registry[Operation Registry]
+        Registry --> Safety[Safety & Rollback Layer]
+        Safety --> Bridge[Bridge Client]
+    end
+    
+    Bridge -- direct MIDI SysEx --> Loopback[Virtual MIDI Loopback]
+    Bridge -- localhost TCP Daemon --> Daemon[TCP Daemon]
+    Daemon -- MIDI SysEx --> Loopback
+    
+    Loopback --> Controller[FL Controller Script]
+    Controller --> FLAPI[FL Studio MIDI Scripting API]
 ```
 
 The Control Center uses the daemon-hosted Runtime. Direct MCP transport can use
