@@ -72,13 +72,23 @@ logger = logging.getLogger("fls_pilot.daemon")
 
 _bridge: FLBridge | None = None
 _bridge_lock = threading.Lock()
-_audio_artifact_store = AudioArtifactStore()
-_runtime = RuntimeCore(
-    artifact_store=_audio_artifact_store,
-    job_result_validator=_audio_artifact_store.validate_result_ref,
-)
-_audio_worker = AudioAnalysisWorker(_audio_artifact_store)
-_audio_worker.register(_runtime)
+_runtime: RuntimeCore | None = None
+_runtime_lock = threading.Lock()
+_audio_artifact_store: AudioArtifactStore | None = None
+
+
+def _get_runtime() -> RuntimeCore:
+    """Return (and lazily create) the singleton RuntimeCore."""
+    global _runtime, _audio_artifact_store
+    with _runtime_lock:
+        if _runtime is None:
+            _audio_artifact_store = AudioArtifactStore()
+            _runtime = RuntimeCore(
+                artifact_store=_audio_artifact_store,
+                job_result_validator=_audio_artifact_store.validate_result_ref,
+            )
+            AudioAnalysisWorker(_audio_artifact_store).register(_runtime)
+        return _runtime
 
 
 def _get_bridge() -> FLBridge:
@@ -213,26 +223,26 @@ def _dispatch_runtime_operation(
 ) -> dict:
     if operation == "runtime.status":
         return {
-            "session": _runtime.session.to_dict(),
-            "project_context": _runtime.project_context.to_dict(),
+            "session": _get_runtime().session.to_dict(),
+            "project_context": _get_runtime().project_context.to_dict(),
             "capabilities": _runtime_capabilities(),
         }
     if operation == "runtime.session":
-        return {"session": _runtime.session.to_dict()}
+        return {"session": _get_runtime().session.to_dict()}
     if operation == "runtime.capabilities":
         return {"capabilities": _runtime_capabilities()}
     if operation == "runtime.invalidate":
         workflows = tuple(str(row) for row in params.get("workflows") or ())
         return {
-            "invalidation": _runtime.invalidate(
+            "invalidation": _get_runtime().invalidate(
                 str(params.get("event") or "project_state_change"),
                 workflows=workflows,
             )
         }
     if operation == "project.current":
-        return {"project_context": _runtime.project_context.to_dict()}
+        return {"project_context": _get_runtime().project_context.to_dict()}
     if operation in {"project.snapshot.get", "project.snapshot.refresh"}:
-        snapshot = _runtime.get_static_project_snapshot(
+        snapshot = _get_runtime().get_static_project_snapshot(
             _get_bridge(),
             StaticSnapshotPolicy(
                 force_refresh=operation.endswith("refresh"),
@@ -242,19 +252,19 @@ def _dispatch_runtime_operation(
         )
         return {
             "snapshot": snapshot.to_dict(),
-            "project_context": _runtime.project_context.to_dict(),
+            "project_context": _get_runtime().project_context.to_dict(),
         }
     if operation == "workflow.catalog":
-        rows = _runtime.workflow_registry.list(
+        rows = _get_runtime().workflow_registry.list(
             include_inactive=bool(params.get("include_inactive", True))
         )
         return {"workflows": [row.to_dict() for row in rows]}
     if operation == "workflow.declaration.get":
         workflow_id = canonical_workflow_id(str(params["workflow_id"]))
-        return {"workflow": _runtime.workflow_registry.get(workflow_id).to_dict()}
+        return {"workflow": _get_runtime().workflow_registry.get(workflow_id).to_dict()}
     if operation == "analysis.workflow.run":
         workflow_id = canonical_workflow_id(str(params["workflow_id"]))
-        declaration = _runtime.workflow_registry.get(workflow_id)
+        declaration = _get_runtime().workflow_registry.get(workflow_id)
         if not declaration.enabled:
             raise ValueError(f"workflow is not active: {workflow_id}")
         inputs = params.get("inputs") or {}
@@ -262,7 +272,7 @@ def _dispatch_runtime_operation(
             raise ValueError("workflow inputs must be an object")
         return {
             "result": run_workflow(
-                _runtime,
+                _get_runtime(),
                 workflow_id,
                 bridge=(
                     None
@@ -281,7 +291,7 @@ def _dispatch_runtime_operation(
             status=dict(params.get("watch_status") or {}),
             last_max=dict(params.get("watch_last_max") or {}),
         )
-        window = _runtime.analysis_broker.get_live_meter_window(
+        window = _get_runtime().analysis_broker.get_live_meter_window(
             _get_bridge(),
             policy=LiveMeterPolicy(
                 ttl_seconds=float(policy_data.get("ttl_seconds") or 2.0),
@@ -299,25 +309,25 @@ def _dispatch_runtime_operation(
         return {"live_meter_window": window.to_dict()}
     if operation == "analysis.report.add":
         report = AnalysisReport.from_dict(dict(params["report"]))
-        stored = _runtime.add_report(report)
+        stored = _get_runtime().add_report(report)
         return {"report": stored.to_dict()}
     if operation == "analysis.report.latest":
         workflow_id = canonical_workflow_id(str(params["workflow_id"]))
-        report = _runtime.latest_report(workflow_id)
+        report = _get_runtime().latest_report(workflow_id)
         return {"report": report.to_dict() if report else None}
     if operation == "analysis.report.list":
         workflow = params.get("workflow_id")
         workflow_id = canonical_workflow_id(str(workflow)) if workflow else None
-        reports = _runtime.report_store.list_reports(workflow_id)
+        reports = _get_runtime().report_store.list_reports(workflow_id)
         return {"reports": [report.to_dict() for report in reports]}
     if operation == "analysis.health.get":
-        return {"health": _runtime.project_health()}
+        return {"health": _get_runtime().project_health()}
     if operation == "job.submit":
         payload = params.get("input") or {}
         summary = params.get("input_summary") or {}
         if not isinstance(payload, dict) or not isinstance(summary, dict):
             raise ValueError("job input and input_summary must be objects")
-        job = _runtime.jobs.submit(
+        job = _get_runtime().jobs.submit(
             kind=str(params.get("kind") or ""),
             input_payload=payload,
             input_summary=summary,
@@ -331,13 +341,13 @@ def _dispatch_runtime_operation(
         )
         return {"job": job.to_dict()}
     if operation == "job.status":
-        return {"job": _runtime.jobs.status(str(params["job_id"])).to_dict()}
+        return {"job": _get_runtime().jobs.status(str(params["job_id"])).to_dict()}
     if operation == "job.result":
-        return {"job": _runtime.jobs.result(str(params["job_id"])).to_dict()}
+        return {"job": _get_runtime().jobs.result(str(params["job_id"])).to_dict()}
     if operation == "job.cancel":
-        return {"job": _runtime.jobs.cancel(str(params["job_id"])).to_dict()}
+        return {"job": _get_runtime().jobs.cancel(str(params["job_id"])).to_dict()}
     if operation == "job.list":
-        jobs = _runtime.jobs.list(
+        jobs = _get_runtime().jobs.list(
             kind=str(params["kind"]) if params.get("kind") else None,
             status=str(params["status"]) if params.get("status") else None,
             limit=int(params.get("limit", 100)),
@@ -438,7 +448,7 @@ def main() -> None:
     finally:
         server.shutdown()
         server.server_close()
-        _runtime.close(wait=False)
+        _get_runtime().close(wait=False)
 
 
 if __name__ == "__main__":

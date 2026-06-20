@@ -46,6 +46,7 @@ from .analysis import (
 from .analysis.live import LiveMeterPolicy
 from .connection import DEFAULT_TCP_HOST, DEFAULT_TCP_PORT, TCPBridge, fetch_all_pages
 from .music import mix_doctor as mix_review
+from .rules import RuleCondition, RuleDefinition, evaluate_rules
 from .runtime.audio_worker import AUDIO_FEATURE_JOB_KIND, build_audio_job_request
 from .runtime.client import RuntimeClient
 from .runtime_config import (
@@ -58,7 +59,11 @@ from .runtime_config import (
     tcp_port_status,
 )
 from .status import collect_status as collect_status_report
-from .workflows.registry import DEFAULT_WORKFLOW_REGISTRY
+from .workflows.registry import (
+    DEFAULT_WORKFLOW_REGISTRY,
+    WorkflowRegistry,
+    build_effective_workflow_registry,
+)
 
 STATIC_PACKAGE = "fls_pilot.control_center_static"
 MAX_LOG_LINES = 80
@@ -69,9 +74,6 @@ MANUAL_CHECKPOINTS = {
     "ran_mcp_apply",
     "granted_macos_accessibility",
 }
-WORKFLOW_CATALOG = DEFAULT_WORKFLOW_REGISTRY.control_center_catalog()
-
-
 def _read_project_version() -> str:
     try:
         project_root = Path(__file__).resolve().parent.parent.parent
@@ -118,7 +120,15 @@ class ManagedProcess:
 
 
 class ControlCenterState:
-    def __init__(self, *, host: str, port: int, sse_host: str, sse_port: int) -> None:
+    def __init__(
+        self,
+        *,
+        host: str,
+        port: int,
+        sse_host: str,
+        sse_port: int,
+        workflow_registry: WorkflowRegistry | None = None,
+    ) -> None:
         daemon_host, daemon_port = _resolve_daemon_endpoint()
         self.host = host
         self.port = port
@@ -128,6 +138,10 @@ class ControlCenterState:
         self.daemon_port = daemon_port
         self.daemon_fallback_port: int | None = None
         self.runtime_client = RuntimeClient(daemon_host, daemon_port)
+        self.workflow_registry = workflow_registry or build_effective_workflow_registry(
+            DEFAULT_WORKFLOW_REGISTRY,
+            (),
+        )
         self.checkpoints: dict[str, dict[str, Any]] = {}
         self.processes: dict[str, ManagedProcess] = {}
         self.last_findings: list[doctor.Finding] = []
@@ -177,6 +191,7 @@ def collect_status(state: ControlCenterState, *, refresh: bool = True) -> dict[s
             readiness=readiness,
             processes=process_state,
             ports=ports,
+            workflow_registry=state.workflow_registry,
         )
         return {
             "version": PROJECT_VERSION,
@@ -221,9 +236,12 @@ def _ui_payload(
     readiness: dict[str, Any],
     processes: dict[str, Any],
     ports: dict[str, dict[str, Any]],
+    workflow_registry: WorkflowRegistry = DEFAULT_WORKFLOW_REGISTRY,
 ) -> dict[str, Any]:
     return {
-        "workflow_catalog": [dict(item) for item in WORKFLOW_CATALOG],
+        "workflow_catalog": [
+            dict(item) for item in workflow_registry.control_center_catalog()
+        ],
         "next_action": _ui_next_action(
             status_report=status_report,
             readiness=readiness,
@@ -360,7 +378,7 @@ def _run_runtime_product_workflow(
         return {
             "contract_version": "fls-pilot.analysis-report.v1",
             "workflow": workflow_id,
-            "title": DEFAULT_WORKFLOW_REGISTRY.get(workflow_id).title,
+            "title": state.workflow_registry.get(workflow_id).title,
             "analysis_mode": "manual_check",
             "evidence_mode": "unavailable",
             "freshness": {"status": "unavailable"},
@@ -869,6 +887,31 @@ MIX_POLICY_RULE_IDS = [
     "source_or_bus_trim_before_master_trim",
     "mix_doctor_existing_plugin_only",
 ]
+LOW_END_RULESET_ID = "core.low-end.metadata"
+LOW_END_RULESET_VERSION = "1.0.0"
+LOW_END_PROFILE_ID = "default"
+LOW_END_METADATA_RULES = (
+    RuleDefinition(
+        id="low_end.stereo_metadata_risk",
+        title="Low-end track has wide or panned mixer metadata",
+        severity="info",
+        risk_score=0,
+        confidence_score=65,
+        evidence_mode="static_snapshot",
+        conditions=(
+            RuleCondition(
+                "track.low_end_role",
+                "in",
+                ("kick", "sub", "bass"),
+            ),
+            RuleCondition("track.stereo_risk", "truthy"),
+        ),
+        metadata={
+            "ruleset_id": LOW_END_RULESET_ID,
+            "profile_id": LOW_END_PROFILE_ID,
+        },
+    ),
+)
 
 
 def _collect_mix_snapshot(
@@ -1161,7 +1204,7 @@ def _build_low_end_analysis_report(report: dict[str, Any]) -> AnalysisReport:
     risk = risk_from_severities(tuple(row.get("severity", "info") for row in low_end_findings))
     freshness_status = "fresh" if ok and not missing else "partial" if ok else "unavailable"
     track_index_by_name = _low_end_track_index_by_name(details, low_end_tracks)
-    findings = tuple(
+    legacy_findings = tuple(
         _low_end_analysis_finding(
             row,
             index=index,
@@ -1171,6 +1214,12 @@ def _build_low_end_analysis_report(report: dict[str, Any]) -> AnalysisReport:
         )
         for index, row in enumerate(low_end_findings, start=1)
     )
+    rule_findings, rule_errors = _low_end_rule_findings(
+        low_end_tracks,
+        analysis_mode=analysis_mode,
+        confidence_score=confidence,
+    )
+    findings = (*legacy_findings, *rule_findings)
     limits = _unique_strings(
         [
             *list(details.get("limits") or []),
@@ -1179,6 +1228,10 @@ def _build_low_end_analysis_report(report: dict[str, Any]) -> AnalysisReport:
                 "Low-end detection is based on names plus mixer pan, stereo separation, "
                 "and peak metadata; it is not true phase-correlation analysis."
             ),
+            *[
+                f"Declarative low-end rules were skipped: {error}"
+                for error in rule_errors
+            ],
         ]
     )
     assumptions = _unique_strings(
@@ -1225,6 +1278,9 @@ def _build_low_end_analysis_report(report: dict[str, Any]) -> AnalysisReport:
         title="Low-End Analysis",
         analysis_mode=analysis_mode,
         evidence_mode=evidence_mode,
+        ruleset_id=LOW_END_RULESET_ID,
+        ruleset_version=LOW_END_RULESET_VERSION,
+        profile_id=LOW_END_PROFILE_ID,
         created_at=created_at,
         project_fingerprint=details.get("project_fingerprint"),
         freshness=Freshness(
@@ -1267,6 +1323,7 @@ def _build_low_end_analysis_report(report: dict[str, Any]) -> AnalysisReport:
             "peak_source": summary.get("peak_source"),
             "low_end_summary": low_end.get("summary") or {},
             "low_end_track_count": len(low_end_tracks),
+            "rule_evaluation_errors": rule_errors,
         },
     )
 
@@ -1320,6 +1377,87 @@ def _low_end_analysis_finding(
         limitations=("Mixer pan/stereo metadata cannot prove true low-band phase behavior.",),
         metadata={"legacy_finding": row},
     )
+
+
+def _low_end_rule_findings(
+    low_end_tracks: list[dict[str, Any]],
+    *,
+    analysis_mode: str,
+    confidence_score: int,
+) -> tuple[tuple[Finding, ...], list[str]]:
+    findings: list[Finding] = []
+    errors: list[str] = []
+    for offset, track in enumerate(low_end_tracks, start=1):
+        track_index = _as_int(track.get("track"))
+        pan = _as_float(track.get("pan"))
+        stereo_sep = _as_float(track.get("stereo_sep"))
+        observation = {
+            "track": {
+                "low_end_role": str(
+                    track.get("low_end_role") or _low_end_role(track.get("name"))
+                ),
+                "stereo_risk": (
+                    pan is not None
+                    and abs(pan) >= 0.2
+                    or stereo_sep is not None
+                    and abs(stereo_sep) >= 0.25
+                ),
+                "pan": pan,
+                "stereo_sep": stereo_sep,
+            }
+        }
+        try:
+            matches = evaluate_rules(observation, LOW_END_METADATA_RULES)
+        except Exception as exc:
+            errors.append(f"{type(exc).__name__}: {exc}")
+            continue
+        for match in matches:
+            entities = ()
+            if track_index is not None:
+                entities = (
+                    EntityRef(
+                        "mixer_track",
+                        mixer_entity_id(track_index),
+                        str(
+                            track.get("name")
+                            or _display_track_name(track_index, None)
+                        ),
+                    ),
+                )
+            findings.append(
+                Finding(
+                    id=f"{match.id}:{track_index if track_index is not None else offset}",
+                    rule_id=match.rule_id,
+                    title=match.title,
+                    severity=match.severity,
+                    risk_score=match.risk_score,
+                    confidence_score=min(
+                        confidence_score,
+                        match.confidence_score,
+                    ),
+                    evidence_mode=analysis_mode,
+                    entities=entities,
+                    evidence=(
+                        *match.evidence,
+                        {
+                            "pan": pan,
+                            "stereo_sep": stereo_sep,
+                            "name_based_role": observation["track"]["low_end_role"],
+                        },
+                    ),
+                    assumptions=(
+                        "The low-end role is inferred from the mixer track name.",
+                    ),
+                    limitations=(
+                        "Mixer metadata cannot prove low-band phase or mono compatibility.",
+                    ),
+                    metadata={
+                        **match.metadata,
+                        "declarative_rule": True,
+                    },
+                )
+            )
+    return tuple(findings), errors
 
 
 def _low_end_track_index_by_name(

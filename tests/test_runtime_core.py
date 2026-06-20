@@ -72,8 +72,8 @@ def _report(workflow: str, fingerprint: str) -> AnalysisReport:
     )
 
 
-def test_runtime_tracks_stable_scope_and_snapshot_revisions() -> None:
-    runtime = RuntimeCore(session=RuntimeSession(id="runtime_test"))
+def test_runtime_tracks_stable_scope_and_snapshot_revisions(tmp_path) -> None:
+    runtime = RuntimeCore(session=RuntimeSession(id="runtime_test"), job_store_path=tmp_path / "jobs.sqlite3")
     bridge = FakeBridge()
 
     first = runtime.get_static_project_snapshot(bridge)
@@ -95,8 +95,8 @@ def test_runtime_tracks_stable_scope_and_snapshot_revisions() -> None:
     assert runtime.project_context.snapshot_revision == 2
 
 
-def test_runtime_scopes_reports_to_current_project() -> None:
-    runtime = RuntimeCore(session=RuntimeSession(id="runtime_test"))
+def test_runtime_scopes_reports_to_current_project(tmp_path) -> None:
+    runtime = RuntimeCore(session=RuntimeSession(id="runtime_test"), job_store_path=tmp_path / "jobs.sqlite3")
     bridge = FakeBridge()
     snapshot = runtime.get_static_project_snapshot(bridge)
 
@@ -112,8 +112,8 @@ def test_runtime_scopes_reports_to_current_project() -> None:
     assert runtime.latest_report("mix_review") is None
 
 
-def test_runtime_health_cannot_use_other_project_reports() -> None:
-    runtime = RuntimeCore(session=RuntimeSession(id="runtime_test"))
+def test_runtime_health_cannot_use_other_project_reports(tmp_path) -> None:
+    runtime = RuntimeCore(session=RuntimeSession(id="runtime_test"), job_store_path=tmp_path / "jobs.sqlite3")
     bridge = FakeBridge()
     snapshot = runtime.get_static_project_snapshot(bridge)
     runtime.add_report(_report("mix_review", snapshot.project_fingerprint))

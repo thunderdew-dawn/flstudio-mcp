@@ -29,8 +29,8 @@ def _report(workflow: str, fingerprint: str) -> AnalysisReport:
     )
 
 
-def test_runtime_invalidation_removes_only_current_scope_reports() -> None:
-    runtime = RuntimeCore()
+def test_runtime_invalidation_removes_only_current_scope_reports(tmp_path) -> None:
+    runtime = RuntimeCore(job_store_path=tmp_path / "jobs.sqlite3")
     bridge = FakeBridge()
     snapshot = runtime.get_static_project_snapshot(bridge)
     runtime.add_report(_report("mix_review", snapshot.project_fingerprint))

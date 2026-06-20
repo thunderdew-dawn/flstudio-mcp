@@ -103,7 +103,7 @@ def check_kb_schema():
                     )
 
                 conf = entry.get("confidence_level")
-                if conf and conf not in ALLOWED_CONFIDENCE_LEVELS:
+                if conf and isinstance(conf, str) and conf not in ALLOWED_CONFIDENCE_LEVELS:
                     report_error(
                         rel_path,
                         1,

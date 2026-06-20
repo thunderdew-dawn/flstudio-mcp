@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import pytest
 
+from fls_pilot.packs import load_pack_manifest
 from fls_pilot.workflows.registry import (
     DEFAULT_WORKFLOW_REGISTRY,
     WorkflowDeclaration,
     WorkflowRegistry,
+    build_effective_workflow_registry,
     canonical_workflow_id,
 )
 
@@ -47,3 +49,78 @@ def test_default_catalog_uses_canonical_ids_and_backend_health() -> None:
     assert catalog["jam_2_project"]["enabled"] is False
     assert catalog["jam_2_project"]["group"] == "Roadmap"
     assert "sidechaining" not in catalog
+
+
+def test_effective_registry_attaches_pack_metadata_without_overriding_core() -> None:
+    base = DEFAULT_WORKFLOW_REGISTRY.get("low_end_analysis")
+    manifest = load_pack_manifest(
+        {
+            "pack_id": "genre.house",
+            "version": "1.0.0",
+            "title": "House Pack",
+            "publisher": "FLS Pilot",
+            "min_app_version": "3.0.0rc1",
+            "workflows": [
+                {
+                    "workflow_id": "low_end_analysis",
+                    "profiles": ["house"],
+                    "metadata": {"genre": "house", "badge": "genre"},
+                }
+            ],
+            "rulesets": [],
+            "profiles": [{"id": "house", "title": "House"}],
+            "entitlement": {"kind": "pro"},
+            "metadata": {},
+        }
+    )
+
+    effective = build_effective_workflow_registry(
+        DEFAULT_WORKFLOW_REGISTRY,
+        (manifest,),
+    )
+    extended = effective.get("low_end_analysis")
+    pack = extended.metadata["pack_extensions"][0]
+
+    assert effective.get("mix_review") is DEFAULT_WORKFLOW_REGISTRY.get("mix_review")
+    assert extended.endpoint == base.endpoint
+    assert extended.requirements == base.requirements
+    assert extended.safety_note == base.safety_note
+    assert extended.forbidden_actions == base.forbidden_actions
+    assert pack["pack_id"] == "genre.house"
+    assert pack["entitlement"] == {"kind": "pro"}
+    assert pack["profiles"] == [{"id": "house", "title": "House"}]
+    assert pack["metadata"]["genre"] == "house"
+
+
+def test_effective_registry_rejects_unknown_pack_profile() -> None:
+    manifest = load_pack_manifest(
+        {
+            "pack_id": "genre.house",
+            "version": "1.0.0",
+            "title": "House Pack",
+            "publisher": "FLS Pilot",
+            "min_app_version": "3.0.0rc1",
+            "workflows": [
+                {
+                    "workflow_id": "low_end_analysis",
+                    "profiles": ["missing"],
+                    "metadata": {},
+                }
+            ],
+            "rulesets": [],
+            "profiles": [],
+            "entitlement": {"kind": "free"},
+            "metadata": {},
+        }
+    )
+
+    with pytest.raises(ValueError, match="unknown profile id"):
+        build_effective_workflow_registry(DEFAULT_WORKFLOW_REGISTRY, (manifest,))
+
+
+def test_effective_registry_without_packs_preserves_base_output() -> None:
+    effective = build_effective_workflow_registry(DEFAULT_WORKFLOW_REGISTRY, ())
+
+    assert [row.to_dict() for row in effective.list()] == [
+        row.to_dict() for row in DEFAULT_WORKFLOW_REGISTRY.list()
+    ]

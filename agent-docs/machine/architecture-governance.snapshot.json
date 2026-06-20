@@ -1,7 +1,8 @@
 {
   "snapshot_version": 1,
-  "as_of": "2026-06-19",
+  "as_of": "2026-06-20",
   "status": "governed",
+  "governance_note": "Architecture snapshot unchanged. fls_pilot.packs (local_pack_metadata component) and fls_pilot.rules (analysis_runtime component) are already captured as governed source-of-truth paths in this snapshot. The corrective-patch changes in this batch — test isolation, audit_anti_vibe.py isinstance guard, and evals additions — are small-behaviour-preserving fixes with no public-surface, safety-posture, protocol/controller, or trust-boundary effect. No governed or generated architecture fact changed.",
   "project": {
     "name": "fls-pilot",
     "package_version": "3.0.0rc1",
@@ -131,7 +132,7 @@
     },
     {
       "id": "control_center",
-      "responsibility": "Serve the local UI and consume declared Runtime workflows and reports.",
+      "responsibility": "Serve the local UI, consume declared Runtime workflows and reports, and render effective metadata-only workflow catalogs.",
       "source_paths": [
         "src/fls_pilot/control_center.py",
         "src/fls_pilot/control_center_static/"
@@ -139,10 +140,22 @@
     },
     {
       "id": "analysis_runtime",
-      "responsibility": "Own canonical observations, evidence modes, reports, freshness, scoring, and invalidation.",
+      "responsibility": "Own canonical observations, evidence modes, reports, freshness, scoring, invalidation, declarative rules, and serializable workflow interactions.",
       "source_paths": [
         "src/fls_pilot/analysis/",
+        "src/fls_pilot/rules/",
         "src/fls_pilot/runtime/core.py",
+        "src/fls_pilot/runtime/interactions.py",
+        "src/fls_pilot/workflows/registry.py"
+      ]
+    },
+    {
+      "id": "local_pack_metadata",
+      "responsibility": "Validate local data-only pack manifests, maintain deterministic enablement state, and attach metadata-only extensions to canonical workflows.",
+      "source_paths": [
+        "src/fls_pilot/packs/",
+        "src/fls_pilot/workflow_identity.py",
+        "src/fls_pilot/workflow_requirements.py",
         "src/fls_pilot/workflows/registry.py"
       ]
     },
@@ -287,6 +300,7 @@
     "control_center": {
       "source": "src/fls_pilot/control_center.py",
       "workflow_registry": "src/fls_pilot/workflows/registry.py",
+      "catalog_source": "effective_metadata_only_workflow_registry",
       "runtime_client": "src/fls_pilot/runtime/client.py",
       "state_ownership": "runtime",
       "audio_evidence_panel": "producer_audio_evidence",
@@ -312,6 +326,10 @@
     "canonical_owner": "src/fls_pilot/runtime/core.py",
     "workflow_registry": "src/fls_pilot/workflows/registry.py",
     "report_contract": "src/fls_pilot/analysis/schema.py",
+    "pack_manifest_contract": "src/fls_pilot/packs/manifest.py",
+    "local_pack_manager": "src/fls_pilot/packs/manager.py",
+    "declarative_rule_engine": "src/fls_pilot/rules/",
+    "workflow_interactions": "src/fls_pilot/runtime/interactions.py",
     "observation_broker": "src/fls_pilot/analysis/broker.py",
     "canonical_workflow_ids": [
       "setup_runtime",
@@ -424,6 +442,11 @@
       "from": "user_files",
       "to": "midi_export",
       "mechanism": "validated_local_file_path"
+    },
+    {
+      "from": "local_pack_manifest_files",
+      "to": "local_pack_metadata",
+      "mechanism": "validated_json_only_without_dynamic_imports_or_code_execution"
     }
   ],
   "source_of_truth": {
@@ -435,6 +458,8 @@
     "controller": "fl_controller/FLStudioPilot/device_FLStudioPilot.py",
     "runtime": "src/fls_pilot/runtime/",
     "analysis": "src/fls_pilot/analysis/",
+    "packs": "src/fls_pilot/packs/",
+    "rules": "src/fls_pilot/rules/",
     "workflows": "src/fls_pilot/workflows/registry.py",
     "capability_evidence": "agent-docs/concepts/api-capability-audit.md",
     "knowledgebase": "knowledgebase/",

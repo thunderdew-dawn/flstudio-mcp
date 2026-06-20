@@ -474,6 +474,7 @@ healthPanel.style.display = "none";
 panels.push(register("overview", "main", "status-report"));
 panels.push(healthPanel);
 register("planned-workflow-list");
+register("workflow-metadata-catalog");
 register("next-action-title");
 register("next-action-detail");
 register("next-action-button", "button");
@@ -516,8 +517,25 @@ const controls = context.window.flsPilotControlCenter;
 controls.state.status = {
   ui: {
     workflow_catalog: [
-      { id: "mix_review", panel_id: "producer_mix_review", title: "Mix Review", maturity: "read_only", enabled: true, safety_note: "Read-only mixer review." },
-      { id: "preflight", panel_id: "producer_preflight", title: "Preflight", maturity: "planned", enabled: false, safety_note: "Planned. No action is available yet." }
+      {
+        id: "mix_review",
+        panel_id: "producer_mix_review",
+        title: "Mix Review",
+        maturity: "read_only",
+        enabled: true,
+        safety_note: "Read-only mixer review.",
+        metadata: {
+          pack_extensions: [{
+            pack_id: "genre.house",
+            pack_title: "House Pack",
+            pack_version: "1.0.0",
+            entitlement: { kind: "pro" },
+            profiles: [{ id: "house", title: "House", genre: "house" }],
+            metadata: { genre: "house" }
+          }]
+        }
+      },
+      { id: "preflight", panel_id: "producer_preflight", title: "Preflight", maturity: "planned", enabled: false, locked: true, safety_note: "Planned. No action is available yet." }
     ],
     next_action: {
       label: "Run Health Scan",
@@ -535,6 +553,17 @@ controls.state.status = {
 controls.renderWorkflowCatalogState();
 assert(preflightNav.classList.contains("nav-item-disabled"));
 assert.strictEqual(preflightNav.querySelector(".nav-badge").textContent, "Planned");
+
+controls.renderWorkflowMetadataCatalog();
+const catalogText = textTree(elements.get("workflow-metadata-catalog"));
+assert.match(catalogText, /Mix Review/);
+assert.match(catalogText, /Read-only/);
+assert.match(catalogText, /Pack/);
+assert.match(catalogText, /Pro/);
+assert.match(catalogText, /Genre · house/);
+assert.match(catalogText, /Profile: House/);
+assert.match(catalogText, /Planned/);
+assert.match(catalogText, /Locked/);
 
 controls.renderPlannedWorkflows();
 const plannedText = textTree(elements.get("planned-workflow-list"));

@@ -8,6 +8,11 @@ from unittest import mock
 import pytest
 
 from fls_pilot import control_center, doctor, runtime_config
+from fls_pilot.packs import load_pack_manifest
+from fls_pilot.workflows.registry import (
+    DEFAULT_WORKFLOW_REGISTRY,
+    build_effective_workflow_registry,
+)
 
 
 def _finding(component: str, severity: str = "blocker", status: str = "ok") -> doctor.Finding:
@@ -158,6 +163,54 @@ def test_ui_payload_surfaces_catalog_next_action_and_service_actions():
     assert payload["service_actions"]["daemon"]["stop"]["enabled"] is True
     assert payload["service_actions"]["sse"]["external"] is True
     assert payload["service_actions"]["sse"]["stop"]["enabled"] is False
+
+
+def test_ui_payload_uses_effective_workflow_registry_metadata() -> None:
+    manifest = load_pack_manifest(
+        {
+            "pack_id": "genre.house",
+            "version": "1.0.0",
+            "title": "House Pack",
+            "publisher": "FLS Pilot",
+            "min_app_version": "3.0.0rc1",
+            "workflows": [
+                {
+                    "workflow_id": "low_end_analysis",
+                    "profiles": ["house"],
+                    "metadata": {"genre": "house"},
+                }
+            ],
+            "rulesets": [],
+            "profiles": [{"id": "house", "title": "House"}],
+            "entitlement": {"kind": "pro"},
+            "metadata": {},
+        }
+    )
+    registry = build_effective_workflow_registry(
+        DEFAULT_WORKFLOW_REGISTRY,
+        (manifest,),
+    )
+
+    payload = control_center._ui_payload(
+        status_report={"bridge": {"state": "live"}},
+        readiness={"read_only_review_ready": True},
+        processes={
+            "daemon": {"state": "running", "running": True},
+            "sse": {"state": "external"},
+        },
+        ports={
+            "daemon": {"host": "127.0.0.1", "selected_port": 9787},
+            "sse": {"host": "127.0.0.1", "selected_port": 8080},
+        },
+        workflow_registry=registry,
+    )
+
+    catalog = {item["id"]: item for item in payload["workflow_catalog"]}
+    extension = catalog["low_end_analysis"]["metadata"]["pack_extensions"][0]
+    assert extension["pack_id"] == "genre.house"
+    assert extension["profiles"][0]["id"] == "house"
+    assert extension["entitlement"]["kind"] == "pro"
+    assert catalog["low_end_analysis"]["endpoint"] == "/api/workflows/low-end-analysis"
 
 
 def test_status_uses_selected_tcp_endpoint_for_doctor_and_status(monkeypatch):

@@ -230,6 +230,11 @@ class AnalysisReport:
     title: str
     analysis_mode: str
     evidence_mode: str = "static_snapshot_only"
+    pack_id: str | None = None
+    pack_version: str | None = None
+    ruleset_id: str | None = None
+    ruleset_version: str | None = None
+    profile_id: str | None = None
     report_id: str = field(default_factory=report_id)
     created_at: str = field(default_factory=utc_now_iso)
     runtime_session_id: str | None = None
@@ -251,6 +256,8 @@ class AnalysisReport:
     next_actions: tuple[dict[str, Any], ...] = ()
     proposed_changes: tuple[dict[str, Any], ...] = ()
     applied_changes: tuple[dict[str, Any], ...] = ()
+    interaction_requests: tuple[dict[str, Any], ...] = ()
+    user_decisions: tuple[dict[str, Any], ...] = ()
     safety: dict[str, Any] = field(default_factory=lambda: {"read_only": True})
     metadata: dict[str, Any] = field(default_factory=dict)
 
@@ -263,6 +270,15 @@ class AnalysisReport:
             _validate(self.analysis_mode, ANALYSIS_MODES, "analysis mode"),
         )
         object.__setattr__(self, "evidence_mode", str(self.evidence_mode))
+        object.__setattr__(self, "pack_id", _optional_identity(self.pack_id))
+        object.__setattr__(self, "pack_version", _optional_identity(self.pack_version))
+        object.__setattr__(self, "ruleset_id", _optional_identity(self.ruleset_id))
+        object.__setattr__(
+            self,
+            "ruleset_version",
+            _optional_identity(self.ruleset_version),
+        )
+        object.__setattr__(self, "profile_id", _optional_identity(self.profile_id))
         object.__setattr__(self, "snapshot_revision", max(0, int(self.snapshot_revision)))
         object.__setattr__(self, "risk_score", clamp_score(self.risk_score))
         health = (
@@ -291,6 +307,16 @@ class AnalysisReport:
             "applied_changes",
             tuple(dict(item) for item in self.applied_changes),
         )
+        object.__setattr__(
+            self,
+            "interaction_requests",
+            tuple(dict(item) for item in self.interaction_requests),
+        )
+        object.__setattr__(
+            self,
+            "user_decisions",
+            tuple(dict(item) for item in self.user_decisions),
+        )
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -301,6 +327,11 @@ class AnalysisReport:
             "created_at": self.created_at,
             "analysis_mode": self.analysis_mode,
             "evidence_mode": self.evidence_mode,
+            "pack_id": self.pack_id,
+            "pack_version": self.pack_version,
+            "ruleset_id": self.ruleset_id,
+            "ruleset_version": self.ruleset_version,
+            "profile_id": self.profile_id,
             "runtime_session_id": self.runtime_session_id or "unknown",
             "project_scope_id": self.project_scope_id or "unknown",
             "project_fingerprint": self.project_fingerprint or "unknown",
@@ -321,6 +352,10 @@ class AnalysisReport:
             "next_actions": [_compact(item) for item in self.next_actions],
             "proposed_changes": [_compact(item) for item in self.proposed_changes],
             "applied_changes": [_compact(item) for item in self.applied_changes],
+            "interaction_requests": [
+                _compact(item) for item in self.interaction_requests
+            ],
+            "user_decisions": [_compact(item) for item in self.user_decisions],
             "safety": _compact(self.safety),
             "metadata": _compact(self.metadata),
         }
@@ -337,6 +372,11 @@ class AnalysisReport:
             title=str(payload.get("title") or payload.get("workflow") or "Workflow"),
             analysis_mode=str(payload.get("analysis_mode") or "static_snapshot"),
             evidence_mode=str(payload.get("evidence_mode") or "static_snapshot_only"),
+            pack_id=_optional_identity(payload.get("pack_id")),
+            pack_version=_optional_identity(payload.get("pack_version")),
+            ruleset_id=_optional_identity(payload.get("ruleset_id")),
+            ruleset_version=_optional_identity(payload.get("ruleset_version")),
+            profile_id=_optional_identity(payload.get("profile_id")),
             created_at=str(payload.get("created_at") or utc_now_iso()),
             runtime_session_id=_optional_identity(payload.get("runtime_session_id")),
             project_scope_id=_optional_identity(payload.get("project_scope_id")),
@@ -383,6 +423,8 @@ class AnalysisReport:
             next_actions=tuple(payload.get("next_actions") or ()),
             proposed_changes=tuple(payload.get("proposed_changes") or ()),
             applied_changes=tuple(payload.get("applied_changes") or ()),
+            interaction_requests=tuple(payload.get("interaction_requests") or ()),
+            user_decisions=tuple(payload.get("user_decisions") or ()),
             safety=dict(payload.get("safety") or {"read_only": True}),
             metadata=dict(payload.get("metadata") or {}),
         )

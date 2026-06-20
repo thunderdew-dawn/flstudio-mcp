@@ -6,8 +6,8 @@ from fls_pilot.runtime.workflow_runner import run_workflow
 from test_runtime_core import FakeBridge
 
 
-def test_preflight_is_static_and_exposes_missing_level_evidence() -> None:
-    runtime = RuntimeCore()
+def test_preflight_is_static_and_exposes_missing_level_evidence(tmp_path) -> None:
+    runtime = RuntimeCore(job_store_path=tmp_path / "jobs.sqlite3")
     bridge = FakeBridge()
 
     result = run_workflow(runtime, "preflight", bridge=bridge)

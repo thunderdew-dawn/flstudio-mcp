@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
-from ..analysis.requirements import WorkflowRequirementSet, requirement
+from ..workflow_identity import CANONICAL_WORKFLOW_IDS as CANONICAL_WORKFLOW_IDS
+from ..workflow_identity import canonical_workflow_id
+from ..workflow_requirements import WorkflowRequirementSet, requirement
 
 WORKFLOW_KINDS = {
     "runtime_readiness",
@@ -27,40 +29,6 @@ HEALTH_INCLUSION_POLICIES = {
     "evidence_upgrade_when_available",
     "excluded",
 }
-
-CANONICAL_WORKFLOW_IDS = (
-    "setup_runtime",
-    "project_health",
-    "mix_review",
-    "routing_audit",
-    "low_end_analysis",
-    "project_organizer",
-    "jam_2_project",
-    "preflight",
-    "sidechain_routing_check",
-    "plugin_assistant",
-    "preset_assistant",
-    "audio_evidence",
-)
-
-LEGACY_WORKFLOW_ALIASES = {
-    "low_end": "low_end_analysis",
-    "low_end_safety": "low_end_analysis",
-    "organizer": "project_organizer",
-    "sidechain": "sidechain_routing_check",
-    "sidechaining": "sidechain_routing_check",
-    "routing_review": "routing_audit",
-}
-
-
-def canonical_workflow_id(value: str) -> str:
-    """Normalize a workflow id without accepting unknown identities."""
-    normalized = str(value or "").strip().lower().replace("-", "_")
-    canonical = LEGACY_WORKFLOW_ALIASES.get(normalized, normalized)
-    if canonical not in CANONICAL_WORKFLOW_IDS:
-        raise ValueError(f"unknown workflow id: {value!r}")
-    return canonical
-
 
 @dataclass(frozen=True)
 class WorkflowDeclaration:
@@ -137,7 +105,7 @@ class WorkflowDeclaration:
 
     def to_control_center_dict(self) -> dict[str, Any]:
         maturity = "read_only" if self.enabled else "planned"
-        return {
+        out = {
             "id": self.id,
             "panel_id": self.panel_id,
             "title": self.title,
@@ -151,6 +119,9 @@ class WorkflowDeclaration:
             "analysis_report_required": self.analysis_report_required,
             "health_inclusion_policy": self.health_inclusion_policy,
         }
+        if self.metadata:
+            out["metadata"] = dict(self.metadata)
+        return out
 
 
 class WorkflowRegistry:
@@ -185,6 +156,71 @@ class WorkflowRegistry:
             for row in self._rows
             if row.panel_id is not None
         ]
+
+
+def build_effective_workflow_registry(
+    base_registry: WorkflowRegistry,
+    pack_manifests: Iterable[Any],
+) -> WorkflowRegistry:
+    """Attach validated pack metadata to known core workflows."""
+    manifests = tuple(pack_manifests)
+    seen_pack_ids: set[str] = set()
+    extensions_by_workflow: dict[str, list[dict[str, Any]]] = {}
+
+    for manifest in manifests:
+        if manifest.pack_id in seen_pack_ids:
+            raise ValueError(f"duplicate pack id: {manifest.pack_id}")
+        seen_pack_ids.add(manifest.pack_id)
+        profiles_by_id = _pack_profiles_by_id(manifest)
+        for extension in manifest.workflows:
+            workflow = base_registry.get(extension.workflow_id)
+            selected_profiles = []
+            for profile_id in extension.profiles:
+                try:
+                    selected_profiles.append(dict(profiles_by_id[profile_id]))
+                except KeyError as exc:
+                    raise ValueError(
+                        f"unknown profile id {profile_id!r} in pack "
+                        f"{manifest.pack_id!r}"
+                    ) from exc
+            extensions_by_workflow.setdefault(workflow.id, []).append(
+                {
+                    "pack_id": manifest.pack_id,
+                    "pack_version": manifest.version,
+                    "pack_title": manifest.title,
+                    "publisher": manifest.publisher,
+                    "entitlement": manifest.entitlement.to_dict(),
+                    "profiles": selected_profiles,
+                    "metadata": dict(extension.metadata),
+                }
+            )
+
+    declarations = []
+    for row in base_registry.list():
+        extensions = extensions_by_workflow.get(row.id)
+        if not extensions:
+            declarations.append(row)
+            continue
+        metadata = dict(row.metadata)
+        metadata["pack_extensions"] = extensions
+        declarations.append(replace(row, metadata=metadata))
+    return WorkflowRegistry(declarations)
+
+
+def _pack_profiles_by_id(manifest: Any) -> dict[str, dict[str, Any]]:
+    profiles: dict[str, dict[str, Any]] = {}
+    for index, profile in enumerate(manifest.profiles):
+        profile_id = str(profile.get("id") or "").strip()
+        if not profile_id:
+            raise ValueError(
+                f"profiles[{index}].id is required in pack {manifest.pack_id!r}"
+            )
+        if profile_id in profiles:
+            raise ValueError(
+                f"duplicate profile id {profile_id!r} in pack {manifest.pack_id!r}"
+            )
+        profiles[profile_id] = dict(profile)
+    return profiles
 
 
 def _declaration(

@@ -6,8 +6,8 @@ from fls_pilot.runtime.core import RuntimeCore
 from fls_pilot.runtime.workflow_runner import run_workflow
 
 
-def test_mix_review_runs_and_stores_scoped_report() -> None:
-    runtime = RuntimeCore()
+def test_mix_review_runs_and_stores_scoped_report(tmp_path) -> None:
+    runtime = RuntimeCore(job_store_path=tmp_path / "jobs.sqlite3")
     bridge = FakeBridge()
 
     result = run_workflow(runtime, "mix_review", bridge=bridge)
@@ -21,8 +21,8 @@ def test_mix_review_runs_and_stores_scoped_report() -> None:
     assert report.snapshot_id == runtime.project_context.snapshot_id
 
 
-def test_all_l1_workflows_share_current_project_scope(monkeypatch) -> None:
-    runtime = RuntimeCore()
+def test_all_l1_workflows_share_current_project_scope(tmp_path, monkeypatch) -> None:
+    runtime = RuntimeCore(job_store_path=tmp_path / "jobs.sqlite3")
     bridge = FakeBridge()
     monkeypatch.setattr(
         "fls_pilot.control_center._probe_unused_mixer_tracks",

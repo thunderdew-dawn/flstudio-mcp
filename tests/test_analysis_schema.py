@@ -97,6 +97,81 @@ def test_analysis_report_rejects_unknown_modes() -> None:
         )
 
 
+def test_analysis_report_pack_metadata_round_trips_without_new_envelope() -> None:
+    report = AnalysisReport(
+        report_id="rep_pack_metadata",
+        workflow="low_end_analysis",
+        title="Low-End Safety Check",
+        analysis_mode="static_snapshot",
+        pack_id="genre.low-end",
+        pack_version="1.2.0",
+        ruleset_id="low-end.house",
+        ruleset_version="2.0.1",
+        profile_id="house",
+        interaction_requests=(
+            {
+                "id": "low_end.confirm_tracks",
+                "type": "multi_select",
+                "prompt": "Choose low-end tracks.",
+            },
+        ),
+        user_decisions=(
+            {
+                "interaction_id": "low_end.confirm_tracks",
+                "selected": ["mixer:4"],
+            },
+        ),
+    )
+
+    data = report.to_dict()
+    restored = AnalysisReport.from_dict(data)
+
+    assert data["contract_version"] == ANALYSIS_REPORT_CONTRACT_VERSION
+    assert "report" not in data
+    assert data["pack_id"] == "genre.low-end"
+    assert data["pack_version"] == "1.2.0"
+    assert data["ruleset_id"] == "low-end.house"
+    assert data["ruleset_version"] == "2.0.1"
+    assert data["profile_id"] == "house"
+    assert data["interaction_requests"][0]["type"] == "multi_select"
+    assert data["user_decisions"][0]["selected"] == ["mixer:4"]
+    assert restored.pack_id == report.pack_id
+    assert restored.pack_version == report.pack_version
+    assert restored.ruleset_id == report.ruleset_id
+    assert restored.ruleset_version == report.ruleset_version
+    assert restored.profile_id == report.profile_id
+    assert restored.interaction_requests == report.interaction_requests
+    assert restored.user_decisions == report.user_decisions
+
+
+def test_analysis_report_without_pack_metadata_still_loads() -> None:
+    payload = AnalysisReport(
+        workflow="mix_review",
+        title="Mix Review",
+        analysis_mode="static_snapshot",
+    ).to_dict()
+    for key in (
+        "pack_id",
+        "pack_version",
+        "ruleset_id",
+        "ruleset_version",
+        "profile_id",
+        "interaction_requests",
+        "user_decisions",
+    ):
+        payload.pop(key)
+
+    restored = AnalysisReport.from_dict(payload)
+
+    assert restored.pack_id is None
+    assert restored.pack_version is None
+    assert restored.ruleset_id is None
+    assert restored.ruleset_version is None
+    assert restored.profile_id is None
+    assert restored.interaction_requests == ()
+    assert restored.user_decisions == ()
+
+
 def test_workflow_requirement_set_separates_required_and_optional() -> None:
     requirements = WorkflowRequirementSet(
         workflow_id="low_end_analysis",

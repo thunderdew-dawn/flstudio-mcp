@@ -226,6 +226,7 @@ function render() {
   renderPorts();
   renderConnection();
   renderWorkflowCatalogState();
+  renderWorkflowMetadataCatalog();
   renderPlannedWorkflows();
   renderNextAction();
   renderConnectionReadyBanner();
@@ -246,6 +247,87 @@ function renderWorkflowCatalogState() {
       }
     }
   }
+}
+
+function renderWorkflowMetadataCatalog() {
+  const container = document.getElementById("workflow-metadata-catalog");
+  if (!container) return;
+  container.innerHTML = "";
+  for (const item of workflowCatalog()) {
+    const card = document.createElement("article");
+    card.className = "panel roadmap-card";
+
+    const heading = document.createElement("div");
+    heading.className = "panel-heading";
+    const title = document.createElement("h2");
+    title.textContent = item.title;
+    heading.appendChild(title);
+    for (const badgeData of workflowMetadataBadges(item)) {
+      const badge = document.createElement("span");
+      badge.className = `badge ${badgeData.className}`;
+      badge.textContent = badgeData.label;
+      heading.appendChild(badge);
+    }
+
+    const body = document.createElement("div");
+    body.className = "roadmap-card-body";
+    const note = document.createElement("p");
+    note.textContent = item.safety_note || "No additional workflow note.";
+    body.appendChild(note);
+
+    for (const extension of workflowPackExtensions(item)) {
+      const pack = document.createElement("p");
+      pack.textContent = `${extension.pack_title || extension.pack_id} ${extension.pack_version || ""}`.trim();
+      body.appendChild(pack);
+      for (const profile of Array.isArray(extension.profiles) ? extension.profiles : []) {
+        const profileRow = document.createElement("p");
+        profileRow.textContent = `Profile: ${profile.title || profile.id}`;
+        body.appendChild(profileRow);
+      }
+    }
+
+    card.append(heading, body);
+    container.appendChild(card);
+  }
+}
+
+function workflowPackExtensions(item) {
+  const extensions = item?.metadata?.pack_extensions;
+  return Array.isArray(extensions) ? extensions : [];
+}
+
+function workflowMetadataBadges(item) {
+  const badges = [];
+  const extensions = workflowPackExtensions(item);
+  if (extensions.length) badges.push({ label: "Pack", className: "badge-pro-preview" });
+  if (item.enabled === false || item.maturity === "planned") {
+    badges.push({ label: "Planned", className: "badge-planned" });
+  } else if (item.maturity === "read_only" || item.maturity === "beta" || item.maturity === "preview") {
+    badges.push({ label: "Read-only", className: "badge-ok" });
+  }
+  const locked = item.locked === true
+    || item.metadata?.locked === true
+    || extensions.some(extension => extension.metadata?.locked === true);
+  if (locked) badges.push({ label: "Locked", className: "badge-warn" });
+
+  const entitlementKinds = new Set(
+    extensions.map(extension => extension.entitlement?.kind).filter(Boolean)
+  );
+  if (entitlementKinds.has("pro") || entitlementKinds.has("sku")) {
+    badges.push({ label: "Pro", className: "badge-pro-preview" });
+  }
+
+  const genres = new Set();
+  for (const extension of extensions) {
+    if (extension.metadata?.genre) genres.add(String(extension.metadata.genre));
+    for (const profile of Array.isArray(extension.profiles) ? extension.profiles : []) {
+      if (profile.genre) genres.add(String(profile.genre));
+    }
+  }
+  for (const genre of genres) {
+    badges.push({ label: `Genre · ${genre}`, className: "badge-neutral" });
+  }
+  return badges;
 }
 
 function renderPlannedWorkflows() {
@@ -4746,6 +4828,7 @@ window.flsPilotControlCenter = {
   renderOverview,
   renderConnectionCheck,
   renderWorkflowCatalogState,
+  renderWorkflowMetadataCatalog,
   renderPlannedWorkflows,
   renderNextAction,
   renderConnectionReadyBanner,
