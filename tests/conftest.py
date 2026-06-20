@@ -31,7 +31,11 @@ def _isolate_daemon_runtime(tmp_path):
     """
     prev_daemon = daemon._runtime
     prev_local = runtime_access._LOCAL_RUNTIME
-    isolated = RuntimeCore(job_store_path=tmp_path / "daemon_jobs.sqlite3")
+    isolated = RuntimeCore(
+        job_store_path=tmp_path / "daemon_jobs.sqlite3",
+        workflow_store_path=tmp_path / "daemon_workflows.sqlite3",
+        workflow_run_store_path=tmp_path / "daemon_workflow_runs.sqlite3",
+    )
     daemon._runtime = isolated
     runtime_access._LOCAL_RUNTIME = isolated
     try:

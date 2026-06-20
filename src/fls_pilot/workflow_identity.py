@@ -1,5 +1,7 @@
 """Canonical workflow identities shared by registries and data-only manifests."""
 
+import re
+
 CANONICAL_WORKFLOW_IDS = (
     "setup_runtime",
     "project_health",
@@ -24,6 +26,21 @@ LEGACY_WORKFLOW_ALIASES = {
     "routing_review": "routing_audit",
 }
 
+CUSTOM_WORKFLOW_ID_RE = re.compile(r"^(user|local)\.[a-z0-9][a-z0-9_.-]{1,80}$")
+
+def is_builtin_workflow_id(value: str) -> bool:
+    """Check if the given workflow id is a known built-in identity."""
+    try:
+        canonical_workflow_id(value)
+        return True
+    except ValueError:
+        return False
+
+def is_custom_workflow_id(value: str) -> bool:
+    """Check if the given workflow id matches the custom namespace format."""
+    if not value:
+        return False
+    return bool(CUSTOM_WORKFLOW_ID_RE.match(value))
 
 def canonical_workflow_id(value: str) -> str:
     """Normalize a workflow id without accepting unknown identities."""
@@ -32,3 +49,12 @@ def canonical_workflow_id(value: str) -> str:
     if canonical not in CANONICAL_WORKFLOW_IDS:
         raise ValueError(f"unknown workflow id: {value!r}")
     return canonical
+
+def normalize_workflow_id(value: str, *, allow_custom: bool = False) -> str:
+    """Normalize a workflow id, optionally accepting valid custom identities."""
+    try:
+        return canonical_workflow_id(value)
+    except ValueError:
+        if allow_custom and is_custom_workflow_id(value):
+            return value
+        raise ValueError(f"invalid or unknown workflow id: {value!r}")

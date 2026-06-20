@@ -128,6 +128,7 @@ class ControlCenterState:
         sse_host: str,
         sse_port: int,
         workflow_registry: WorkflowRegistry | None = None,
+        admin_enabled: bool = False,
     ) -> None:
         daemon_host, daemon_port = _resolve_daemon_endpoint()
         self.host = host
@@ -137,6 +138,7 @@ class ControlCenterState:
         self.daemon_host = daemon_host
         self.daemon_port = daemon_port
         self.daemon_fallback_port: int | None = None
+        self.admin_enabled: bool = admin_enabled
         self.runtime_client = RuntimeClient(daemon_host, daemon_port)
         self.workflow_registry = workflow_registry or build_effective_workflow_registry(
             DEFAULT_WORKFLOW_REGISTRY,
@@ -3837,6 +3839,7 @@ def serve_control_center(
     host: str = DEFAULT_CONTROL_CENTER_HOST,
     port: int = DEFAULT_CONTROL_CENTER_PORT,
     open_browser: bool = False,
+    admin: bool = False,
 ) -> None:
     if not _is_loopback_host(host):
         raise ValueError("Control Center host must be localhost or a loopback address.")
@@ -3847,12 +3850,15 @@ def serve_control_center(
         port=selected_port,
         sse_host=DEFAULT_SSE_HOST,
         sse_port=sse_port,
+        admin_enabled=admin,
     )
     server = create_server(state)
     url = f"http://{host}:{selected_port}/"
     if selected_port != port:
         print(f"Control Center port {port} is busy; using {selected_port}.")
     print(f"Serving fls-pilot Control Center at {url}")
+    if admin:
+        print(f"Admin mode enabled. Admin UI at {url}admin")
     print("Press Ctrl+C to stop.")
     if open_browser:
         webbrowser.open(url)
@@ -3870,15 +3876,77 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--host", default=DEFAULT_CONTROL_CENTER_HOST)
     parser.add_argument("--port", type=int, default=DEFAULT_CONTROL_CENTER_PORT)
     parser.add_argument("--open", action="store_true", help="Open the Control Center in a browser.")
+    parser.add_argument(
+        "--admin",
+        action="store_true",
+        help="Enable local admin mode (exposes /admin and /api/admin/* routes).",
+    )
     args = parser.parse_args(argv)
     if not _is_loopback_host(args.host):
         parser.error("--host must be localhost or a loopback address")
-    serve_control_center(host=args.host, port=args.port, open_browser=args.open)
+    serve_control_center(host=args.host, port=args.port, open_browser=args.open, admin=args.admin)
 
 
 def _handler_factory(state: ControlCenterState):
     class ControlCenterHandler(BaseHTTPRequestHandler):
         server_version = "FLSPilotControlCenter/1.0"
+
+        # ------------------------------------------------------------------ #
+        # Helpers
+        # ------------------------------------------------------------------ #
+
+        def _require_admin(self) -> bool:
+            """Return True if admin mode is active; otherwise send 403 and return False."""
+            if not state.admin_enabled:
+                self._json(
+                    {"ok": False, "error": "admin mode disabled"},
+                    status=HTTPStatus.FORBIDDEN,
+                )
+                return False
+            return True
+
+        def _read_json(self) -> dict[str, Any]:
+            length = int(self.headers.get("Content-Length", "0") or 0)
+            if length <= 0:
+                return {}
+            raw = self.rfile.read(length)
+            try:
+                data = json.loads(raw.decode("utf-8"))
+            except json.JSONDecodeError:
+                return {}
+            return data if isinstance(data, dict) else {}
+
+        def _serve_static(self, name: str, content_type: str) -> None:
+            try:
+                data = resources.files(STATIC_PACKAGE).joinpath(name).read_bytes()
+            except FileNotFoundError:
+                self._json({"ok": False, "error": "static asset not found"}, status=HTTPStatus.NOT_FOUND)
+                return
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+
+        def _json(self, data: Any, *, status: int | HTTPStatus = HTTPStatus.OK) -> None:
+            payload = json.dumps(data, indent=2).encode("utf-8")
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+
+        def _text(self, data: str, *, content_type: str) -> None:
+            payload = data.encode("utf-8")
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+
+        # ------------------------------------------------------------------ #
+        # Normal routes
+        # ------------------------------------------------------------------ #
 
         def do_GET(self) -> None:  # noqa: N802
             if self.path in {"/", "/index.html"}:
@@ -3897,6 +3965,49 @@ def _handler_factory(state: ControlCenterState):
                 self._json(client_snippets(state))
             elif self.path == "/api/setup/report":
                 self._text(setup_report(state), content_type="text/markdown; charset=utf-8")
+            # ------------------------------------------------------------------ #
+            # Admin GET routes — all guarded by _require_admin()
+            # ------------------------------------------------------------------ #
+            elif self.path == "/admin" or self.path == "/admin/":
+                if not self._require_admin():
+                    return
+                self._serve_static("admin.html", "text/html; charset=utf-8")
+            elif self.path == "/admin.js":
+                if not self._require_admin():
+                    return
+                self._serve_static("admin.js", "application/javascript; charset=utf-8")
+            elif self.path == "/api/admin/workflows":
+                if not self._require_admin():
+                    return
+                self._json(_admin_list_workflows(state))
+            elif self.path.startswith("/api/admin/workflows/") and not self.path.endswith("/run"):
+                workflow_id = self.path[len("/api/admin/workflows/"):]
+                if not workflow_id or "/" in workflow_id:
+                    self._json({"ok": False, "error": "not found"}, status=HTTPStatus.NOT_FOUND)
+                    return
+                if not self._require_admin():
+                    return
+                self._json(_admin_get_workflow(state, workflow_id))
+            elif self.path == "/api/admin/workflow-runs":
+                if not self._require_admin():
+                    return
+                self._json(_admin_list_workflow_runs(state))
+            elif self.path.startswith("/api/admin/workflow-runs/") and not self.path.endswith("/cancel"):
+                run_id = self.path[len("/api/admin/workflow-runs/"):]
+                if not run_id or "/" in run_id:
+                    self._json({"ok": False, "error": "not found"}, status=HTTPStatus.NOT_FOUND)
+                    return
+                if not self._require_admin():
+                    return
+                self._json(_admin_get_workflow_run(state, run_id))
+            elif self.path == "/api/admin/job-kinds":
+                if not self._require_admin():
+                    return
+                self._json(_admin_list_job_kinds(state))
+            elif self.path == "/api/admin/jobs":
+                if not self._require_admin():
+                    return
+                self._json(_admin_list_jobs(state))
             else:
                 self._json({"ok": False, "error": "not found"}, status=HTTPStatus.NOT_FOUND)
 
@@ -3952,52 +4063,195 @@ def _handler_factory(state: ControlCenterState):
                             "error": f"{type(exc).__name__}: {exc}",
                         }
                     )
+            # ------------------------------------------------------------------ #
+            # Admin POST routes — all guarded by _require_admin()
+            # ------------------------------------------------------------------ #
+            elif self.path == "/api/admin/workflows":
+                if not self._require_admin():
+                    return
+                self._json(_admin_create_workflow(state, body))
+            elif self.path.endswith("/run") and self.path.startswith("/api/admin/workflows/"):
+                workflow_id = self.path[len("/api/admin/workflows/"):-len("/run")]
+                if not workflow_id:
+                    self._json({"ok": False, "error": "not found"}, status=HTTPStatus.NOT_FOUND)
+                    return
+                if not self._require_admin():
+                    return
+                self._json(_admin_run_workflow(state, workflow_id, body))
+            elif self.path.endswith("/cancel") and self.path.startswith("/api/admin/workflow-runs/"):
+                run_id = self.path[len("/api/admin/workflow-runs/"):-len("/cancel")]
+                if not run_id:
+                    self._json({"ok": False, "error": "not found"}, status=HTTPStatus.NOT_FOUND)
+                    return
+                if not self._require_admin():
+                    return
+                self._json(_admin_cancel_workflow_run(state, run_id))
+            elif self.path.endswith("/cancel") and self.path.startswith("/api/admin/jobs/"):
+                job_id = self.path[len("/api/admin/jobs/"):-len("/cancel")]
+                if not job_id:
+                    self._json({"ok": False, "error": "not found"}, status=HTTPStatus.NOT_FOUND)
+                    return
+                if not self._require_admin():
+                    return
+                self._json(_admin_cancel_job(state, job_id))
+            else:
+                self._json({"ok": False, "error": "not found"}, status=HTTPStatus.NOT_FOUND)
+
+        def do_PUT(self) -> None:  # noqa: N802
+            body = self._read_json()
+            if self.path.startswith("/api/admin/workflows/"):
+                workflow_id = self.path[len("/api/admin/workflows/"):]
+                if not workflow_id or "/" in workflow_id:
+                    self._json({"ok": False, "error": "not found"}, status=HTTPStatus.NOT_FOUND)
+                    return
+                if not self._require_admin():
+                    return
+                self._json(_admin_update_workflow(state, workflow_id, body))
+            else:
+                self._json({"ok": False, "error": "not found"}, status=HTTPStatus.NOT_FOUND)
+
+        def do_DELETE(self) -> None:  # noqa: N802
+            if self.path.startswith("/api/admin/workflows/"):
+                workflow_id = self.path[len("/api/admin/workflows/"):]
+                if not workflow_id or "/" in workflow_id:
+                    self._json({"ok": False, "error": "not found"}, status=HTTPStatus.NOT_FOUND)
+                    return
+                if not self._require_admin():
+                    return
+                # Archive only — never hard delete
+                self._json(_admin_archive_workflow(state, workflow_id))
             else:
                 self._json({"ok": False, "error": "not found"}, status=HTTPStatus.NOT_FOUND)
 
         def log_message(self, fmt: str, *args: Any) -> None:
             return
 
-        def _read_json(self) -> dict[str, Any]:
-            length = int(self.headers.get("Content-Length", "0") or 0)
-            if length <= 0:
-                return {}
-            raw = self.rfile.read(length)
-            try:
-                data = json.loads(raw.decode("utf-8"))
-            except json.JSONDecodeError:
-                return {}
-            return data if isinstance(data, dict) else {}
-
-        def _serve_static(self, name: str, content_type: str) -> None:
-            try:
-                data = resources.files(STATIC_PACKAGE).joinpath(name).read_bytes()
-            except FileNotFoundError:
-                self._json({"ok": False, "error": "static asset not found"}, status=500)
-                return
-            self.send_response(HTTPStatus.OK)
-            self.send_header("Content-Type", content_type)
-            self.send_header("Content-Length", str(len(data)))
-            self.end_headers()
-            self.wfile.write(data)
-
-        def _json(self, data: Any, *, status: int | HTTPStatus = HTTPStatus.OK) -> None:
-            payload = json.dumps(data, indent=2).encode("utf-8")
-            self.send_response(status)
-            self.send_header("Content-Type", "application/json; charset=utf-8")
-            self.send_header("Content-Length", str(len(payload)))
-            self.end_headers()
-            self.wfile.write(payload)
-
-        def _text(self, data: str, *, content_type: str) -> None:
-            payload = data.encode("utf-8")
-            self.send_response(HTTPStatus.OK)
-            self.send_header("Content-Type", content_type)
-            self.send_header("Content-Length", str(len(payload)))
-            self.end_headers()
-            self.wfile.write(payload)
-
     return ControlCenterHandler
+
+
+# ---------------------------------------------------------------------------
+# Admin route proxy helpers (PR 5)
+# ---------------------------------------------------------------------------
+
+
+def _admin_list_workflows(state: ControlCenterState) -> dict[str, Any]:
+    try:
+        workflows = _runtime_client(state).workflow_admin_list(include_archived=False)
+        return {"ok": True, "workflows": workflows}
+    except Exception as exc:
+        return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+
+
+def _admin_get_workflow(state: ControlCenterState, workflow_id: str) -> dict[str, Any]:
+    try:
+        workflow = _runtime_client(state).workflow_admin_get(workflow_id)
+        return {"ok": True, "workflow": workflow}
+    except Exception as exc:
+        return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+
+
+def _admin_create_workflow(state: ControlCenterState, body: dict[str, Any]) -> dict[str, Any]:
+    try:
+        definition = body.get("definition") or {}
+        if not isinstance(definition, dict):
+            return {"ok": False, "error": "definition must be an object"}
+        workflow = _runtime_client(state).workflow_admin_create(definition)
+        return {"ok": True, "workflow": workflow}
+    except Exception as exc:
+        return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+
+
+def _admin_update_workflow(
+    state: ControlCenterState, workflow_id: str, body: dict[str, Any]
+) -> dict[str, Any]:
+    try:
+        patch = body.get("patch") or {}
+        if not isinstance(patch, dict):
+            return {"ok": False, "error": "patch must be an object"}
+        workflow = _runtime_client(state).workflow_admin_update(workflow_id, patch)
+        return {"ok": True, "workflow": workflow}
+    except Exception as exc:
+        return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+
+
+def _admin_archive_workflow(state: ControlCenterState, workflow_id: str) -> dict[str, Any]:
+    """Archive a workflow — never hard-deletes."""
+    try:
+        workflow = _runtime_client(state).workflow_admin_archive(workflow_id)
+        return {"ok": True, "workflow": workflow}
+    except Exception as exc:
+        return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+
+
+def _admin_run_workflow(
+    state: ControlCenterState, workflow_id: str, body: dict[str, Any]
+) -> dict[str, Any]:
+    """Submit a workflow run via workflow.run.submit."""
+    try:
+        inputs = body.get("inputs") or {}
+        idempotency_key = body.get("idempotency_key") or None
+        input_summary = body.get("input_summary") or {}
+        if not isinstance(inputs, dict):
+            return {"ok": False, "error": "inputs must be an object"}
+        result = _runtime_client(state).workflow_run_submit(
+            workflow_id,
+            inputs=inputs,
+            idempotency_key=idempotency_key,
+            input_summary=input_summary,
+        )
+        return {"ok": True, **result}
+    except Exception as exc:
+        return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+
+
+def _admin_list_workflow_runs(state: ControlCenterState) -> dict[str, Any]:
+    try:
+        runs = _runtime_client(state).workflow_run_list(include_finished=True)
+        return {"ok": True, "workflow_runs": runs}
+    except Exception as exc:
+        return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+
+
+def _admin_get_workflow_run(state: ControlCenterState, run_id: str) -> dict[str, Any]:
+    try:
+        result = _runtime_client(state).workflow_run_status(run_id)
+        return {"ok": True, **result}
+    except Exception as exc:
+        return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+
+
+def _admin_cancel_workflow_run(state: ControlCenterState, run_id: str) -> dict[str, Any]:
+    """Cancel a workflow run via workflow.run.cancel."""
+    try:
+        result = _runtime_client(state).workflow_run_cancel(run_id)
+        return {"ok": True, **result}
+    except Exception as exc:
+        return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+
+
+def _admin_list_job_kinds(state: ControlCenterState) -> dict[str, Any]:
+    """List registered job kinds via job.kind.list."""
+    try:
+        kinds = _runtime_client(state).job_kind_list()
+        return {"ok": True, "kinds": kinds}
+    except Exception as exc:
+        return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+
+
+def _admin_list_jobs(state: ControlCenterState) -> dict[str, Any]:
+    try:
+        jobs = _runtime_client(state).list_jobs()
+        return {"ok": True, "jobs": jobs}
+    except Exception as exc:
+        return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+
+
+def _admin_cancel_job(state: ControlCenterState, job_id: str) -> dict[str, Any]:
+    try:
+        job = _runtime_client(state).cancel_job(job_id)
+        return {"ok": True, "job": job}
+    except Exception as exc:
+        return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
 
 
 def _start_daemon(state: ControlCenterState) -> dict[str, Any]:

@@ -144,6 +144,65 @@ class RuntimeClient:
         rows = self.request("job.list", params).data.get("jobs") or ()
         return [dict(row) for row in rows]
 
+    def workflow_admin_list(self, *, include_archived: bool = False) -> list[dict[str, Any]]:
+        rows = self.request("workflow.admin.list", {"include_archived": include_archived}).data.get("workflows") or ()
+        return [dict(row) for row in rows]
+
+    def workflow_admin_get(self, workflow_id: str, version: int | None = None) -> dict[str, Any]:
+        params: dict[str, Any] = {"workflow_id": workflow_id}
+        if version is not None:
+            params["version"] = version
+        return dict(self.request("workflow.admin.get", params).data["workflow"])
+
+    def workflow_admin_create(self, definition: dict[str, Any]) -> dict[str, Any]:
+        return dict(self.request("workflow.admin.create", {"definition": definition}).data["workflow"])
+
+    def workflow_admin_update(self, workflow_id: str, patch: dict[str, Any]) -> dict[str, Any]:
+        return dict(self.request("workflow.admin.update", {"workflow_id": workflow_id, "patch": patch}).data["workflow"])
+
+    def workflow_admin_archive(self, workflow_id: str) -> dict[str, Any]:
+        return dict(self.request("workflow.admin.archive", {"workflow_id": workflow_id}).data["workflow"])
+
+    def workflow_admin_validate(self, definition: dict[str, Any]) -> dict[str, Any]:
+        return dict(self.request("workflow.admin.validate", {"definition": definition}).data)
+
+    def workflow_run_submit(
+        self,
+        workflow_id: str,
+        *,
+        inputs: dict[str, Any],
+        idempotency_key: str | None = None,
+        input_summary: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        return dict(self.request("workflow.run.submit", {
+            "workflow_id": workflow_id,
+            "inputs": inputs,
+            "idempotency_key": idempotency_key,
+            "input_summary": input_summary or {}
+        }).data)
+
+    def workflow_run_status(self, run_id: str) -> dict[str, Any]:
+        return dict(self.request("workflow.run.status", {"run_id": run_id}).data)
+
+    def workflow_run_list(
+        self,
+        *,
+        workflow_id: str | None = None,
+        limit: int = 100,
+        include_finished: bool = True,
+    ) -> list[dict[str, Any]]:
+        params: dict[str, Any] = {"limit": limit, "include_finished": include_finished}
+        if workflow_id:
+            params["workflow_id"] = workflow_id
+        rows = self.request("workflow.run.list", params).data.get("workflow_runs") or ()
+        return [dict(row) for row in rows]
+
+    def workflow_run_cancel(self, run_id: str) -> dict[str, Any]:
+        return dict(self.request("workflow.run.cancel", {"run_id": run_id}).data)
+
+    def job_kind_list(self) -> list[str]:
+        return list(self.request("job.kind.list").data.get("kinds") or [])
+
     def _rpc(self, request: dict[str, Any]) -> dict[str, Any]:
         with (
             self._lock,

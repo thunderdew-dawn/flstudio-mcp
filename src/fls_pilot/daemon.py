@@ -64,6 +64,12 @@ from .runtime.contracts import RuntimeResponse
 from .runtime.core import RuntimeCore
 from .runtime.protocol import validate_runtime_request
 from .runtime.workflow_runner import run_workflow
+from .runtime.workflow_jobs import (
+    submit_workflow_run,
+    get_workflow_run_status,
+    list_workflow_runs,
+    cancel_workflow_run,
+)
 from .runtime_config import find_available_tcp_port
 from .workflows.registry import canonical_workflow_id
 
@@ -322,6 +328,80 @@ def _dispatch_runtime_operation(
         return {"reports": [report.to_dict() for report in reports]}
     if operation == "analysis.health.get":
         return {"health": _get_runtime().project_health()}
+    if operation == "workflow.admin.list":
+        rows = _get_runtime().effective_workflows.list_effective(
+            include_archived=bool(params.get("include_archived", False))
+        )
+        return {"workflows": [row.to_dict() for row in rows]}
+    if operation == "workflow.admin.get":
+        workflow_id = str(params["workflow_id"])
+        version = params.get("version")
+        if version is not None:
+            model = _get_runtime().workflow_store.get_definition(workflow_id, version=int(version))
+        else:
+            model = _get_runtime().effective_workflows.get_effective(workflow_id)
+        return {"workflow": model.to_dict()}
+    if operation == "workflow.admin.create":
+        model = _get_runtime().workflow_store.create_custom(
+            params["definition"],
+            valid_job_kinds=_get_runtime().jobs.list_kinds()
+        )
+        return {"workflow": model.to_dict()}
+    if operation == "workflow.admin.update":
+        model = _get_runtime().workflow_store.update_custom(
+            str(params["workflow_id"]),
+            params.get("patch") or params.get("definition") or {},
+            valid_job_kinds=_get_runtime().jobs.list_kinds()
+        )
+        return {"workflow": model.to_dict()}
+    if operation == "workflow.admin.archive":
+        model = _get_runtime().workflow_store.archive_custom(str(params["workflow_id"]))
+        return {"workflow": model.to_dict()}
+    if operation == "workflow.admin.validate":
+        from .runtime.workflow_store import validate_admin_payload
+        from .workflow_identity import is_custom_workflow_id
+        
+        definition = params.get("definition") or {}
+        errors = []
+        try:
+            validate_admin_payload(definition)
+        except ValueError as e:
+            errors.append(str(e))
+            
+        workflow_id = str(definition.get("workflow_id", ""))
+        if not is_custom_workflow_id(workflow_id):
+            errors.append(f"Invalid custom workflow ID: {workflow_id}")
+            
+        runner_type = definition.get("runner_type")
+        runner_ref = definition.get("runner_ref")
+        if runner_type == "job":
+            if not runner_ref:
+                errors.append("runner_type 'job' requires a runner_ref")
+            elif runner_ref not in _get_runtime().jobs.list_kinds():
+                errors.append(f"runner_ref {runner_ref!r} is not a registered job kind")
+            
+        return {"valid": len(errors) == 0, "errors": errors}
+    if operation == "job.kind.list":
+        return {"kinds": list(_get_runtime().jobs.list_kinds())}
+    if operation == "workflow.run.submit":
+        return submit_workflow_run(
+            workflow_id=str(params["workflow_id"]),
+            inputs=params.get("inputs") or {},
+            idempotency_key=str(params["idempotency_key"]) if params.get("idempotency_key") else None,
+            input_summary=params.get("input_summary") or {},
+            core=_get_runtime()
+        )
+    if operation == "workflow.run.status":
+        return get_workflow_run_status(str(params["run_id"]), core=_get_runtime())
+    if operation == "workflow.run.list":
+        return {"workflow_runs": list_workflow_runs(
+            workflow_id=str(params["workflow_id"]) if params.get("workflow_id") else None,
+            limit=int(params.get("limit", 100)),
+            include_finished=bool(params.get("include_finished", True)),
+            core=_get_runtime()
+        )}
+    if operation == "workflow.run.cancel":
+        return cancel_workflow_run(str(params["run_id"]), core=_get_runtime())
     if operation == "job.submit":
         payload = params.get("input") or {}
         summary = params.get("input_summary") or {}

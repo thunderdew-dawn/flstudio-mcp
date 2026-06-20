@@ -26,6 +26,17 @@ RUNTIME_OPERATIONS = {
     "job.result",
     "job.cancel",
     "job.list",
+    "workflow.admin.list",
+    "workflow.admin.get",
+    "workflow.admin.create",
+    "workflow.admin.update",
+    "workflow.admin.archive",
+    "workflow.admin.validate",
+    "job.kind.list",
+    "workflow.run.submit",
+    "workflow.run.status",
+    "workflow.run.list",
+    "workflow.run.cancel",
 }
 
 OPERATION_ALLOWED_PARAMS = {
@@ -61,6 +72,17 @@ OPERATION_ALLOWED_PARAMS = {
     "job.result": {"job_id"},
     "job.cancel": {"job_id"},
     "job.list": {"kind", "status", "limit", "offset"},
+    "workflow.admin.list": {"include_archived"},
+    "workflow.admin.get": {"workflow_id", "version"},
+    "workflow.admin.create": {"definition"},
+    "workflow.admin.update": {"workflow_id", "patch"},
+    "workflow.admin.archive": {"workflow_id"},
+    "workflow.admin.validate": {"definition"},
+    "job.kind.list": set(),
+    "workflow.run.submit": {"workflow_id", "inputs", "idempotency_key", "input_summary"},
+    "workflow.run.status": {"run_id"},
+    "workflow.run.list": {"workflow_id", "limit", "include_finished"},
+    "workflow.run.cancel": {"run_id"},
 }
 
 

@@ -66,6 +66,10 @@ class RuntimeJobQueue:
         for job in reversed(self.store.list(kind=normalized, status="queued", limit=500)):
             self._schedule(job.job_id)
 
+    def list_kinds(self) -> tuple[str, ...]:
+        with self._lock:
+            return tuple(sorted(self._handlers.keys()))
+
     def submit(
         self,
         *,

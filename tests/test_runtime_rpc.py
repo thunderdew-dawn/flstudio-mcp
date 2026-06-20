@@ -13,7 +13,11 @@ from fls_pilot.runtime.core import RuntimeCore
 @pytest.fixture
 def runtime_server(tmp_path):
     original_runtime = daemon._runtime
-    daemon._runtime = RuntimeCore(job_store_path=tmp_path / "jobs.sqlite3")
+    daemon._runtime = RuntimeCore(
+        job_store_path=tmp_path / "jobs.sqlite3",
+        workflow_store_path=tmp_path / "workflows.sqlite3",
+        workflow_run_store_path=tmp_path / "runs.sqlite3",
+    )
     server = daemon._Server(("127.0.0.1", 0), daemon._Handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -155,3 +159,40 @@ def test_runtime_job_rpc_never_accesses_bridge(runtime_server, monkeypatch) -> N
     result = client.job_result(submitted["job_id"])
     assert result["result_ref"] == {"value": 7}
     assert client.list_jobs(kind="test.rpc")
+
+
+def test_runtime_operations_include_admin_ops() -> None:
+    from fls_pilot.runtime.protocol import RUNTIME_OPERATIONS
+    expected = {
+        "workflow.admin.list",
+        "workflow.admin.get",
+        "workflow.admin.create",
+        "workflow.admin.update",
+        "workflow.admin.archive",
+        "workflow.admin.validate",
+        "job.kind.list"
+    }
+    assert expected.issubset(RUNTIME_OPERATIONS)
+
+
+def test_operation_allowed_params_strictly_defined_for_admin_ops() -> None:
+    from fls_pilot.runtime.protocol import OPERATION_ALLOWED_PARAMS
+    assert OPERATION_ALLOWED_PARAMS["workflow.admin.list"] == {"include_archived"}
+    assert OPERATION_ALLOWED_PARAMS["workflow.admin.get"] == {"workflow_id", "version"}
+    assert OPERATION_ALLOWED_PARAMS["workflow.admin.create"] == {"definition"}
+    assert OPERATION_ALLOWED_PARAMS["workflow.admin.update"] == {"workflow_id", "patch"}
+    assert OPERATION_ALLOWED_PARAMS["workflow.admin.archive"] == {"workflow_id"}
+    assert OPERATION_ALLOWED_PARAMS["workflow.admin.validate"] == {"definition"}
+    assert OPERATION_ALLOWED_PARAMS["job.kind.list"] == set()
+
+
+def test_workflow_run_operations_in_pr4() -> None:
+    from fls_pilot.runtime.protocol import RUNTIME_OPERATIONS
+    expected = {
+        "workflow.run.submit",
+        "workflow.run.status",
+        "workflow.run.list",
+        "workflow.run.cancel",
+    }
+    assert expected.issubset(RUNTIME_OPERATIONS)
+

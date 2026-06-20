@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FLS Pilot — Admin</title>
+    <style>
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+      :root {
+        --bg: #12141a;
+        --surface: #1c1f29;
+        --border: #2e3344;
+        --accent: #6c8ff8;
+        --accent-dk: #4a6cf0;
+        --danger: #e05252;
+        --success: #4caf81;
+        --warn: #e0a050;
+        --text: #dde1f0;
+        --muted: #6b7396;
+        --font: 'Inter', system-ui, sans-serif;
+        --radius: 8px;
+      }
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font-family: var(--font);
+        font-size: 14px;
+        line-height: 1.5;
+      }
+      header {
+        background: var(--surface);
+        border-bottom: 1px solid var(--border);
+        padding: 0 24px;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        height: 52px;
+      }
+      header h1 { font-size: 15px; font-weight: 600; color: var(--text); }
+      header .badge {
+        font-size: 11px;
+        background: #3a2a00;
+        color: var(--warn);
+        border: 1px solid var(--warn);
+        border-radius: 4px;
+        padding: 1px 6px;
+      }
+      header a { margin-left: auto; color: var(--muted); font-size: 13px; text-decoration: none; }
+      header a:hover { color: var(--text); }
+      .layout {
+        display: flex;
+        height: calc(100vh - 52px);
+      }
+      nav {
+        width: 200px;
+        background: var(--surface);
+        border-right: 1px solid var(--border);
+        padding: 12px 0;
+        flex-shrink: 0;
+        overflow-y: auto;
+      }
+      nav .nav-section {
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: .08em;
+        color: var(--muted);
+        padding: 12px 16px 4px;
+      }
+      nav button {
+        display: block;
+        width: 100%;
+        text-align: left;
+        background: none;
+        border: none;
+        color: var(--text);
+        padding: 7px 16px;
+        font-size: 13px;
+        cursor: pointer;
+        border-radius: 0;
+        transition: background .15s;
+      }
+      nav button:hover { background: rgba(255,255,255,.05); }
+      nav button.active { background: rgba(108,143,248,.12); color: var(--accent); }
+      main {
+        flex: 1;
+        overflow-y: auto;
+        padding: 24px;
+      }
+      .page { display: none; }
+      .page.active { display: block; }
+      h2 { font-size: 16px; font-weight: 600; margin-bottom: 16px; }
+      .toolbar {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        margin-bottom: 16px;
+        flex-wrap: wrap;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+      th {
+        text-align: left;
+        color: var(--muted);
+        font-weight: 500;
+        padding: 6px 10px;
+        border-bottom: 1px solid var(--border);
+        white-space: nowrap;
+      }
+      td {
+        padding: 8px 10px;
+        border-bottom: 1px solid rgba(255,255,255,.04);
+        vertical-align: top;
+      }
+      tr:hover td { background: rgba(255,255,255,.025); }
+      .code { font-family: monospace; font-size: 12px; color: var(--accent); }
+      .pill {
+        display: inline-block;
+        font-size: 11px;
+        padding: 1px 7px;
+        border-radius: 20px;
+        background: rgba(255,255,255,.07);
+        color: var(--muted);
+      }
+      .pill.active   { background: rgba(76,175,129,.15); color: var(--success); }
+      .pill.archived { background: rgba(255,255,255,.05); color: var(--muted); }
+      .pill.builtin  { background: rgba(108,143,248,.12); color: var(--accent); }
+      .pill.queued   { background: rgba(224,160,80,.12);  color: var(--warn); }
+      .pill.running  { background: rgba(108,143,248,.2);  color: var(--accent); }
+      .pill.complete { background: rgba(76,175,129,.15);  color: var(--success); }
+      .pill.failed   { background: rgba(224,82,82,.15);   color: var(--danger); }
+      .pill.cancelled{ background: rgba(255,255,255,.06); color: var(--muted); }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 5px 12px;
+        border-radius: var(--radius);
+        border: none;
+        font-size: 13px;
+        cursor: pointer;
+        transition: opacity .15s, background .15s;
+      }
+      .btn:disabled { opacity: .4; cursor: not-allowed; }
+      .btn-primary { background: var(--accent); color: #fff; }
+      .btn-primary:hover:not(:disabled) { background: var(--accent-dk); }
+      .btn-danger  { background: rgba(224,82,82,.15); color: var(--danger); border: 1px solid rgba(224,82,82,.3); }
+      .btn-danger:hover:not(:disabled)  { background: rgba(224,82,82,.25); }
+      .btn-ghost   { background: rgba(255,255,255,.06); color: var(--text); }
+      .btn-ghost:hover:not(:disabled)   { background: rgba(255,255,255,.1); }
+      .detail-box {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 16px 20px;
+        margin-bottom: 16px;
+      }
+      .detail-box h3 { font-size: 14px; margin-bottom: 12px; }
+      .detail-row { display: flex; gap: 12px; margin-bottom: 6px; font-size: 13px; }
+      .detail-label { color: var(--muted); min-width: 120px; flex-shrink: 0; }
+      .json-editor {
+        width: 100%;
+        min-height: 300px;
+        background: #0f1118;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        color: var(--text);
+        font-family: monospace;
+        font-size: 12px;
+        padding: 12px;
+        resize: vertical;
+        outline: none;
+        line-height: 1.6;
+      }
+      .json-editor:focus { border-color: var(--accent); }
+      .alert {
+        padding: 10px 14px;
+        border-radius: var(--radius);
+        font-size: 13px;
+        margin-bottom: 12px;
+      }
+      .alert-error   { background: rgba(224,82,82,.1);   border: 1px solid rgba(224,82,82,.3);   color: var(--danger); }
+      .alert-success { background: rgba(76,175,129,.1);  border: 1px solid rgba(76,175,129,.3);  color: var(--success); }
+      .alert-info    { background: rgba(108,143,248,.1); border: 1px solid rgba(108,143,248,.3); color: var(--accent); }
+      .empty { color: var(--muted); font-size: 13px; padding: 24px 0; text-align: center; }
+      .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--muted); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      .modal-overlay {
+        position: fixed; inset: 0;
+        background: rgba(0,0,0,.6);
+        display: flex; align-items: center; justify-content: center;
+        z-index: 100;
+      }
+      .modal-overlay.hidden { display: none; }
+      .modal {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 24px;
+        min-width: 480px;
+        max-width: 90vw;
+        max-height: 85vh;
+        overflow-y: auto;
+      }
+      .modal h3 { font-size: 15px; font-weight: 600; margin-bottom: 16px; }
+      .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+      .kind-chip {
+        display: inline-block;
+        font-family: monospace;
+        font-size: 11px;
+        background: rgba(108,143,248,.1);
+        color: var(--accent);
+        border: 1px solid rgba(108,143,248,.2);
+        border-radius: 4px;
+        padding: 1px 6px;
+        margin: 2px;
+      }
+    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  </head>
+  <body>
+    <header>
+      <h1>FLS Pilot Admin</h1>
+      <span class="badge">LOCAL ADMIN</span>
+      <a href="/">← Control Center</a>
+    </header>
+
+    <div class="layout">
+      <nav id="nav">
+        <div class="nav-section">Workflows</div>
+        <button data-page="workflows" class="active" onclick="showPage('workflows')">Workflow Catalog</button>
+        <button data-page="workflow-runs" onclick="showPage('workflow-runs')">Workflow Runs</button>
+        <div class="nav-section">Jobs</div>
+        <button data-page="job-kinds" onclick="showPage('job-kinds')">Job Kinds</button>
+        <button data-page="jobs" onclick="showPage('jobs')">Jobs</button>
+      </nav>
+
+      <main>
+        <!-- ── Workflows ─────────────────────────────────────────── -->
+        <section class="page active" id="page-workflows">
+          <h2>Workflow Catalog</h2>
+          <div class="toolbar">
+            <button class="btn btn-primary" onclick="openCreateModal()">+ New Workflow</button>
+            <button class="btn btn-ghost" onclick="loadWorkflows()">↺ Refresh</button>
+          </div>
+          <div id="workflows-alert"></div>
+          <div id="workflows-content"><div class="empty"><span class="spinner"></span> Loading…</div></div>
+        </section>
+
+        <!-- ── Workflow Runs ─────────────────────────────────────── -->
+        <section class="page" id="page-workflow-runs">
+          <h2>Workflow Runs</h2>
+          <div class="toolbar">
+            <button class="btn btn-ghost" onclick="loadWorkflowRuns()">↺ Refresh</button>
+          </div>
+          <div id="runs-alert"></div>
+          <div id="runs-content"><div class="empty">Loading…</div></div>
+        </section>
+
+        <!-- ── Job Kinds ─────────────────────────────────────────── -->
+        <section class="page" id="page-job-kinds">
+          <h2>Registered Job Kinds</h2>
+          <div class="toolbar">
+            <button class="btn btn-ghost" onclick="loadJobKinds()">↺ Refresh</button>
+          </div>
+          <div id="kinds-content"><div class="empty">Loading…</div></div>
+        </section>
+
+        <!-- ── Jobs ─────────────────────────────────────────────── -->
+        <section class="page" id="page-jobs">
+          <h2>Jobs</h2>
+          <div class="toolbar">
+            <button class="btn btn-ghost" onclick="loadJobs()">↺ Refresh</button>
+          </div>
+          <div id="jobs-alert"></div>
+          <div id="jobs-content"><div class="empty">Loading…</div></div>
+        </section>
+      </main>
+    </div>
+
+    <!-- ── Create / Edit Workflow Modal ───────────────────────── -->
+    <div class="modal-overlay hidden" id="workflow-modal">
+      <div class="modal">
+        <h3 id="workflow-modal-title">New Custom Workflow</h3>
+        <div id="workflow-modal-alert"></div>
+        <label style="display:block;margin-bottom:6px;font-size:13px;color:var(--muted)">
+          Workflow JSON definition (data only — no code, scripts, or commands):
+        </label>
+        <textarea class="json-editor" id="workflow-json" spellcheck="false"></textarea>
+        <div class="modal-actions">
+          <button class="btn btn-ghost" onclick="closeModal('workflow-modal')">Cancel</button>
+          <button class="btn btn-primary" id="workflow-modal-save" onclick="saveWorkflow()">Save</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Run Workflow Modal ──────────────────────────────────── -->
+    <div class="modal-overlay hidden" id="run-modal">
+      <div class="modal">
+        <h3>Run Workflow: <span id="run-modal-wfid" class="code"></span></h3>
+        <div id="run-modal-alert"></div>
+        <label style="display:block;margin-bottom:6px;font-size:13px;color:var(--muted)">
+          Inputs (JSON object):
+        </label>
+        <textarea class="json-editor" id="run-inputs" spellcheck="false">{}</textarea>
+        <div class="modal-actions">
+          <button class="btn btn-ghost" onclick="closeModal('run-modal')">Cancel</button>
+          <button class="btn btn-primary" onclick="submitWorkflowRun()">Submit Run</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="/admin.js"></script>
+  </body>
+</html>

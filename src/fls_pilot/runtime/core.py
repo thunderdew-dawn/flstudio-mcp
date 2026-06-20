@@ -20,6 +20,9 @@ from .contracts import ProjectContext, RuntimeSession
 from .job_store import JobStore
 from .jobs import JobHandler, RuntimeJobQueue
 from .project_context import ProjectContextService
+from .workflow_store import WorkflowStore
+from .effective_workflows import EffectiveWorkflowRegistry
+from .workflow_run_store import WorkflowRunStore
 
 
 class RuntimeCore:
@@ -32,11 +35,13 @@ class RuntimeCore:
         observation_store: ObservationStore | None = None,
         report_store: ReportStore | None = None,
         workflow_registry: WorkflowRegistry = DEFAULT_WORKFLOW_REGISTRY,
+        workflow_store_path: str | Path | None = None,
         job_store_path: str | Path | None = None,
         job_worker_concurrency: int = 1,
         job_result_validator: Callable[[dict[str, Any]], bool] | None = None,
         artifact_store: AudioArtifactStore | None = None,
         evidence_link_store: EvidenceLinkStore | None = None,
+        workflow_run_store_path: str | Path | None = None,
     ) -> None:
         self.session = session or RuntimeSession(runtime_version=__version__)
         self.observation_store = observation_store or ObservationStore()
@@ -46,9 +51,12 @@ class RuntimeCore:
         )
         self.report_store = report_store or ReportStore()
         self.workflow_registry = workflow_registry
+        self.workflow_store = WorkflowStore(workflow_store_path)
+        self.effective_workflows = EffectiveWorkflowRegistry(self.workflow_registry, self.workflow_store)
         self.project_contexts = ProjectContextService(self.session)
         self.audio_artifacts = artifact_store or AudioArtifactStore()
         self.evidence_links = evidence_link_store or EvidenceLinkStore()
+        self.workflow_run_store = WorkflowRunStore(workflow_run_store_path)
         self.job_store = JobStore(job_store_path)
         self.jobs = RuntimeJobQueue(
             self.job_store,
