@@ -208,6 +208,7 @@ def gather_snapshot(
             or {}
         ).get("channels", [])
     route_by = {r.get("i", r.get("index")): (r.get("routes_to") or []) for r in routing_raw}
+    channel_names_by_target = _channel_names_by_target(channel_routing_raw)
 
     indices = [t.get("i", t.get("index")) for t in tracks_raw[:max_tracks]]
 
@@ -234,6 +235,12 @@ def gather_snapshot(
     tracks = []
     for t in tracks_raw[:max_tracks]:
         i = t.get("i", t.get("index"))
+        idx = _as_int(i)
+        mixer_name = t.get("name")
+        channel_names = channel_names_by_target.get(idx, []) if idx is not None else []
+        effective_name = mixer_name
+        if idx != 0 and _is_default_mixer_name(idx, mixer_name):
+            effective_name = _source_label(channel_names) or mixer_name
         if peaks_override is not None:
             pl_lin = peaks_override.get(i)
             peak_max, peak_db, peak_avg, n_reads = pl_lin, lin_to_db(pl_lin), None, None
@@ -265,7 +272,9 @@ def gather_snapshot(
         tracks.append(
             {
                 "index": i,
-                "name": t.get("name"),
+                "name": effective_name,
+                "mixer_name": mixer_name,
+                "channel_names": channel_names,
                 "vol_db": t.get("vol_db"),
                 "vol_norm": t.get("vol_norm"),
                 "pan": t.get("pan"),
@@ -305,6 +314,67 @@ def gather_snapshot(
 # Diagnosis rules (PURE -- operate on the snapshot dict only)
 # --------------------------------------------------------------------------
 _DEFAULT_NAME = re.compile(r"^\s*(insert\s*\d+|master)\s*$", re.I)
+_DEFAULT_INSERT_NAME = re.compile(r"^\s*(insert|track)\s*\d+\s*$", re.I)
+
+
+def _as_int(v):
+    try:
+        return int(v)
+    except (TypeError, ValueError):
+        return None
+
+
+def _is_default_mixer_name(index, name):
+    """Whether a mixer-track label is just FL's generated insert name.
+
+    Master is intentionally not treated as replaceable: channels routed to the
+    Master should not make the Master row look like a source track.
+    """
+    idx = _as_int(index)
+    raw = str(name or "").strip()
+    if idx == 0:
+        return raw == "" or raw.lower() == "master"
+    if not raw:
+        return True
+    return bool(_DEFAULT_INSERT_NAME.match(raw))
+
+
+def _unique_nonempty(values):
+    out = []
+    seen = set()
+    for value in values or []:
+        text = str(value or "").strip()
+        if not text or text.lower() in seen:
+            continue
+        seen.add(text.lower())
+        out.append(text)
+    return out
+
+
+def _channel_names_by_target(channel_rows):
+    by_target = {}
+    for row in channel_rows or []:
+        if not isinstance(row, dict):
+            continue
+        target = _as_int(row.get("target_mixer_track"))
+        if target is None or target < 0:
+            continue
+        name = str(row.get("name") or row.get("channel_name") or "").strip()
+        if not name:
+            continue
+        by_target.setdefault(target, []).append(name)
+    return {target: _unique_nonempty(names) for target, names in by_target.items()}
+
+
+def _source_label(names):
+    names = _unique_nonempty(names)
+    if not names:
+        return None
+    if len(names) == 1:
+        return names[0]
+    if len(names) == 2:
+        return f"{names[0]} + {names[1]}"
+    return f"{names[0]} + {names[1]} + {len(names) - 2} more"
 
 
 def _is_used(t):

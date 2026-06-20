@@ -65,13 +65,13 @@ def measure_many(bridge, tracks, samples=15, interval_ms=100):
 
         {track: {track, playing, avg_db, peak_db, peak_lin, n_reads}}
     """
-    acc = {t: [] for t in tracks}
+    selected = [t for t in tracks if t is not None]
+    acc = {t: [] for t in selected}
     for _ in range(max(1, int(samples))):
-        for t in tracks:
-            try:
-                v = bridge.call(protocol.CMD_MIXER_GET_PEAKS, {"track": t}).get("peak_max")
-            except Exception:
-                v = None
+        bulk_values = _read_many_peaks_bulk(bridge, selected)
+        if bulk_values is None:
+            bulk_values = _read_many_peaks_legacy(bridge, selected)
+        for t, v in bulk_values.items():
             if v is not None:
                 acc[t].append(v)
         time.sleep(max(0.0, interval_ms / 1000.0))
@@ -98,3 +98,44 @@ def measure_many(bridge, tracks, samples=15, interval_ms=100):
                 "n_reads": len(vals),
             }
     return out
+
+
+def _read_many_peaks_bulk(bridge, tracks, page_size=32):
+    """Read many peak meters with the paged controller command.
+
+    The legacy path called ``mixer_get_peaks`` once per track per sample. On a
+    medium/large project that can turn a nominal 1.2s Mix Review window into
+    hundreds of MIDI/TCP round trips, causing stale or missing level evidence.
+    ``mixer_get_all_peaks`` keeps the same semantics but reads up to 32 tracks
+    per bridge call.
+    """
+    values = {}
+    if not tracks:
+        return values
+    try:
+        for start in range(0, len(tracks), page_size):
+            chunk = tracks[start : start + page_size]
+            payload = bridge.call(protocol.CMD_MIXER_GET_ALL_PEAKS, {"tracks": chunk})
+            scale = float(payload.get("scale") or 1000000.0)
+            returned_tracks = payload.get("tracks") or chunk
+            returned_peaks = payload.get("peaks") or []
+            if len(returned_peaks) != len(returned_tracks):
+                return None
+            for track, raw_peak in zip(returned_tracks, returned_peaks, strict=False):
+                try:
+                    values[track] = max(0.0, float(raw_peak) / scale)
+                except (TypeError, ValueError, ZeroDivisionError):
+                    values[track] = None
+        return values
+    except Exception:
+        return None
+
+
+def _read_many_peaks_legacy(bridge, tracks):
+    values = {}
+    for t in tracks:
+        try:
+            values[t] = bridge.call(protocol.CMD_MIXER_GET_PEAKS, {"track": t}).get("peak_max")
+        except Exception:
+            values[t] = None
+    return values
