@@ -4874,6 +4874,8 @@ def _selected_daemon_endpoint(state: ControlCenterState) -> tuple[str, int]:
 def _runtime_client(state: ControlCenterState) -> RuntimeClient:
     host, port = _selected_daemon_endpoint(state)
     client = state.runtime_client
+    if not hasattr(client, "host") or not hasattr(client, "port"):
+        return client
     if client.host != host or client.port != port:
         client = RuntimeClient(host, port)
         state.runtime_client = client

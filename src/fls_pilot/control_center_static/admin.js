@@ -61,6 +61,36 @@ function ts(isoStr) {
 // ---------------------------------------------------------------------------
 
 let _editingWorkflowId = null;
+let _workflowRows = [];
+let _registeredJobKinds = null;
+
+async function getRegisteredJobKinds() {
+  if (Array.isArray(_registeredJobKinds)) return _registeredJobKinds;
+  try {
+    const { ok, data } = await apiFetch('/api/admin/job-kinds');
+    if (!ok || !data.ok) throw new Error(data.error || 'Failed to load job kinds');
+    _registeredJobKinds = data.kinds || [];
+  } catch {
+    _registeredJobKinds = [];
+  }
+  return _registeredJobKinds;
+}
+
+function workflowJobKinds(kinds) {
+  return (kinds || []).filter(k => String(k).startsWith('workflow.'));
+}
+
+function renderJobKindHint(kinds) {
+  const wfKinds = workflowJobKinds(kinds);
+  if (wfKinds.length) {
+    return 'Registered workflow job kinds: ' + wfKinds.join(', ');
+  }
+  if ((kinds || []).length) {
+    return 'Registered job kinds: ' + kinds.join(', ') +
+      '. None are workflow.* handlers; create/register a workflow job handler before using Run.';
+  }
+  return 'No job kinds are registered. Start the Runtime daemon or register a workflow job handler first.';
+}
 
 async function loadWorkflows() {
   const el = document.getElementById('workflows-content');
@@ -78,11 +108,12 @@ async function loadWorkflows() {
 
 function renderWorkflows(rows) {
   const el = document.getElementById('workflows-content');
-  if (!rows.length) {
+  _workflowRows = Array.isArray(rows) ? rows : [];
+  if (!_workflowRows.length) {
     el.innerHTML = '<div class="empty">No workflows found.</div>';
     return;
   }
-  const tbody = rows.map(w => {
+  const tbody = _workflowRows.map((w, index) => {
     const statusV = String(w.status || 'unknown');
     const originV = String(w.origin || 'unknown');
     const isProtected = Boolean(w.protected);
@@ -92,13 +123,13 @@ function renderWorkflows(rows) {
         <td>${esc(w.title || '—')}</td>
         <td>${pill(statusV, statusV)}</td>
         <td>${pill(originV, originV === 'builtin' ? 'builtin' : '')}</td>
-        <td>${esc(w.runner_type || '—')}</td>
+        <td>${esc(w.runner_type || '—')}${w.runner_ref ? `<div class="muted code">${esc(w.runner_ref)}</div>` : ''}</td>
         <td>
           <button class="btn btn-ghost" style="font-size:12px;padding:3px 8px"
-            onclick="viewWorkflow(${JSON.stringify(JSON.stringify(w))})">View</button>
+            onclick="viewWorkflowByIndex(${index})">View</button>
           ${!isProtected ? `
             <button class="btn btn-ghost" style="font-size:12px;padding:3px 8px"
-              onclick="openEditModal(${JSON.stringify(JSON.stringify(w))})">Edit</button>
+              onclick="openEditModalByIndex(${index})">Edit</button>
             <button class="btn btn-danger" style="font-size:12px;padding:3px 8px"
               onclick="archiveWorkflow(${JSON.stringify(w.workflow_id)})">Archive</button>
           ` : `<span class="pill" style="font-size:11px">protected</span>`}
@@ -120,40 +151,60 @@ function renderWorkflows(rows) {
     </table>`;
 }
 
-function viewWorkflow(jsonStr) {
-  try {
-    const w = JSON.parse(jsonStr);
-    alert(JSON.stringify(w, null, 2));
-  } catch { alert('Could not parse workflow data.'); }
+function workflowByIndex(index) {
+  const n = Number(index);
+  if (!Number.isInteger(n) || n < 0 || n >= _workflowRows.length) return null;
+  return _workflowRows[n];
 }
 
-function openCreateModal() {
+function viewWorkflowByIndex(index) {
+  const w = workflowByIndex(index);
+  if (!w) { alert('Could not find workflow data.'); return; }
+  document.getElementById('workflow-view-title').textContent =
+    (w.origin === 'builtin' || w.protected) ? 'Built-in Workflow (read-only)' : 'Workflow Definition';
+  document.getElementById('workflow-view-json').value = JSON.stringify(w, null, 2);
+  document.getElementById('workflow-view-modal').classList.remove('hidden');
+}
+
+async function openCreateModal() {
   _editingWorkflowId = null;
   document.getElementById('workflow-modal-title').textContent = 'New Custom Workflow';
   document.getElementById('workflow-modal-save').textContent = 'Create';
+  const kinds = await getRegisteredJobKinds();
+  const wfKinds = workflowJobKinds(kinds);
+  const runnerRef = wfKinds[0] || '';
   document.getElementById('workflow-json').value = JSON.stringify({
     workflow_id: 'user.my_workflow',
     title: 'My Workflow',
     kind: 'analysis_workflow',
-    status: 'active',
+    status: runnerRef ? 'active' : 'draft',
     origin: 'custom',
     runner_type: 'job',
-    runner_ref: 'workflow.my_job_kind'
+    runner_ref: runnerRef || null,
+    analysis_report_required: false,
+    health_inclusion_policy: 'optional_context_report',
+    inputs_schema: {},
+    metadata: {
+      notes: runnerRef
+        ? 'runner_ref must stay one of the registered workflow job kinds.'
+        : 'Register a workflow.* job handler first, then set runner_ref and status=active.'
+    }
   }, null, 2);
-  setAlert('workflow-modal-alert', '', '');
+  setAlert('workflow-modal-alert', renderJobKindHint(kinds), runnerRef ? 'info' : 'error');
   document.getElementById('workflow-modal').classList.remove('hidden');
 }
 
-function openEditModal(jsonStr) {
-  try {
-    const w = JSON.parse(jsonStr);
-    _editingWorkflowId = w.workflow_id;
-    document.getElementById('workflow-modal-title').textContent = 'Edit Workflow';
-    document.getElementById('workflow-modal-save').textContent = 'Save';
-    document.getElementById('workflow-json').value = JSON.stringify(w, null, 2);
-    setAlert('workflow-modal-alert', '', '');
-    document.getElementById('workflow-modal').classList.remove('hidden');
-  } catch { alert('Could not parse workflow data.'); }
+function openEditModalByIndex(index) {
+  const w = workflowByIndex(index);
+  if (!w) { alert('Could not find workflow data.'); return; }
+  _editingWorkflowId = w.workflow_id;
+  document.getElementById('workflow-modal-title').textContent = 'Edit Workflow';
+  document.getElementById('workflow-modal-save').textContent = 'Save';
+  document.getElementById('workflow-json').value = JSON.stringify(w, null, 2);
+  getRegisteredJobKinds().then(kinds =>
+    setAlert('workflow-modal-alert', renderJobKindHint(kinds), 'info')
+  );
+  document.getElementById('workflow-modal').classList.remove('hidden');
 }
 
 function closeModal(id) {
@@ -339,6 +390,7 @@ async function loadJobKinds() {
     const { ok, data } = await apiFetch('/api/admin/job-kinds');
     if (!ok || !data.ok) throw new Error(data.error || 'Failed to load job kinds');
     const kinds = data.kinds || [];
+    _registeredJobKinds = kinds;
     if (!kinds.length) {
       el.innerHTML = '<div class="empty">No registered job kinds.</div>';
       return;

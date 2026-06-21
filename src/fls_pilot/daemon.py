@@ -83,6 +83,79 @@ _runtime_lock = threading.Lock()
 _audio_artifact_store: AudioArtifactStore | None = None
 
 
+CUSTOM_WORKFLOW_JOB_KIND = "workflow.my_workflow"
+
+
+def _register_custom_workflow_jobs(runtime: RuntimeCore) -> None:
+    """Register daemon-local custom workflow job handlers.
+
+    These handlers are what make custom Workflow definitions with
+    runner_type="job" executable via workflow.run.submit.
+    """
+    runtime.register_job_handler(CUSTOM_WORKFLOW_JOB_KIND, _run_my_workflow_job)
+
+
+def _run_my_workflow_job(payload: dict, context) -> dict:
+    """Example custom workflow job.
+
+    Expected payload shape when launched through workflow.run.submit:
+        {
+            "workflow_id": "user.my_workflow",
+            "workflow_version": 1,
+            "run_id": "...",
+            "inputs": {...}
+        }
+
+    Replace the body below with the real workflow logic once the first
+    end-to-end custom workflow path is working.
+    """
+    if not isinstance(payload, dict):
+        raise ValueError("workflow job payload must be an object")
+
+    workflow_id = str(payload.get("workflow_id") or "user.my_workflow")
+    workflow_version = payload.get("workflow_version")
+    run_id = str(payload.get("run_id") or "")
+    inputs = payload.get("inputs") or {}
+    if not isinstance(inputs, dict):
+        raise ValueError("workflow inputs must be an object")
+
+    context.set_progress(0.10)
+
+    requested_steps = inputs.get("steps") or []
+    if isinstance(requested_steps, str):
+        requested_steps = [requested_steps]
+    elif not isinstance(requested_steps, list):
+        requested_steps = []
+
+    context.set_progress(0.45)
+
+    input_keys = sorted(str(key) for key in inputs.keys())
+    summary = {
+        "ok": True,
+        "message": "Custom workflow job executed successfully.",
+        "workflow_id": workflow_id,
+        "run_id": run_id or None,
+        "input_keys": input_keys,
+        "step_count": len(requested_steps),
+    }
+
+    context.set_progress(0.80)
+
+    result = {
+        "kind": "workflow_result",
+        "runner_kind": CUSTOM_WORKFLOW_JOB_KIND,
+        "workflow_id": workflow_id,
+        "workflow_version": workflow_version,
+        "run_id": run_id or None,
+        "summary": summary,
+        "inputs_echo": inputs,
+        "steps": [str(step) for step in requested_steps],
+    }
+
+    context.set_progress(1.0)
+    return result
+
+
 def _get_runtime() -> RuntimeCore:
     """Return (and lazily create) the singleton RuntimeCore."""
     global _runtime, _audio_artifact_store
@@ -94,6 +167,8 @@ def _get_runtime() -> RuntimeCore:
                 job_result_validator=_audio_artifact_store.validate_result_ref,
             )
             AudioAnalysisWorker(_audio_artifact_store).register(_runtime)
+            _register_custom_workflow_jobs(_runtime)
+
         return _runtime
 
 
@@ -281,18 +356,14 @@ def _dispatch_runtime_operation(
                 _get_runtime(),
                 workflow_id,
                 bridge=(
-                    None
-                    if workflow_id in {"preset_assistant", "audio_evidence"}
-                    else _get_bridge()
+                    None if workflow_id in {"preset_assistant", "audio_evidence"} else _get_bridge()
                 ),
                 inputs=inputs,
             )
         }
     if operation == "analysis.live_meter.normalize":
         policy_data = dict(params.get("policy") or {})
-        snapshot = StaticProjectSnapshot.from_dict(
-            dict(params.get("static_snapshot") or {})
-        )
+        snapshot = StaticProjectSnapshot.from_dict(dict(params.get("static_snapshot") or {}))
         provider = _PayloadWatcherProvider(
             status=dict(params.get("watch_status") or {}),
             last_max=dict(params.get("watch_last_max") or {}),
@@ -302,12 +373,8 @@ def _dispatch_runtime_operation(
             policy=LiveMeterPolicy(
                 ttl_seconds=float(policy_data.get("ttl_seconds") or 2.0),
                 require_playing=bool(policy_data.get("require_playing", False)),
-                min_capture_seconds=float(
-                    policy_data.get("min_capture_seconds") or 1.0
-                ),
-                recent_watch_seconds=float(
-                    policy_data.get("recent_watch_seconds") or 120.0
-                ),
+                min_capture_seconds=float(policy_data.get("min_capture_seconds") or 1.0),
+                recent_watch_seconds=float(policy_data.get("recent_watch_seconds") or 120.0),
             ),
             watcher_provider=provider,
             static_snapshot=snapshot,
@@ -343,15 +410,14 @@ def _dispatch_runtime_operation(
         return {"workflow": model.to_dict()}
     if operation == "workflow.admin.create":
         model = _get_runtime().workflow_store.create_custom(
-            params["definition"],
-            valid_job_kinds=_get_runtime().jobs.list_kinds()
+            params["definition"], valid_job_kinds=_get_runtime().jobs.list_kinds()
         )
         return {"workflow": model.to_dict()}
     if operation == "workflow.admin.update":
         model = _get_runtime().workflow_store.update_custom(
             str(params["workflow_id"]),
             params.get("patch") or params.get("definition") or {},
-            valid_job_kinds=_get_runtime().jobs.list_kinds()
+            valid_job_kinds=_get_runtime().jobs.list_kinds(),
         )
         return {"workflow": model.to_dict()}
     if operation == "workflow.admin.archive":
@@ -360,26 +426,28 @@ def _dispatch_runtime_operation(
     if operation == "workflow.admin.validate":
         from .runtime.workflow_store import validate_admin_payload
         from .workflow_identity import is_custom_workflow_id
-        
+
         definition = params.get("definition") or {}
         errors = []
         try:
             validate_admin_payload(definition)
         except ValueError as e:
             errors.append(str(e))
-            
+
         workflow_id = str(definition.get("workflow_id", ""))
         if not is_custom_workflow_id(workflow_id):
             errors.append(f"Invalid custom workflow ID: {workflow_id}")
-            
+
         runner_type = definition.get("runner_type")
         runner_ref = definition.get("runner_ref")
+        runner_ref = str(runner_ref).strip() if runner_ref is not None else ""
+        status = str(definition.get("status") or "active").strip() or "active"
         if runner_type == "job":
-            if not runner_ref:
-                errors.append("runner_type 'job' requires a runner_ref")
-            elif runner_ref not in _get_runtime().jobs.list_kinds():
+            if status == "active" and not runner_ref:
+                errors.append("runner_type 'job' requires a runner_ref when status is active")
+            elif runner_ref and runner_ref not in _get_runtime().jobs.list_kinds():
                 errors.append(f"runner_ref {runner_ref!r} is not a registered job kind")
-            
+
         return {"valid": len(errors) == 0, "errors": errors}
     if operation == "job.kind.list":
         return {"kinds": list(_get_runtime().jobs.list_kinds())}
@@ -387,19 +455,23 @@ def _dispatch_runtime_operation(
         return submit_workflow_run(
             workflow_id=str(params["workflow_id"]),
             inputs=params.get("inputs") or {},
-            idempotency_key=str(params["idempotency_key"]) if params.get("idempotency_key") else None,
+            idempotency_key=str(params["idempotency_key"])
+            if params.get("idempotency_key")
+            else None,
             input_summary=params.get("input_summary") or {},
-            core=_get_runtime()
+            core=_get_runtime(),
         )
     if operation == "workflow.run.status":
         return get_workflow_run_status(str(params["run_id"]), core=_get_runtime())
     if operation == "workflow.run.list":
-        return {"workflow_runs": list_workflow_runs(
-            workflow_id=str(params["workflow_id"]) if params.get("workflow_id") else None,
-            limit=int(params.get("limit", 100)),
-            include_finished=bool(params.get("include_finished", True)),
-            core=_get_runtime()
-        )}
+        return {
+            "workflow_runs": list_workflow_runs(
+                workflow_id=str(params["workflow_id"]) if params.get("workflow_id") else None,
+                limit=int(params.get("limit", 100)),
+                include_finished=bool(params.get("include_finished", True)),
+                core=_get_runtime(),
+            )
+        }
     if operation == "workflow.run.cancel":
         return cancel_workflow_run(str(params["run_id"]), core=_get_runtime())
     if operation == "job.submit":
@@ -412,9 +484,7 @@ def _dispatch_runtime_operation(
             input_payload=payload,
             input_summary=summary,
             idempotency_key=(
-                str(params["idempotency_key"])
-                if params.get("idempotency_key")
-                else None
+                str(params["idempotency_key"]) if params.get("idempotency_key") else None
             ),
             idempotent=bool(params.get("idempotent", True)),
             max_retries=int(params.get("max_retries", 1)),

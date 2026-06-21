@@ -53,6 +53,15 @@ class WorkflowDefinition:
     
     archived_at: str | None = None
 
+
+    @property
+    def id(self) -> str:
+        return self.workflow_id
+
+    @property
+    def enabled(self) -> bool:
+        return self.status == "active"
+
     def __post_init__(self) -> None:
         object.__setattr__(self, "supported_next_actions", tuple(self.supported_next_actions))
         object.__setattr__(self, "manual_only_actions", tuple(self.manual_only_actions))

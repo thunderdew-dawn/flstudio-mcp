@@ -52,7 +52,11 @@ class RuntimeCore:
         self.report_store = report_store or ReportStore()
         self.workflow_registry = workflow_registry
         self.workflow_store = WorkflowStore(workflow_store_path)
-        self.effective_workflows = EffectiveWorkflowRegistry(self.workflow_registry, self.workflow_store)
+        self.workflow_store.mirror_builtins(self.workflow_registry)
+        self.effective_workflows = EffectiveWorkflowRegistry(
+            self.workflow_registry,
+            self.workflow_store,
+        )
         self.project_contexts = ProjectContextService(self.session)
         self.audio_artifacts = artifact_store or AudioArtifactStore()
         self.evidence_links = evidence_link_store or EvidenceLinkStore()

@@ -297,6 +297,20 @@
       </div>
     </div>
 
+    <!-- ── Read-only Workflow View Modal ───────────────────────── -->
+    <div class="modal-overlay hidden" id="workflow-view-modal">
+      <div class="modal">
+        <h3 id="workflow-view-title">Workflow Definition</h3>
+        <label style="display:block;margin-bottom:6px;font-size:13px;color:var(--muted)">
+          Read-only workflow JSON definition:
+        </label>
+        <textarea class="json-editor" id="workflow-view-json" spellcheck="false" readonly></textarea>
+        <div class="modal-actions">
+          <button class="btn btn-primary" onclick="closeModal('workflow-view-modal')">Close</button>
+        </div>
+      </div>
+    </div>
+
     <!-- ── Run Workflow Modal ──────────────────────────────────── -->
     <div class="modal-overlay hidden" id="run-modal">
       <div class="modal">
