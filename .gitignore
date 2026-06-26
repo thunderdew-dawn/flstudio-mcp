@@ -39,3 +39,5 @@ htmlcov/
 
 # Bridge runtime data (don't commit the queue)
 fls_pilot_bridge/
+
+scratch/
