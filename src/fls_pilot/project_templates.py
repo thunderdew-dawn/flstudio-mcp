@@ -40,6 +40,32 @@ _POLICY_KEYS = {
     "suppress_offcenter_bass",
     "suppress_layering_warning_without_audio",
 }
+GENERIC_NAME_WEIGHT = 0.25
+MIN_PROFILE_SCORE_GAP_RATIO = 0.15
+MIN_PROFILE_SCORE_GAP_POINTS = 20.0
+MIN_CHANNEL_MATCH_RATIO = 0.60
+_GENERIC_TEMPLATE_NAMES = {
+    "kick",
+    "snare",
+    "clap",
+    "hat",
+    "hats",
+    "hi hat",
+    "hi hats",
+    "cymbal",
+    "cymbals",
+    "sub",
+    "bass",
+    "perc",
+    "percs",
+    "drum",
+    "drums",
+    "vocal",
+    "vocals",
+    "lead",
+    "pad",
+    "fx",
+}
 
 
 def classify_topology(
@@ -73,7 +99,9 @@ def classify_topology(
     matches.sort(
         key=lambda match: (
             match["score"],
+            match["channel_match_ratio"],
             match["channel_matches"],
+            match["specific_source_name_matches"],
             match["source_name_matches"],
             match["route_matches"],
             match["placeholder_matches"],
@@ -81,18 +109,9 @@ def classify_topology(
         reverse=True,
     )
     best = matches[0]
-    tied = [
-        match
-        for match in matches
-        if (
-            match["score"] == best["score"]
-            and match["channel_matches"] == best["channel_matches"]
-            and match["source_name_matches"] == best["source_name_matches"]
-            and match["route_matches"] == best["route_matches"]
-            and match["placeholder_matches"] == best["placeholder_matches"]
-        )
-    ]
-    context = _context_from_match(best, tied, name_by, route_by)
+    candidates = _ambiguous_candidates(best, matches)
+    reason = _ambiguity_reason(best, candidates)
+    context = _context_from_match(best, candidates, name_by, route_by, ambiguity_reason=reason)
     if channel_rows is not None:
         context["channel_summary"] = _channel_summary(channel_rows, context)
     return context
@@ -174,6 +193,7 @@ def compact_context(template_context: Mapping[str, Any]) -> dict[str, Any] | Non
         "template_slug": template_context.get("template_slug"),
         "confidence_level": template_context.get("confidence_level"),
         "ambiguous": bool(template_context.get("ambiguous")),
+        "ambiguity_reason": template_context.get("ambiguity_reason"),
         "candidate_templates": list(template_context.get("candidate_templates") or []),
         "candidate_slugs": list(template_context.get("candidate_slugs") or []),
         "summary": summary,
@@ -227,6 +247,8 @@ def is_template_control_route(
     level: Any = None,
 ) -> bool:
     """Whether a route is a known non-audio/control route in a matched template."""
+    if template_context.get("ambiguous"):
+        return False
     if src is None or dst is None:
         return False
     src_i = int(src)
@@ -271,8 +293,11 @@ def _score_profile(
     ]
 
     source_name_matches = _name_matches(source_named, name_by)
+    source_name_points = _name_match_points(source_named, name_by)
+    specific_source_name_matches = _specific_name_matches(source_named, name_by)
     anchor_name_matches = _name_matches(anchor_named, name_by)
     all_name_matches = _name_matches(non_reserved, name_by)
+    all_name_points = _name_match_points(non_reserved, name_by)
 
     required_routes = profile.get("template_detection", {}).get("required_routes") or []
     route_matches = 0
@@ -284,6 +309,12 @@ def _score_profile(
             route_matches += 1
 
     channel_total, channel_matches = _channel_matches(profile, channel_by or {})
+    channel_match_ratio = (
+        channel_matches / channel_total if channel_total and channel_by else 1.0
+    )
+    channel_gate_ok = (
+        channel_match_ratio >= MIN_CHANNEL_MATCH_RATIO if channel_total and channel_by else True
+    )
     placeholder_matches = _placeholder_matches(profile, name_by, route_by)
     min_placeholders = (
         _as_int(profile.get("template_detection", {}).get("reserved_placeholder_min_count")) or 0
@@ -292,21 +323,31 @@ def _score_profile(
     anchor_total = max(1, len(anchor_named))
     route_total = max(1, len(required_routes))
     source_total = max(1, len(source_named))
-    source_required = max(1, min(source_total, int(source_total * 0.75)))
     anchor_required = max(3, min(anchor_total, int(anchor_total * 0.75)))
     route_required = max(3, min(route_total, int(route_total * 0.75)))
+    structural_evidence_ok = (
+        bool(channel_by)
+        and channel_total > 0
+        and channel_gate_ok
+        and route_matches >= route_required
+        and placeholder_ok
+    )
+    source_required_ratio = 0.40 if structural_evidence_ok else 0.45
+    source_required = max(3.0, min(float(source_total), source_total * source_required_ratio))
     matched = (
         anchor_name_matches >= anchor_required
         and route_matches >= route_required
-        and source_name_matches >= source_required
+        and source_name_points >= source_required
+        and channel_gate_ok
         and placeholder_ok
     )
     score = (
         anchor_name_matches * 12
-        + route_matches * 8
-        + source_name_matches * 10
+        + route_matches * 10
+        + source_name_points * 10
+        + specific_source_name_matches * 3
         + channel_matches * 20
-        + all_name_matches
+        + all_name_points
         + min(placeholder_matches, 20)
     )
     return {
@@ -315,25 +356,99 @@ def _score_profile(
         "profile": profile,
         "anchor_name_matches": anchor_name_matches,
         "source_name_matches": source_name_matches,
+        "source_name_points": source_name_points,
+        "specific_source_name_matches": specific_source_name_matches,
         "all_name_matches": all_name_matches,
         "route_matches": route_matches,
         "channel_matches": channel_matches,
         "channel_total": channel_total,
+        "channel_match_ratio": channel_match_ratio,
+        "channel_gate_ok": channel_gate_ok,
         "placeholder_matches": placeholder_matches,
         "profile_track_count": len(profile_tracks),
     }
 
 
+def _ambiguous_candidates(
+    best: Mapping[str, Any],
+    matches: list[Mapping[str, Any]],
+) -> list[Mapping[str, Any]]:
+    candidates: list[Mapping[str, Any]] = []
+    for match in matches:
+        if match is best or _same_profile_evidence(best, match) or _scores_too_close(best, match):
+            candidates.append(match)
+    return candidates
+
+
+def _same_profile_evidence(a: Mapping[str, Any], b: Mapping[str, Any]) -> bool:
+    return (
+        a["score"] == b["score"]
+        and a["channel_matches"] == b["channel_matches"]
+        and a["specific_source_name_matches"] == b["specific_source_name_matches"]
+        and a["source_name_matches"] == b["source_name_matches"]
+        and a["route_matches"] == b["route_matches"]
+        and a["placeholder_matches"] == b["placeholder_matches"]
+    )
+
+
+def _scores_too_close(best: Mapping[str, Any], candidate: Mapping[str, Any]) -> bool:
+    if candidate is best:
+        return True
+    best_score = float(best.get("score") or 0.0)
+    candidate_score = float(candidate.get("score") or 0.0)
+    if best_score <= 0:
+        return False
+    gap = best_score - candidate_score
+    if gap < 0:
+        return False
+    threshold = max(MIN_PROFILE_SCORE_GAP_POINTS, best_score * MIN_PROFILE_SCORE_GAP_RATIO)
+    if _has_clear_profile_lead(best, candidate):
+        return False
+    return gap < threshold
+
+
+def _has_clear_profile_lead(best: Mapping[str, Any], candidate: Mapping[str, Any]) -> bool:
+    channel_gap = int(best.get("channel_matches") or 0) - int(
+        candidate.get("channel_matches") or 0
+    )
+    channel_ratio_gap = float(best.get("channel_match_ratio") or 0.0) - float(
+        candidate.get("channel_match_ratio") or 0.0
+    )
+    specific_name_gap = int(best.get("specific_source_name_matches") or 0) - int(
+        candidate.get("specific_source_name_matches") or 0
+    )
+    route_gap = int(best.get("route_matches") or 0) - int(candidate.get("route_matches") or 0)
+    return (
+        channel_gap >= 2
+        or (channel_ratio_gap >= 0.10 and specific_name_gap >= 2)
+        or (route_gap >= 2 and specific_name_gap >= 2)
+    )
+
+
+def _ambiguity_reason(
+    best: Mapping[str, Any],
+    candidates: list[Mapping[str, Any]],
+) -> str | None:
+    if len(candidates) <= 1:
+        return None
+    if any(not _same_profile_evidence(best, candidate) for candidate in candidates[1:]):
+        return "profile_scores_too_close"
+    return "profile_scores_tied"
+
+
 def _context_from_match(
     best: Mapping[str, Any],
-    tied: Iterable[Mapping[str, Any]],
+    candidates: Iterable[Mapping[str, Any]],
     name_by: Mapping[int, str],
     route_by: Mapping[int, list],
+    *,
+    ambiguity_reason: str | None = None,
 ) -> dict[str, Any]:
     profile = best["profile"]
-    tied_profiles = [match["profile"] for match in tied]
-    candidate_names = _unique_values(p.get("template_name") for p in tied_profiles)
-    candidate_slugs = _unique_values(p.get("template_slug") for p in tied_profiles)
+    candidate_matches = list(candidates)
+    candidate_profiles = [match["profile"] for match in candidate_matches]
+    candidate_names = _unique_values(p.get("template_name") for p in candidate_profiles)
+    candidate_slugs = _unique_values(p.get("template_slug") for p in candidate_profiles)
     roles = _track_roles_from_profile(profile, name_by, route_by)
     role_counts: dict[str, int] = {}
     for row in roles.values():
@@ -365,10 +480,12 @@ def _context_from_match(
             "Multiple template profiles share this mixer topology; exact template "
             "name is ambiguous from mixer/routing/channel readbacks alone."
         )
+    if ambiguity_reason == "profile_scores_too_close":
+        notes.append("Template profile scores are too close for confident suppression.")
 
     kb_refs = [
         str(profile.get("_profile_path"))
-        for profile in tied_profiles
+        for profile in candidate_profiles
         if profile.get("_profile_path")
     ]
     if profile.get("template_name") == ELECTRO_TEMPLATE_NAME:
@@ -382,6 +499,7 @@ def _context_from_match(
         "ambiguous": ambiguous,
         "candidate_templates": candidate_names,
         "candidate_slugs": candidate_slugs,
+        "ambiguity_reason": ambiguity_reason if ambiguous else None,
         "track_roles": roles,
         "known_control_routes": list(profile.get("known_control_routes") or []),
         "summary": summary,
@@ -390,12 +508,53 @@ def _context_from_match(
             "score": best["score"],
             "anchor_name_matches": best["anchor_name_matches"],
             "source_name_matches": best["source_name_matches"],
+            "source_name_points": best["source_name_points"],
+            "specific_source_name_matches": best["specific_source_name_matches"],
             "route_matches": best["route_matches"],
             "channel_matches": best["channel_matches"],
+            "channel_total": best["channel_total"],
+            "channel_match_ratio": best["channel_match_ratio"],
             "placeholder_matches": best["placeholder_matches"],
+            "score_gap": _score_gap(candidate_matches),
+            "score_gap_ratio": _score_gap_ratio(candidate_matches),
+            "candidate_scores": _candidate_score_rows(candidate_matches),
         },
         "kb_refs": _unique_values(kb_refs),
     }
+
+
+def _candidate_score_rows(candidates: list[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        {
+            "template_name": match["profile"].get("template_name"),
+            "template_slug": match["profile"].get("template_slug"),
+            "score": match["score"],
+            "channel_matches": match["channel_matches"],
+            "channel_total": match["channel_total"],
+            "source_name_matches": match["source_name_matches"],
+            "source_name_points": match["source_name_points"],
+            "specific_source_name_matches": match["specific_source_name_matches"],
+            "route_matches": match["route_matches"],
+            "placeholder_matches": match["placeholder_matches"],
+        }
+        for match in candidates
+    ]
+
+
+def _score_gap(candidates: list[Mapping[str, Any]]) -> float | None:
+    if len(candidates) < 2:
+        return None
+    return float(candidates[0].get("score") or 0.0) - float(candidates[1].get("score") or 0.0)
+
+
+def _score_gap_ratio(candidates: list[Mapping[str, Any]]) -> float | None:
+    if len(candidates) < 2:
+        return None
+    best = float(candidates[0].get("score") or 0.0)
+    if best <= 0:
+        return None
+    gap = _score_gap(candidates)
+    return None if gap is None else gap / best
 
 
 def _track_roles_from_profile(
@@ -513,6 +672,52 @@ def _name_matches(profile_tracks: Iterable[Mapping[str, Any]], name_by: Mapping[
     return matches
 
 
+def _name_match_points(
+    profile_tracks: Iterable[Mapping[str, Any]],
+    name_by: Mapping[int, str],
+) -> float:
+    points = 0.0
+    for row in profile_tracks:
+        idx = _as_int(row.get("index"))
+        name = str(row.get("name") or "")
+        if idx is not None and name_by.get(idx) == name:
+            points += _specific_name_weight(name)
+    return points
+
+
+def _specific_name_matches(
+    profile_tracks: Iterable[Mapping[str, Any]],
+    name_by: Mapping[int, str],
+) -> int:
+    matches = 0
+    for row in profile_tracks:
+        idx = _as_int(row.get("index"))
+        name = str(row.get("name") or "")
+        if idx is not None and name_by.get(idx) == name and not _is_generic_template_name(name):
+            matches += 1
+    return matches
+
+
+def _specific_name_weight(name: Any) -> float:
+    if _DEFAULT_INSERT_RE.match(str(name or "")):
+        return 0.0
+    return GENERIC_NAME_WEIGHT if _is_generic_template_name(name) else 1.0
+
+
+def _is_generic_template_name(name: Any) -> bool:
+    normalized = _normalized_template_name(name)
+    if not normalized:
+        return True
+    return normalized in _GENERIC_TEMPLATE_NAMES
+
+
+def _normalized_template_name(name: Any) -> str:
+    value = str(name or "").lower()
+    value = re.sub(r"\b\d+\b", " ", value)
+    value = re.sub(r"[^a-z]+", " ", value)
+    return re.sub(r"\s+", " ", value).strip()
+
+
 def _channel_matches(
     profile: Mapping[str, Any],
     channel_by: Mapping[int, Mapping[str, Any]],
@@ -609,6 +814,8 @@ def _is_default_insert_name(index: int, name: str | None) -> bool:
 
 
 def _roles(template_context: Mapping[str, Any]) -> dict[int, Mapping[str, Any]]:
+    if template_context.get("ambiguous"):
+        return {}
     raw = template_context.get("track_roles") or {}
     out: dict[int, Mapping[str, Any]] = {}
     for key, value in raw.items():

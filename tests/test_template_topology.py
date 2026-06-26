@@ -180,6 +180,19 @@ def test_profile_policies_preserve_template_structure(profile_path: Path) -> Non
     reserved = profile["reserved_ranges"][0]
     first_reserved = reserved["from"]
 
+    if context["ambiguous"]:
+        assert templates.role_for(context, first_reserved) is None
+        assert templates.suppresses(context, first_reserved, "suppress_unused_track") is False
+        for route in profile.get("known_control_routes", []):
+            for target in route["targets"]:
+                assert (
+                    templates.is_template_control_route(
+                        context, route["source"], target, route.get("level")
+                    )
+                    is False
+                )
+        return
+
     assert templates.role_for(context, first_reserved) == templates.ROLE_RESERVED_PLACEHOLDER
     assert templates.suppresses(context, first_reserved, "suppress_unused_track") is True
     for route in profile.get("known_control_routes", []):
@@ -222,9 +235,13 @@ def test_cleanup_preserves_profile_reserved_placeholders(monkeypatch, profile_pa
     monkeypatch.setattr(routing, "fetch_all_pages", fake_fetch)
     result = routing.detect_cleanup(_CleanupBridge(), max_plugin_checks=140)
     unused = {row["track"] for row in result["unused_mixer_tracks"]}
+    context = result["template_context"]
 
-    assert not (reserved_tracks & unused)
-    assert result["template_context"]["template_name"] is not None
+    if context["ambiguous"]:
+        assert reserved_tracks & unused
+    else:
+        assert not (reserved_tracks & unused)
+    assert context["template_name"] is not None
 
 
 def test_electro_topology_classifier_marks_reserved_placeholders() -> None:
