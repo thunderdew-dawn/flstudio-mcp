@@ -15,8 +15,9 @@ flowchart TD
     Client[AI Client] --> FastMCP[FastMCP Server]
     
     subgraph fls-pilot process
-        FastMCP --> Surface[MCP Tool Surface]
-        Surface --> Registry[Operation Registry]
+        FastMCP --> Surface[MCP Resources, Prompts, Tools]
+        Surface --> Runtime[Runtime, Analysis, Workflow Layer]
+        Runtime --> Registry[Operation Registry]
         Registry --> Safety[Safety & Rollback Layer]
         Safety --> Bridge[Bridge Client]
     end
@@ -52,6 +53,24 @@ resources, and prompts. Public surface changes are architecture-governed.
 High-level tools are preferred over raw protocol-shaped wrappers. Registration
 is centralized in `src/fls_pilot/server.py` and checked by
 `scripts/check_tool_registration_baseline.py`.
+
+### Product Workflow Registry
+
+`src/fls_pilot/workflows/registry.py` owns product and Runtime workflow
+declarations: workflow identity, status, kind, requirements, Control Center
+panel ids, API endpoints, health inclusion policy, safety notes, and supported
+or manual-only next actions. Treat it as the source of truth for Runtime
+catalogs, Control Center panels, workflow APIs, Product Health aggregation, and
+metadata-only pack extensions.
+
+### Agent Workflow Context Registry
+
+`src/fls_pilot/tools/workflow_context.py` owns agent-facing workflow guidance
+for prompts and the read-only `fl_get_workflow_context` tool: resources to
+read, recommended tools, approval-sensitive tools, stop rules, and hard limits.
+It is the source of truth for prompt/resource/tool guidance, not for product
+workflow status, API endpoints, Control Center ownership, or report
+requirements.
 
 ### Operation Registry
 
@@ -96,6 +115,27 @@ workflow state.
 storage. `src/fls_pilot/analysis/` owns observation collection, canonical
 entities, evidence modes, scoring, freshness, report schemas, audio features,
 and project-scoped evidence links.
+
+Runtime-owned state includes observations, workflow runs, reports, durable
+jobs, artifact references, freshness, and invalidation. Control Center panels
+and MCP workflows consume this Runtime-owned state instead of creating private
+workflow state.
+
+### Local Packs And Rules
+
+`src/fls_pilot/packs/` validates local data-only pack manifests and enablement
+state. Pack metadata can extend known workflow declarations but must not load
+dynamic code or create new execution paths. `src/fls_pilot/rules/` contains
+declarative analysis rules used by the analysis Runtime.
+
+### Offline Audio Evidence
+
+User-provided or manually bounced audio files enter through the Runtime audio
+worker, not the FL bridge. The worker extracts bounded feature summaries,
+publishes immutable artifacts under the audio artifact store, and links
+compatible artifacts back to workflow reports through project-scoped evidence
+links. This path never renders from FL Studio and never modifies source audio
+or FL Studio projects.
 
 ### Knowledgebase
 
@@ -155,7 +195,10 @@ human-approval STOP rule.
 - Protocol commands: `src/fls_pilot/protocol.py`
 - Controller handlers: `fl_controller/FLStudioPilot/device_FLStudioPilot.py`
 - Runtime ownership: `src/fls_pilot/runtime/`
-- Workflow declarations: `src/fls_pilot/workflows/registry.py`
+- Product workflow registry, catalog, API/UI truth:
+  `src/fls_pilot/workflows/registry.py`
+- Agent workflow context, prompt/resource/tool guidance:
+  `src/fls_pilot/tools/workflow_context.py`
 - Analysis contract: `agent-docs/concepts/analysis-workflow-contract.md`
 - Analysis report versioning:
   `agent-docs/contracts/report-versioning.md`

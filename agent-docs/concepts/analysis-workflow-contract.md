@@ -32,6 +32,20 @@ Runtime reports, or infer current FL Studio state from static source files.
 Static source can explain implementation only; current evidence must come from
 the Runtime/MCP path.
 
+## Workflow Identity Vs Agent-Facing Workflow Context
+
+There are two workflow registries with different ownership:
+
+| Registry | Owns | Must not own |
+|---|---|---|
+| `src/fls_pilot/workflows/registry.py` | Product and Runtime workflow declarations: canonical ids, status, requirements, report expectations, Control Center panels, API endpoints, health inclusion, safety notes, supported/manual/forbidden actions. | Prompt-specific tool-selection hints or dialogue sequencing. |
+| `src/fls_pilot/tools/workflow_context.py` | Agent-facing guidance for prompts and `fl_get_workflow_context`: resources to read, recommended tools, approval-sensitive tools, stop rules, and unsupported actions. | Product status, Control Center catalog truth, workflow API endpoints, or report contract requirements. |
+
+When these files mention "source of truth", read it within that scope. Product
+workflow identity and UI/API availability come from the product workflow
+registry. Agent orientation and prompt/tool guidance come from the workflow
+context registry.
+
 ## Agent Dialogue Contract
 
 AI-facing workflows must behave as structured diagnostic conversations, not as

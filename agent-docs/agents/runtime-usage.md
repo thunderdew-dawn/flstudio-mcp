@@ -36,7 +36,7 @@ architecture work.
 | Channel, mixer, pattern, playlist | Consolidated domain tool | Matching capped resource |
 | Effect or loaded-plugin parameters | `fl_effect`, `fl_plugin` | Parameter read plus Knowledgebase |
 | Piano Roll | `fl_piano_roll` | Readback-limit or dry-run guidance |
-| Audio file analysis | `fl_analyze_audio`, `fl_extract_melody` | Validate the source path first |
+| Audio file analysis | `fl_audio_analysis`, `fl_extract_melody` | Use Runtime jobs for core features; validate the source path first |
 | MIDI export | `fl_export_midi` | Validate the arrangement spec first |
 | Values and mappings | Knowledgebase tools | `kb_search`, then a specific `kb_get` |
 

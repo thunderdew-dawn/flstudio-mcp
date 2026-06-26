@@ -1,6 +1,7 @@
-"""Shared workflow registry and read-only fl_get_workflow_context tool.
+"""Agent-facing workflow guidance and read-only fl_get_workflow_context tool.
 
-The ``WORKFLOW_REGISTRY`` dict is the single source of truth for:
+The ``WORKFLOW_REGISTRY`` dict is the single source of truth for agent
+workflow guidance:
 - which resources an agent should read for a given workflow,
 - which tools the agent may call,
 - which tools require explicit user approval before execution,
@@ -15,7 +16,7 @@ from __future__ import annotations
 from fastmcp import FastMCP
 
 # ---------------------------------------------------------------------------
-# Single-source workflow registry
+# Agent-facing workflow guidance registry
 # ---------------------------------------------------------------------------
 
 WORKFLOW_REGISTRY: dict[str, dict] = {

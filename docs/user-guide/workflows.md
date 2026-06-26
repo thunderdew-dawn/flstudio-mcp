@@ -5,15 +5,38 @@ fls-pilot is designed around producer workflows rather than one-off API calls.
 The safe default is read-only diagnosis first, then one explicit reversible
 change only after approval.
 
+## Analysis Workflows And Evidence
+
+Project Review workflows such as Mix Review, Low-End Analysis, Routing Audit,
+Project Organizer, Preflight, and Audio Evidence produce shared analysis
+reports instead of private one-off results. Reports carry findings, coverage,
+freshness, assumptions, limitations, proposed changes, applied changes, and
+safety metadata so MCP clients and Control Center panels can reason about the
+same evidence.
+
+Evidence modes are shown explicitly:
+
+| Mode | User meaning |
+|---|---|
+| Static snapshot | Current FL Studio metadata such as names, mixer controls, routing, plugins, patterns, and playlist track metadata. |
+| Live runtime | Current playback or meter data, such as peaks captured while the project plays. |
+| Rendered audio | User-provided or manually bounced audio files analyzed outside FL Studio. |
+| Manual check | A human step is required because the FL API cannot prove the fact. |
+| Hybrid | The report intentionally combines more than one evidence mode. |
+
+Active workflows are available in the current v3 runtime and Control Center.
+Planned workflows can appear in catalogs as roadmap items, but they do not
+imply an automated action is available.
+
 ## How it Works: 8 Production Phases
 
 FL Studio's Python API is useful but has strict boundaries. This project combines safe controller calls, local file analysis, generated Piano Roll scripts, and a snapshot/rollback safety layer. The summary below explains what is automated and where FL Studio still requires manual action.
 
 ### Phase 1: Ideation & Composition (Notes & Audio)
 
-**Audio Analysis (`fl_analyze_audio`, `fl_extract_melody`)**
+**Audio Analysis (`fl_audio_analysis`, `fl_extract_melody`)**
 - **The Limitation:** FL Studio's API cannot read or analyze audio files.
-- **How it works:** These tools read `.wav` or `.mp3` files directly from disk and analyze them with Python libraries such as CREPE when the optional accurate audio extras are installed.
+- **How it works:** `fl_audio_analysis` submits daemon-owned Runtime jobs for user-provided `.wav` or `.mp3` files, publishes compact audio feature artifacts, and powers the Control Center `/api/audio-analysis` path. `fl_extract_melody` remains available for monophonic melody-to-MIDI extraction and can use CREPE when the optional accurate audio extras are installed.
 
 **Piano Roll & Scales (`fl_piano_roll`, `fl_scale_get`)**
 - **The Limitation:** The API does not allow external programs to arbitrarily push notes directly into the Piano Roll at runtime.

@@ -8,6 +8,11 @@ project, and shows the ports and MCP snippets your client should use.
 
 ![Control Center setup overview](assets/control-center-setup-overview.png)
 
+Control Center is a UI over the local Runtime. It displays runtime status,
+daemon and SSE state, MCP client snippets, the workflow catalog, workflow runs,
+analysis reports, safety state, and long-running Runtime jobs such as audio
+analysis. It consumes the same workflow/report contracts that MCP clients use.
+
 ## Guided Setup
 
 Use the guided setup before connecting an MCP client or starting write-capable
@@ -58,3 +63,14 @@ names, colors, and cleanup candidates.
 ![Routing Audit panel](assets/control-center-routing-audit.png)
 
 ![Project Organizer panel](assets/control-center-project-organizer.png)
+
+Project review panels show Runtime reports with their available evidence,
+freshness, coverage, assumptions, and limitations. Static project metadata can
+flag suspicious mix or routing conditions, but audio-backed claims require live
+meter capture or a linked rendered audio artifact. The Audio Evidence workflow
+uses `/api/audio-analysis` to run offline analysis of user-selected files
+without modifying FL Studio projects or source audio.
+
+Workflow actions remain safety-gated. Cleanup or write-capable follow-ups must
+start with a read-only scan, propose one reversible action, wait for explicit
+approval, read back supported state, and report rollback details.
