@@ -266,7 +266,8 @@
         "read-only routing diagnosis and planning",
         "do not alter sends/routes or names",
         "include explicit approval gate for any later cleanup batch",
-        "never propose routing Master as a normal source target"
+        "never propose routing Master as a normal source target",
+        "do not suppress cleanup findings when template profile classification is ambiguous"
       ],
       "not_expected_tools": [
         "fl_apply_routing_cleanup",
@@ -276,7 +277,8 @@
       ],
       "success_criteria": [
         "assistant separates route findings from rollback-safe proposed actions",
-        "cleanup plan references supported routing tools only"
+        "cleanup plan references supported routing tools only",
+        "assistant treats ambiguous template profile matches as validation-needed rather than cleanup-safe suppressions"
       ]
     },
     {
