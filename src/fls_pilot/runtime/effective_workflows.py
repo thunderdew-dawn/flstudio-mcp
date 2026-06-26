@@ -4,8 +4,7 @@ import logging
 from typing import Any
 
 from ..workflow_identity import is_custom_workflow_id, normalize_workflow_id
-from ..workflows.registry import WorkflowDeclaration, WorkflowRegistry
-from .workflow_models import WorkflowDefinition
+from ..workflows.registry import WorkflowRegistry
 from .workflow_store import WorkflowStore
 
 logger = logging.getLogger(__name__)
