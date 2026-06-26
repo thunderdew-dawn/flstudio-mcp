@@ -1,0 +1,38 @@
+from __future__ import annotations
+
+from fls_pilot import control_center
+
+
+def test_project_organizer_marks_cleanup_heuristics_provisional() -> None:
+    payload = control_center._build_project_organizer_report(
+        channels=[
+            {
+                "channel": 1,
+                "name": "Channel 1",
+                "type": {"label": "genplug"},
+                "target_mixer_track": 0,
+                "target_name": "Master",
+            }
+        ],
+        mixer_tracks=[{"i": 0, "name": "Master", "routes_to": []}],
+        patterns=[],
+        playlist_tracks=[],
+        routing=[{"i": 0, "name": "Master", "routes_to": []}],
+        template_context={},
+    )
+    report = control_center._generic_analysis_report_from_legacy(
+        payload,
+        "project_organizer",
+        "Organizer",
+    ).to_dict()
+
+    unnamed = next(row for row in report["findings"] if row["id"] == "unnamed_channels")
+    routing = next(row for row in report["findings"] if row["id"] == "routing_cleanup")
+
+    assert payload["interaction_requests"][0]["id"] == "organizer.confirm_cleanup_heuristics"
+    assert payload["cleanup_plan"]["blocked_until_human_validation"] is True
+    assert payload["cleanup_plan"]["steps"][0]["blocked_until_human_validation"] is True
+    assert unnamed["metadata"]["evidence_type"] == "name_based_detection"
+    assert routing["metadata"]["evidence_type"] == "routing_based_detection"
+    assert report["metadata"]["score_status"] == "provisional"
+    assert report["metadata"]["blocked_fix_plan_until_confirmed"] is True

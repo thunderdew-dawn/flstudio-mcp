@@ -95,6 +95,13 @@ def test_fl_review_routing_returns_canonical_report_and_ui_lists(monkeypatch):
     assert result["coverage"]["status"] == "fresh"
     assert result["metadata"]["legacy_routing_review"]["unrouted_channels"]
     assert result["findings"][0]["entities"][0]["canonical_id"] == "channel:2"
+    direct = next(
+        row for row in result["findings"] if row["rule_id"] == "routing.generators_direct_to_master"
+    )
+    assert direct["metadata"]["evidence_type"] == "routing_based_detection"
+    assert direct["metadata"]["human_validation_required"] is True
+    assert result["interaction_requests"][0]["id"] == "routing.confirm_cleanup_heuristics"
+    assert result["metadata"]["score_status"] == "provisional"
 
 
 def test_fl_plan_routing_cleanup_returns_workflow_report():

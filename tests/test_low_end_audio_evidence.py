@@ -51,6 +51,11 @@ def test_low_end_report_keeps_proxy_labeling(tmp_path) -> None:
         assert report["ruleset_id"] == "core.low-end.metadata"
         assert report["ruleset_version"] == "1.0.0"
         assert report["profile_id"] == "default"
+        assert report["metadata"]["evidence_level"] == 2
+        assert report["metadata"]["evidence_level_label"] == "rendered_master_audio"
+        assert report["metadata"]["audio_evidence_status"] == "available"
+        assert report["metadata"]["automatic_fl_render"] is False
+        assert report["metadata"]["evidence_level_4"]["status"] == "planned"
     finally:
         runtime.close()
 
@@ -82,6 +87,44 @@ def test_low_end_declarative_rule_failure_does_not_crash(monkeypatch) -> None:
     assert report.findings == ()
     assert report.metadata["rule_evaluation_errors"] == ["ValueError: bad rule"]
     assert "rules were skipped" in " ".join(report.limitations)
+
+
+def test_low_end_name_based_detection_requests_human_validation() -> None:
+    report = control_center._build_low_end_analysis_report(
+        {
+            "ok": True,
+            "workflow": "low_end_analysis",
+            "title": "Low-End Analysis",
+            "evidence_mode": "static_snapshot_only",
+            "summary": {"levels_valid": False},
+            "details": {
+                "low_end": {
+                    "tracks": [{"track": 2, "name": "Sub Bass", "pan": 0.4}],
+                    "findings": [
+                        {
+                            "id": "low_end_off_center_1",
+                            "severity": "medium",
+                            "rule": "low_end_off_center",
+                            "title": "Low-End Pan Risk",
+                            "track": "Sub Bass",
+                            "evidence": "pan +0.40",
+                        }
+                    ],
+                }
+            },
+        }
+    )
+
+    payload = report.to_dict()
+    finding = payload["findings"][0]
+
+    assert payload["interaction_requests"][0]["id"] == "low_end.confirm_detected_tracks"
+    assert payload["interaction_requests"][0]["type"] == "multi_select"
+    assert finding["metadata"]["evidence_type"] == "name_based_detection"
+    assert finding["metadata"]["human_validation_required"] is True
+    assert finding["metadata"]["interaction_request_id"] == "low_end.confirm_detected_tracks"
+    assert payload["metadata"]["score_status"] == "provisional"
+    assert payload["metadata"]["blocked_fix_plan_until_confirmed"] is True
 
 
 def test_low_end_report_can_represent_manual_audio_task() -> None:

@@ -22,6 +22,32 @@ ANALYSIS_MODES = {
     "manual_check",
     "hybrid",
 }
+EVIDENCE_TYPE_NAME_BASED_DETECTION = "name_based_detection"
+EVIDENCE_TYPE_ROUTING_BASED_DETECTION = "routing_based_detection"
+EVIDENCE_TYPE_PLUGIN_NAME_BASED_DETECTION = "plugin_name_based_detection"
+EVIDENCE_TYPE_TEMPLATE_PROFILE_DETECTION = "template_profile_detection"
+EVIDENCE_TYPE_STATIC_SNAPSHOT = "static_snapshot"
+EVIDENCE_TYPE_LIVE_METER_WINDOW = "live_meter_window"
+EVIDENCE_TYPE_RENDERED_AUDIO = "rendered_audio"
+EVIDENCE_TYPE_MANUAL_CHECK = "manual_check"
+EVIDENCE_TYPE_HYBRID = "hybrid"
+EVIDENCE_TYPES = frozenset(
+    {
+        EVIDENCE_TYPE_NAME_BASED_DETECTION,
+        EVIDENCE_TYPE_ROUTING_BASED_DETECTION,
+        EVIDENCE_TYPE_PLUGIN_NAME_BASED_DETECTION,
+        EVIDENCE_TYPE_TEMPLATE_PROFILE_DETECTION,
+        EVIDENCE_TYPE_STATIC_SNAPSHOT,
+        EVIDENCE_TYPE_LIVE_METER_WINDOW,
+        EVIDENCE_TYPE_RENDERED_AUDIO,
+        EVIDENCE_TYPE_MANUAL_CHECK,
+        EVIDENCE_TYPE_HYBRID,
+    }
+)
+CONFIDENCE_BASIS_HEURISTIC = "heuristic"
+SCORE_POLICY_DOWNWEIGHT_OR_EXCLUDE_UNTIL_CONFIRMED = (
+    "downweight_or_exclude_until_confirmed"
+)
 PREREQUISITE_STATUSES = {"ok", "missing", "unavailable", "skipped", "unknown"}
 SEVERITIES = {"ok", "info", "low", "medium", "high", "critical", "warning", "error"}
 
@@ -49,6 +75,103 @@ def _compact(value: Any) -> Any:
     if isinstance(value, (list, tuple)):
         return [_compact(v) for v in value if v is not None]
     return value
+
+
+def evidence_metadata(
+    evidence_type: str,
+    *,
+    confidence_basis: str | None = None,
+    **extra: Any,
+) -> dict[str, Any]:
+    """Build stable Finding.metadata evidence markers."""
+    normalized = str(evidence_type or "").strip().lower()
+    if normalized not in EVIDENCE_TYPES:
+        raise ValueError(f"invalid evidence_type: {evidence_type!r}")
+    metadata: dict[str, Any] = {"evidence_type": normalized}
+    if confidence_basis:
+        metadata["confidence_basis"] = str(confidence_basis)
+    metadata.update({str(key): value for key, value in extra.items() if value is not None})
+    return metadata
+
+
+def heuristic_validation_metadata(
+    *,
+    evidence_type: str,
+    interaction_request_id: str,
+    provisional: bool = True,
+    score_policy: str = SCORE_POLICY_DOWNWEIGHT_OR_EXCLUDE_UNTIL_CONFIRMED,
+    **extra: Any,
+) -> dict[str, Any]:
+    """Build metadata for heuristic findings that need human validation."""
+    request_id = str(interaction_request_id or "").strip()
+    if not request_id:
+        raise ValueError("interaction_request_id is required")
+    return evidence_metadata(
+        evidence_type,
+        confidence_basis=CONFIDENCE_BASIS_HEURISTIC,
+        human_validation_required=True,
+        interaction_request_id=request_id,
+        provisional=provisional,
+        score_policy=score_policy,
+        **extra,
+    )
+
+
+def pending_human_validation_ids(
+    rows: tuple[Any, ...] | list[Any],
+    user_decisions: tuple[dict[str, Any], ...] | list[dict[str, Any]] = (),
+) -> tuple[str, ...]:
+    """Return interaction request ids still needed for heuristic findings."""
+    decided = {
+        decision_id
+        for row in user_decisions
+        if isinstance(row, dict)
+        for decision_id in (
+            str(row.get("interaction_request_id") or "").strip(),
+            str(row.get("interaction_id") or "").strip(),
+            str(row.get("id") or "").strip(),
+        )
+        if decision_id
+    }
+    pending: list[str] = []
+    for row in rows:
+        metadata = _metadata_for_validation(row)
+        if not metadata.get("human_validation_required"):
+            continue
+        request_id = str(metadata.get("interaction_request_id") or "").strip()
+        if not request_id or request_id in decided or request_id in pending:
+            continue
+        pending.append(request_id)
+    return tuple(pending)
+
+
+def provisional_score_metadata(pending_request_ids: tuple[str, ...] | list[str]) -> dict[str, Any]:
+    """Report-level metadata for scores or plans gated by pending validation."""
+    ids = tuple(str(item) for item in pending_request_ids if str(item).strip())
+    if not ids:
+        return {
+            "score_status": "final",
+            "human_validation_required": False,
+            "blocked_fix_plan_until_confirmed": False,
+        }
+    return {
+        "score_status": "provisional",
+        "human_validation_required": True,
+        "blocked_fix_plan_until_confirmed": True,
+        "pending_interaction_request_ids": list(dict.fromkeys(ids)),
+    }
+
+
+def _metadata_for_validation(row: Any) -> dict[str, Any]:
+    if isinstance(row, Finding):
+        return dict(row.metadata)
+    if hasattr(row, "metadata"):
+        metadata = row.metadata
+        return dict(metadata) if isinstance(metadata, dict) else {}
+    if isinstance(row, dict):
+        metadata = row.get("metadata")
+        return dict(metadata) if isinstance(metadata, dict) else {}
+    return {}
 
 
 @dataclass(frozen=True)

@@ -6,7 +6,16 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from .canonical import channel_entity_id, mixer_entity_id
-from .schema import AnalysisReport, Coverage, EntityRef, Finding, Freshness, Prerequisite
+from .schema import (
+    AnalysisReport,
+    Coverage,
+    EntityRef,
+    Finding,
+    Freshness,
+    Prerequisite,
+    pending_human_validation_ids,
+    provisional_score_metadata,
+)
 from .scoring import confidence_from_coverage, risk_from_severities
 
 ROUTING_POLICY_NOTES = (
@@ -39,8 +48,33 @@ def routing_analysis_report_from_legacy_payload(
         _routing_finding(row, index=index, confidence_score=confidence)
         for index, row in enumerate(findings, start=1)
     )
+    interaction_requests = tuple(
+        dict(row)
+        for row in payload.get("interaction_requests") or ()
+        if isinstance(row, dict)
+    )
+    user_decisions = tuple(
+        dict(row)
+        for row in payload.get("user_decisions") or ()
+        if isinstance(row, dict)
+    )
+    pending_validation = pending_human_validation_ids(
+        analysis_findings,
+        user_decisions,
+    )
+    for request in interaction_requests:
+        request_id = str(request.get("id") or "").strip()
+        if request_id and request_id not in pending_validation:
+            pending_validation = (*pending_validation, request_id)
     report_created_at, valid_until = _validity_window(created_at or payload.get("generated_at"))
     source_observations = tuple(details.get("source_observation_ids") or ())
+    metadata = {
+        "routing_summary": summary,
+        "policy_notes": list(details.get("policy_notes") or ROUTING_POLICY_NOTES),
+        "template_context": details.get("template_context") or payload.get("template_context"),
+    }
+    metadata.update(dict(payload.get("metadata") or {}))
+    metadata.update(provisional_score_metadata(pending_validation))
     return AnalysisReport(
         workflow=workflow,
         title=title,
@@ -81,12 +115,10 @@ def routing_analysis_report_from_legacy_payload(
                 "label": "Plan cleanup only after reviewing the static routing evidence.",
             },
         ),
+        interaction_requests=interaction_requests,
+        user_decisions=user_decisions,
         safety={"read_only": True, "project_changes": False},
-        metadata={
-            "routing_summary": summary,
-            "policy_notes": list(details.get("policy_notes") or ROUTING_POLICY_NOTES),
-            "template_context": details.get("template_context") or payload.get("template_context"),
-        },
+        metadata=metadata,
     )
 
 
@@ -150,6 +182,7 @@ def _routing_finding(
 ) -> Finding:
     rule = str(row.get("id") or "routing_finding")
     severity = str(row.get("severity") or "info")
+    row_metadata = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
     return Finding(
         id=rule,
         rule_id=f"routing.{rule}",
@@ -167,7 +200,11 @@ def _routing_finding(
             },
         ),
         limitations=("Static routing metadata does not prove audible signal flow.",),
-        metadata={"legacy_finding_index": index, "legacy_finding": row},
+        metadata={
+            **dict(row_metadata),
+            "legacy_finding_index": index,
+            "legacy_finding": row,
+        },
     )
 
 

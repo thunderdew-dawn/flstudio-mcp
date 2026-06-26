@@ -4,6 +4,7 @@ import pytest
 
 from fls_pilot.analysis import (
     ANALYSIS_REPORT_CONTRACT_VERSION,
+    EVIDENCE_TYPE_NAME_BASED_DETECTION,
     AnalysisReport,
     Coverage,
     EntityRef,
@@ -11,6 +12,7 @@ from fls_pilot.analysis import (
     Freshness,
     Prerequisite,
     WorkflowRequirementSet,
+    heuristic_validation_metadata,
     requirement,
 )
 
@@ -98,6 +100,19 @@ def test_analysis_report_rejects_unknown_modes() -> None:
 
 
 def test_analysis_report_pack_metadata_round_trips_without_new_envelope() -> None:
+    finding = Finding(
+        id="low_end.name_role",
+        rule_id="low_end.name_role",
+        title="Name-based low-end role",
+        severity="info",
+        risk_score=2,
+        confidence_score=50,
+        evidence_mode="static_snapshot",
+        metadata=heuristic_validation_metadata(
+            evidence_type=EVIDENCE_TYPE_NAME_BASED_DETECTION,
+            interaction_request_id="low_end.confirm_detected_tracks",
+        ),
+    )
     report = AnalysisReport(
         report_id="rep_pack_metadata",
         workflow="low_end_analysis",
@@ -121,6 +136,7 @@ def test_analysis_report_pack_metadata_round_trips_without_new_envelope() -> Non
                 "selected": ["mixer:4"],
             },
         ),
+        findings=(finding,),
     )
 
     data = report.to_dict()
@@ -142,6 +158,8 @@ def test_analysis_report_pack_metadata_round_trips_without_new_envelope() -> Non
     assert restored.profile_id == report.profile_id
     assert restored.interaction_requests == report.interaction_requests
     assert restored.user_decisions == report.user_decisions
+    assert restored.findings[0].metadata["evidence_type"] == "name_based_detection"
+    assert restored.findings[0].metadata["human_validation_required"] is True
 
 
 def test_analysis_report_without_pack_metadata_still_loads() -> None:

@@ -5,10 +5,18 @@ from __future__ import annotations
 import threading
 from typing import Any
 
+from ..analysis import EVIDENCE_TYPE_RENDERED_AUDIO
 from ..analysis.reports import analysis_report_for_control_center
 from ..analysis.schema import AnalysisReport, Coverage, Finding, Freshness, Prerequisite
 from ..analysis.scoring import confidence_from_coverage, risk_from_severities
 from .core import RuntimeCore
+
+EVIDENCE_LEVEL_LABELS = {
+    1: "static_project_snapshot",
+    2: "rendered_master_audio",
+    3: "rendered_master_and_stems",
+    4: "full_song_all_channels",
+}
 
 
 class _WorkflowState:
@@ -110,10 +118,13 @@ def _apply_audio_evidence(
         findings.append(_audio_finding(workflow_id, summary, master.observation_id))
         metadata["rendered_audio_evidence"] = {
             "level": evidence_level,
+            "level_label": EVIDENCE_LEVEL_LABELS[evidence_level],
+            "status": "available",
             "master": master_payload,
             "stems": [
                 dict(row.payload) for row in stems if isinstance(row.payload, dict)
             ],
+            "automatic_fl_render": False,
         }
     else:
         next_actions.insert(
@@ -127,9 +138,12 @@ def _apply_audio_evidence(
         )
         metadata["rendered_audio_evidence"] = {
             "level": 1,
+            "level_label": EVIDENCE_LEVEL_LABELS[1],
             "status": "missing",
             "next_action": "submit_rendered_master",
+            "automatic_fl_render": False,
         }
+    metadata.update(_evidence_level_metadata(evidence_level, audio_available=audio_available))
 
     audio_risk = risk_from_severities(
         tuple(row.severity for row in findings[len(report.findings) :])
@@ -199,9 +213,27 @@ def _apply_audio_evidence(
             "findings": tuple(findings),
             "source_observations": tuple(dict.fromkeys(source_observations)),
             "next_actions": tuple(next_actions),
-            "metadata": {**metadata, "evidence_level": evidence_level},
+            "metadata": metadata,
         }
     )
+
+
+def _evidence_level_metadata(level: int, *, audio_available: bool) -> dict[str, Any]:
+    label = EVIDENCE_LEVEL_LABELS[level]
+    return {
+        "evidence_level": level,
+        "evidence_level_label": label,
+        "audio_evidence_status": "available" if audio_available else "missing",
+        "automatic_fl_render": False,
+        "requires_manual_audio_export": not audio_available,
+        "evidence_level_4": {
+            "evidence_level": 4,
+            "evidence_level_label": EVIDENCE_LEVEL_LABELS[4],
+            "status": "planned",
+            "requires_manual_stem_export": True,
+            "automatic_fl_render": False,
+        },
+    }
 
 
 def _latest_audio_observation(observations, evidence_kind: str):  # noqa: ANN001, ANN201
@@ -240,6 +272,7 @@ def _audio_finding(
             ),
             limitations=("Low-band stereo is a correlation proxy.",),
             source_observation_ids=(observation_id,),
+            metadata={"evidence_type": EVIDENCE_TYPE_RENDERED_AUDIO},
         )
     peak = summary.get("peak_dbfs")
     severity = "high" if isinstance(peak, (int, float)) and peak >= 0 else "info"
@@ -267,4 +300,5 @@ def _audio_finding(
         ),
         limitations=("Stereo correlation is a proxy, not mono-cancellation proof.",),
         source_observation_ids=(observation_id,),
+        metadata={"evidence_type": EVIDENCE_TYPE_RENDERED_AUDIO},
     )

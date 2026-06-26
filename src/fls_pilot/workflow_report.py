@@ -17,6 +17,8 @@ from .analysis.schema import (
     Finding,
     Freshness,
     Prerequisite,
+    pending_human_validation_ids,
+    provisional_score_metadata,
 )
 from .analysis.scoring import confidence_from_coverage, risk_from_severities
 
@@ -194,6 +196,8 @@ def workflow_report(
     ok: bool = True,
     safety: Mapping[str, Any] | None = None,
     metadata: Mapping[str, Any] | None = None,
+    interaction_requests: list[dict[str, Any]] | None = None,
+    user_decisions: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     rows = diagnostics or []
     analysis_mode = _analysis_mode(mode)
@@ -204,6 +208,24 @@ def workflow_report(
         evidence_mode=analysis_mode,
     )
     severities = tuple(str(row.get("severity") or "info") for row in rows)
+    pending_validation = pending_human_validation_ids(rows, user_decisions or [])
+    report_metadata = {
+        **dict(metadata or {}),
+        "status": str(status),
+        "summary": _compact_value(summary or {}),
+        "skipped_changes": skipped_changes or [],
+        "kb_policy_refs": kb_policy_refs or [],
+    }
+    report_metadata.update(provisional_score_metadata(pending_validation))
+    if pending_validation and proposed_changes:
+        proposed_changes = [
+            {
+                **dict(row),
+                "blocked_until_human_validation": True,
+                "blocked_until_interaction_request_ids": list(pending_validation),
+            }
+            for row in proposed_changes
+        ]
     report = AnalysisReport(
         workflow=str(workflow),
         title=str(title),
@@ -224,7 +246,14 @@ def workflow_report(
                 confidence_score=confidence,
                 evidence_mode=analysis_mode,
                 evidence=({"value": row.get("evidence"), "target": row.get("target")},),
-                metadata={"diagnostic": _compact_value(row)},
+                metadata={
+                    **(
+                        dict(row.get("metadata"))
+                        if isinstance(row.get("metadata"), Mapping)
+                        else {}
+                    ),
+                    "diagnostic": _compact_value(row),
+                },
             )
             for index, row in enumerate(rows, start=1)
         ),
@@ -233,19 +262,15 @@ def workflow_report(
         manual_checks=tuple(manual_checks or ()),
         proposed_changes=tuple(proposed_changes or ()),
         applied_changes=tuple(applied_changes or ()),
+        interaction_requests=tuple(interaction_requests or ()),
+        user_decisions=tuple(user_decisions or ()),
         safety={
             "read_only": not bool(applied_changes),
             "requires_explicit_approval": bool(proposed_changes),
             "proposal_first": True,
             **dict(safety or {}),
         },
-        metadata={
-            **dict(metadata or {}),
-            "status": str(status),
-            "summary": _compact_value(summary or {}),
-            "skipped_changes": skipped_changes or [],
-            "kb_policy_refs": kb_policy_refs or [],
-        },
+        metadata=report_metadata,
     )
     base = report.to_dict()
     base.update(

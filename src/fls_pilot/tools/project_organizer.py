@@ -14,8 +14,14 @@ from pydantic import Field
 from .. import kb_policy, operations, safety
 from .. import project_templates as templates
 from .. import workflow_report as wr
-from ..analysis import get_analysis_broker
+from ..analysis import (
+    EVIDENCE_TYPE_NAME_BASED_DETECTION,
+    EVIDENCE_TYPE_ROUTING_BASED_DETECTION,
+    get_analysis_broker,
+    heuristic_validation_metadata,
+)
 from ..connection import get_bridge
+from ..runtime.interactions import InteractionRequest
 from .channels import _find_free_mixer_track
 from .color import parse_color
 from .routing import _bus_rename_entry
@@ -25,6 +31,7 @@ _ORGANIZER_APPLY_TOOLS = {
     "fl_apply_naming_standard",
     "fl_apply_color_standard",
 }
+ORGANIZER_VALIDATION_REQUEST_ID = "organizer.confirm_cleanup_heuristics"
 
 
 def _looks_default_channel_name(name) -> bool:
@@ -72,6 +79,44 @@ def _suggest_channel_name(row: dict) -> str:
     if label == "genplug":
         return f"Instrument {idx}"
     return f"Channel {idx}"
+
+
+def _organizer_validation_metadata(evidence_type: str, *, reason: str) -> dict:
+    return heuristic_validation_metadata(
+        evidence_type=evidence_type,
+        interaction_request_id=ORGANIZER_VALIDATION_REQUEST_ID,
+        reason=reason,
+    )
+
+
+def _organizer_validation_request(diagnostics: list[dict]) -> dict | None:
+    options = [
+        {
+            "id": str(row.get("id")),
+            "label": str(row.get("message") or row.get("id")),
+            "reason": dict(row.get("metadata") or {}).get("reason"),
+        }
+        for row in diagnostics
+        if isinstance(row.get("metadata"), dict)
+        and row["metadata"].get("human_validation_required")
+    ]
+    if not options:
+        return None
+    return InteractionRequest(
+        id=ORGANIZER_VALIDATION_REQUEST_ID,
+        type="multi_select",
+        title="Confirm organizer cleanup candidates",
+        prompt=(
+            "Which organizer cleanup diagnostics are intentional or should be kept "
+            "before applying a cleanup plan?"
+        ),
+        options=tuple(options),
+        allow_remove=True,
+        metadata={
+            "reason": "heuristic_cleanup_validation",
+            "finding_ids": [row["id"] for row in options],
+        },
+    ).to_dict()
 
 
 def _cleanup_proposal(
@@ -374,6 +419,10 @@ def register(mcp: FastMCP) -> None:
                         evidence={"name": c.get("name"), "suggested_name": suggested},
                         target={"type": "channel", "index": idx},
                         source="project_organizer",
+                        metadata=_organizer_validation_metadata(
+                            EVIDENCE_TYPE_NAME_BASED_DETECTION,
+                            reason="default_channel_name",
+                        ),
                     )
                 )
                 proposed_changes.append(
@@ -393,6 +442,10 @@ def register(mcp: FastMCP) -> None:
                         evidence={"target_mixer_track": target},
                         target={"type": "channel", "index": idx},
                         source="project_organizer",
+                        metadata=_organizer_validation_metadata(
+                            EVIDENCE_TYPE_ROUTING_BASED_DETECTION,
+                            reason="master_or_unknown_routing",
+                        ),
                     )
                 )
                 proposed_changes.append(_proposal_for_channel_routing(idx))
@@ -417,10 +470,15 @@ def register(mcp: FastMCP) -> None:
                         evidence={"name": name, "suggested_name": suggested},
                         target={"type": "mixer", "index": idx},
                         source="project_organizer",
+                        metadata=_organizer_validation_metadata(
+                            EVIDENCE_TYPE_NAME_BASED_DETECTION,
+                            reason="duplicate_mixer_name",
+                        ),
                     )
                 )
                 proposed_changes.append(_proposal_for_rename("mixer", idx, name, suggested))
 
+        interaction_request = _organizer_validation_request(diagnostics)
         payload = wr.workflow_report(
             workflow="project_organizer",
             title="Project Cleanup Proposal",
@@ -447,6 +505,9 @@ def register(mcp: FastMCP) -> None:
                 ]
             ),
             metadata={"template_context": templates.compact_context(template_context)},
+            interaction_requests=(
+                [interaction_request] if interaction_request is not None else []
+            ),
             safety={"read_only": True, "requires_explicit_approval": bool(proposed_changes)},
         )
         payload["project_fingerprint"] = snapshot.project_fingerprint
