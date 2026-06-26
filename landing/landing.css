@@ -416,20 +416,6 @@ h1, h2, h3, p { margin-top: 0; }
   font-size: 13px;
 }
 
-.disclaimer-line {
-  max-width: 700px;
-  color: #c7d3e8;
-  font-size: 12px;
-  line-height: 1.55;
-  opacity: 0.88;
-}
-
-.disclaimer-line::before {
-  content: "Independent notice: ";
-  color: var(--cyan);
-  font-weight: 850;
-}
-
 .hero-visual {
   position: relative;
   min-width: 0;
