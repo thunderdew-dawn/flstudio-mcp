@@ -125,7 +125,7 @@ def pending_human_validation_ids(
     decided = {
         decision_id
         for row in user_decisions
-        if isinstance(row, dict)
+        if isinstance(row, dict) and _decision_satisfies_validation(row)
         for decision_id in (
             str(row.get("interaction_request_id") or "").strip(),
             str(row.get("interaction_id") or "").strip(),
@@ -143,6 +143,19 @@ def pending_human_validation_ids(
             continue
         pending.append(request_id)
     return tuple(pending)
+
+
+def _decision_satisfies_validation(row: dict[str, Any]) -> bool:
+    if bool(row.get("skipped")):
+        return False
+    decision = str(row.get("decision") or "").strip().lower()
+    if decision in {"skip", "skipped"}:
+        return False
+    if decision in {"confirm", "confirmed", "complete", "completed", "selected"}:
+        return True
+    if row.get("confirmed") is True or row.get("completed") is True:
+        return True
+    return any(key in row for key in ("selected", "selected_values", "selected_value"))
 
 
 def provisional_score_metadata(pending_request_ids: tuple[str, ...] | list[str]) -> dict[str, Any]:

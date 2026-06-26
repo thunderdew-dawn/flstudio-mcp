@@ -9,6 +9,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from fls_pilot import protocol
+from fls_pilot.analysis.routing import routing_analysis_report_from_legacy_payload
 from fls_pilot.tools import routing
 
 
@@ -127,6 +128,48 @@ def test_fl_plan_routing_cleanup_returns_workflow_report():
 
     change_2 = plan["proposed_changes"][1]
     assert change_2["id"] == "create_buses"
+
+
+def test_routing_analysis_user_decision_clears_pending_validation() -> None:
+    payload = {
+        "ok": True,
+        "summary": {"findings": 1},
+        "findings": [
+            {
+                "id": "routing_cleanup",
+                "severity": "medium",
+                "title": "Routing cleanup",
+                "metadata": {
+                    "human_validation_required": True,
+                    "interaction_request_id": "routing.confirm_cleanup_heuristics",
+                },
+            }
+        ],
+        "interaction_requests": [
+            {
+                "id": "routing.confirm_cleanup_heuristics",
+                "type": "multi_select",
+                "prompt": "Confirm routing cleanup findings.",
+            }
+        ],
+        "user_decisions": [
+            {
+                "interaction_id": "routing.confirm_cleanup_heuristics",
+                "decision": "selected",
+                "selected": ["routing_cleanup"],
+            }
+        ],
+    }
+
+    report = routing_analysis_report_from_legacy_payload(
+        payload,
+        workflow="routing_audit",
+        title="Routing Audit",
+    ).to_dict()
+
+    assert report["metadata"]["score_status"] == "final"
+    assert report["metadata"]["blocked_fix_plan_until_confirmed"] is False
+    assert "pending_interaction_request_ids" not in report["metadata"]
 
 
 def test_fl_apply_routing_cleanup_requires_approval(monkeypatch):

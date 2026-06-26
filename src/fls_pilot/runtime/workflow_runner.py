@@ -63,15 +63,29 @@ def run_workflow(
             bridge=bridge,
             inputs=inputs,
         )
-    if inputs:
+    safe_inputs = _legacy_workflow_inputs(inputs)
+    if safe_inputs is None:
         raise ValueError(f"{workflow_id} does not accept workflow inputs")
-    payload = runner(state, bridge_override=bridge)
+    payload = runner(state, bridge_override=bridge, inputs=safe_inputs)
     report = runtime.latest_report(workflow_id)
     if report is None or workflow_id not in {"mix_review", "low_end_analysis"}:
         return payload
     upgraded = _apply_audio_evidence(runtime, report, workflow_id=workflow_id)
     runtime.add_report(upgraded)
     return analysis_report_for_control_center(upgraded, payload)
+
+
+def _legacy_workflow_inputs(inputs: dict[str, Any] | None) -> dict[str, Any] | None:
+    payload = dict(inputs or {})
+    if not payload:
+        return {}
+    allowed = {"user_decisions"}
+    if any(key not in allowed for key in payload):
+        return None
+    user_decisions = payload.get("user_decisions")
+    if not isinstance(user_decisions, (list, tuple)):
+        return None
+    return {"user_decisions": [dict(row) for row in user_decisions if isinstance(row, dict)]}
 
 
 def _apply_audio_evidence(

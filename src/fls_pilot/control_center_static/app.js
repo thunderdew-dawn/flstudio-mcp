@@ -36,6 +36,7 @@ const state = {
     pollTimer: null
   },
   runtimeWorkflows: {},
+  workflowUserDecisions: {},
   setupFeedback: {},
   actionFeedback: {},
   evidenceKeys: new Set()
@@ -375,6 +376,83 @@ function runtimeWorkflowState(workflowId) {
   return state.runtimeWorkflows[workflowId];
 }
 
+function workflowReportSlot(workflowId) {
+  return {
+    mix_review: state.mixReview,
+    low_end_analysis: state.lowEndAnalysis,
+    routing_audit: state.routingAudit,
+    project_organizer: state.projectOrganizer,
+  }[workflowId] || runtimeWorkflowState(workflowId);
+}
+
+function currentWorkflowReport(workflowId) {
+  return workflowReportSlot(workflowId)?.report || null;
+}
+
+function setWorkflowReport(workflowId, report) {
+  workflowReportSlot(workflowId).report = report;
+}
+
+function interactionRequestId(requestOrDecision) {
+  return String(
+    requestOrDecision?.interaction_request_id
+    || requestOrDecision?.interaction_id
+    || requestOrDecision?.id
+    || ""
+  ).trim();
+}
+
+function getWorkflowUserDecisions(workflowId) {
+  const rows = state.workflowUserDecisions?.[workflowId];
+  return Array.isArray(rows) ? rows : [];
+}
+
+function syncWorkflowUserDecisions(workflowId, report) {
+  if (!workflowId || !report) return;
+  if (!state.workflowUserDecisions) state.workflowUserDecisions = {};
+  const existing = getWorkflowUserDecisions(workflowId);
+  const incoming = Array.isArray(report.user_decisions) ? report.user_decisions : [];
+  const merged = [...existing];
+  for (const row of incoming) {
+    const requestId = interactionRequestId(row);
+    if (!requestId) continue;
+    const normalized = { ...row, interaction_request_id: requestId, interaction_id: requestId };
+    const index = merged.findIndex(item => interactionRequestId(item) === requestId);
+    if (index >= 0) merged[index] = normalized;
+    else merged.push(normalized);
+  }
+  state.workflowUserDecisions[workflowId] = merged;
+  report.user_decisions = merged;
+}
+
+function upsertWorkflowUserDecision(workflowId, decision) {
+  if (!workflowId) return;
+  if (!state.workflowUserDecisions) state.workflowUserDecisions = {};
+  const requestId = interactionRequestId(decision);
+  if (!requestId) return;
+  const normalized = {
+    ...decision,
+    interaction_request_id: requestId,
+    interaction_id: requestId,
+    workflow_id: workflowId,
+  };
+  const existing = getWorkflowUserDecisions(workflowId);
+  state.workflowUserDecisions[workflowId] = [
+    ...existing.filter(item => interactionRequestId(item) !== requestId),
+    normalized,
+  ];
+  const report = currentWorkflowReport(workflowId);
+  if (report) {
+    report.user_decisions = state.workflowUserDecisions[workflowId];
+    setWorkflowReport(workflowId, report);
+  }
+}
+
+function workflowRunBody(workflowId, base = {}) {
+  const decisions = getWorkflowUserDecisions(workflowId);
+  return decisions.length ? { ...base, user_decisions: decisions } : { ...base };
+}
+
 async function runRuntimeProductWorkflow(workflowId) {
   const workflow = workflowById(workflowId);
   if (!workflow?.endpoint) return;
@@ -392,10 +470,12 @@ async function runRuntimeProductWorkflow(workflowId) {
       body.plugin = document.getElementById("preset-assistant-plugin")?.value || "";
       body.description = document.getElementById("preset-assistant-description")?.value || "";
     }
+    const requestBody = workflowRunBody(workflowId, body);
     workflowState.report = await api(workflow.endpoint, {
       method: "POST",
-      body: JSON.stringify(body)
+      body: JSON.stringify(requestBody)
     });
+    syncWorkflowUserDecisions(workflowId, workflowState.report);
   } catch (error) {
     workflowState.error = error.message;
   } finally {
@@ -537,14 +617,20 @@ function runtimeReportList(titleText, rows, emptyText) {
 }
 
 function runtimeInteractionRequests(workflowId, report) {
+  return renderInteractionRequests(report, workflowId, { showEmpty: true });
+}
+
+function renderInteractionRequests(report, workflowId, { showEmpty = false } = {}) {
+  syncWorkflowUserDecisions(workflowId, report);
   const card = document.createElement("section");
   card.className = "workflow-runtime-list workflow-runtime-interactions";
   const title = document.createElement("h2");
-  title.textContent = "Interaction requests";
+  title.textContent = "Workflow needs your input";
   card.appendChild(title);
 
   const requests = Array.isArray(report?.interaction_requests) ? report.interaction_requests : [];
   if (!requests.length) {
+    if (!showEmpty) return null;
     const empty = document.createElement("p");
     empty.textContent = "No interaction requests reported.";
     card.appendChild(empty);
@@ -567,11 +653,11 @@ function runtimeInteractionRequests(workflowId, report) {
     renderInteractionControl(body, workflowId, report, request);
     item.appendChild(body);
 
-    const decision = findUserDecision(report, request.id);
+    const decision = findUserDecision(report, interactionRequestId(request), workflowId);
     if (decision) {
       const saved = document.createElement("p");
       saved.className = "workflow-interaction-decision";
-      saved.textContent = `Saved locally: ${formatUserDecision(decision)}`;
+      saved.textContent = `Saved. Re-run this workflow to apply your answer: ${formatUserDecision(decision)}`;
       item.appendChild(saved);
     }
     card.appendChild(item);
@@ -579,27 +665,57 @@ function runtimeInteractionRequests(workflowId, report) {
   return card;
 }
 
+function renderWorkflowInteractionMount(mountId, workflowId, report) {
+  const mount = document.getElementById(mountId);
+  if (!mount) return;
+  mount.innerHTML = "";
+  const node = renderInteractionRequests(report, workflowId);
+  if (node) mount.appendChild(node);
+}
+
 function renderInteractionControl(container, workflowId, report, request) {
   const type = request.type;
+  const requestId = interactionRequestId(request);
   if (type === "confirm") {
     const row = document.createElement("div");
     row.className = "workflow-interaction-actions";
     row.append(
-      interactionButton("Confirm", true, () => updateUserDecision(workflowId, report, request, { confirmed: true })),
-      interactionButton("Decline", false, () => updateUserDecision(workflowId, report, request, { confirmed: false }))
+      interactionButton("Confirm", true, () => updateUserDecision(workflowId, report, request, { decision: "confirmed", confirmed: true, skipped: false })),
+      interactionButton("Skip", false, () => updateUserDecision(workflowId, report, request, { decision: "skipped", confirmed: false, skipped: true }))
     );
     container.appendChild(row);
     return;
   }
 
   if (type === "manual_task") {
+    const row = document.createElement("div");
+    row.className = "workflow-interaction-actions";
+    row.append(
+      interactionButton("I did this", true, () => updateUserDecision(workflowId, report, request, {
+        decision: "completed",
+        confirmed: true,
+        completed: true,
+        value: manualTaskInputValue(container),
+      })),
+      interactionButton("Skip for now", false, () => updateUserDecision(workflowId, report, request, {
+        decision: "skipped",
+        skipped: true,
+        completed: false,
+        value: manualTaskInputValue(container),
+      }))
+    );
+    container.appendChild(row);
+
     const label = document.createElement("label");
     label.className = "workflow-interaction-option";
     const input = document.createElement("input");
     input.type = "checkbox";
-    input.checked = Boolean(findUserDecision(report, request.id)?.completed);
+    input.checked = Boolean(findUserDecision(report, requestId, workflowId)?.completed);
     input.addEventListener("change", () => {
       updateUserDecision(workflowId, report, request, {
+        decision: input.checked ? "completed" : "skipped",
+        confirmed: Boolean(input.checked),
+        skipped: !input.checked,
         completed: Boolean(input.checked),
         value: manualTaskInputValue(container),
       });
@@ -614,9 +730,12 @@ function renderInteractionControl(container, workflowId, report, request) {
       resume.className = "workflow-interaction-resume";
       resume.type = "text";
       resume.placeholder = resumeInputPlaceholder(request.resume_input);
-      resume.value = safeString(findUserDecision(report, request.id)?.value || "");
+      resume.value = String(findUserDecision(report, requestId, workflowId)?.value || "");
       resume.addEventListener("input", () => {
         updateUserDecision(workflowId, report, request, {
+          decision: input.checked ? "completed" : "pending",
+          confirmed: Boolean(input.checked),
+          skipped: false,
           completed: Boolean(input.checked),
           value: resume.value,
         });
@@ -634,8 +753,15 @@ function renderInteractionControl(container, workflowId, report, request) {
       container.appendChild(empty);
       return;
     }
-    const decision = findUserDecision(report, request.id);
-    const selected = new Set(Array.isArray(decision?.selected) ? decision.selected : []);
+    const decision = findUserDecision(report, requestId, workflowId);
+    const selectedRows = Array.isArray(decision?.selected_values)
+      ? decision.selected_values
+      : Array.isArray(decision?.selected)
+        ? decision.selected
+        : decision?.selected_value
+          ? [decision.selected_value]
+          : [];
+    const selected = new Set(selectedRows);
     for (const option of options) {
       const optionId = safeString(option.id || option.value || option.label);
       const label = document.createElement("label");
@@ -651,7 +777,11 @@ function renderInteractionControl(container, workflowId, report, request) {
           .filter(node => node.checked)
           .map(node => node.value);
         updateUserDecision(workflowId, report, request, {
+          decision: "selected",
           selected: type === "single_select" ? values.slice(0, 1) : values,
+          selected_values: type === "single_select" ? values.slice(0, 1) : values,
+          selected_value: type === "single_select" ? (values[0] || "") : undefined,
+          skipped: false,
         });
       });
       const textNode = document.createElement("span");
@@ -677,24 +807,26 @@ function interactionButton(label, primary, onClick) {
 }
 
 function updateUserDecision(workflowId, report, request, values) {
-  if (!report || !request?.id) return;
+  const requestId = interactionRequestId(request);
+  if (!requestId) return;
   const decision = {
+    interaction_request_id: requestId,
     interaction_id: request.id,
+    workflow_id: workflowId,
     type: request.type,
     ...values,
   };
-  const existing = Array.isArray(report.user_decisions) ? report.user_decisions : [];
-  report.user_decisions = [
-    ...existing.filter(item => item?.interaction_id !== request.id),
-    decision,
-  ];
-  runtimeWorkflowState(workflowId).report = report;
-  renderRuntimeProductPanel(workflowId);
+  upsertWorkflowUserDecision(workflowId, decision);
+  const updated = currentWorkflowReport(workflowId) || report;
+  if (updated) updated.user_decisions = getWorkflowUserDecisions(workflowId);
+  renderWorkflowPanelById(workflowId);
 }
 
-function findUserDecision(report, requestId) {
-  const decisions = Array.isArray(report?.user_decisions) ? report.user_decisions : [];
-  return decisions.find(item => item?.interaction_id === requestId) || null;
+function findUserDecision(report, requestId, workflowId) {
+  const stored = workflowId ? getWorkflowUserDecisions(workflowId) : [];
+  const reportDecisions = Array.isArray(report?.user_decisions) ? report.user_decisions : [];
+  const decisions = [...stored, ...reportDecisions];
+  return decisions.find(item => interactionRequestId(item) === requestId) || null;
 }
 
 function manualTaskInputValue(container) {
@@ -718,13 +850,35 @@ function interactionTypeLabel(type) {
 }
 
 function formatUserDecision(decision) {
+  if (decision.skipped) return "skipped";
   if (decision.type === "confirm") return decision.confirmed ? "confirmed" : "declined";
   if (decision.type === "manual_task") {
     const suffix = decision.value ? ` (${decision.value})` : "";
     return `${decision.completed ? "completed" : "not completed"}${suffix}`;
   }
+  if (Array.isArray(decision.selected_values)) return decision.selected_values.join(", ") || "none selected";
   if (Array.isArray(decision.selected)) return decision.selected.join(", ") || "none selected";
   return "recorded";
+}
+
+function renderWorkflowPanelById(workflowId) {
+  if (workflowId === "mix_review") {
+    renderMixReview();
+    return;
+  }
+  if (workflowId === "low_end_analysis") {
+    renderLowEndAnalysis();
+    return;
+  }
+  if (workflowId === "routing_audit") {
+    renderRoutingAudit();
+    return;
+  }
+  if (workflowId === "project_organizer") {
+    renderProjectOrganizer();
+    return;
+  }
+  renderRuntimeProductPanel(workflowId);
 }
 
 function evidenceLabel(value) {
@@ -1998,9 +2152,10 @@ async function runMixReview() {
   try {
     const result = await api("/api/workflows/mix-review", {
       method: "POST",
-      body: "{}"
+      body: JSON.stringify(workflowRunBody("mix_review"))
     });
     state.mixReview.report = result;
+    syncWorkflowUserDecisions("mix_review", result);
     state.mixReview.error = result?.ok === false
       ? (result.error || "Mix Review unavailable.")
       : null;
@@ -2023,6 +2178,7 @@ function renderMixReview() {
   setRunButton("run-mix-review", isLoading, "Run Mix Review");
 
   renderMixFeedback(report, error, isLoading);
+  renderWorkflowInteractionMount("mix-review-interactions", "mix_review", report);
   renderMixSummary(report, isLoading);
   renderMixLevels(report);
   renderMixFindings(report);
@@ -2333,9 +2489,10 @@ async function runLowEndAnalysis() {
   try {
     const result = await api("/api/workflows/low-end-analysis", {
       method: "POST",
-      body: "{}"
+      body: JSON.stringify(workflowRunBody("low_end_analysis"))
     });
     state.lowEndAnalysis.report = result;
+    syncWorkflowUserDecisions("low_end_analysis", result);
     state.lowEndAnalysis.error = result?.ok === false
       ? (result.error || "Low-End Analysis unavailable.")
       : null;
@@ -2358,6 +2515,7 @@ function renderLowEndAnalysis() {
   setRunButton("run-low-end-analysis", isLoading, "Run Low-End Analysis");
 
   renderLowEndFeedback(report, error, isLoading);
+  renderWorkflowInteractionMount("low-end-interactions", "low_end_analysis", report);
   renderLowEndSummary(report, isLoading);
   renderLowEndFocus(report);
   renderLowEndFindings(report);
@@ -2977,9 +3135,10 @@ async function runRoutingAudit() {
   try {
     const result = await api("/api/workflows/routing-audit", {
       method: "POST",
-      body: "{}"
+      body: JSON.stringify(workflowRunBody("routing_audit"))
     });
     state.routingAudit.report = result;
+    syncWorkflowUserDecisions("routing_audit", result);
     state.routingAudit.error = result?.ok === false
       ? (result.error || "Routing Audit unavailable.")
       : null;
@@ -3002,6 +3161,7 @@ function renderRoutingAudit() {
   setRunButton("run-routing-audit", isLoading, "Run Routing Audit");
 
   renderRoutingFeedback(report, error, isLoading);
+  renderWorkflowInteractionMount("routing-audit-interactions", "routing_audit", report);
   renderRoutingSummary(report, isLoading);
   renderRoutingGraph(report);
   renderRoutingFindings(report);
@@ -3419,9 +3579,10 @@ async function runProjectOrganizer() {
   try {
     const result = await api("/api/workflows/project-organizer", {
       method: "POST",
-      body: "{}"
+      body: JSON.stringify(workflowRunBody("project_organizer"))
     });
     state.projectOrganizer.report = result;
+    syncWorkflowUserDecisions("project_organizer", result);
     state.projectOrganizer.error = result?.ok === false
       ? (result.error || "Project Organizer unavailable.")
       : null;
@@ -3444,6 +3605,7 @@ function renderProjectOrganizer() {
   setRunButton("run-project-organizer", isLoading, "Run Organizer");
 
   renderOrganizerFeedback(report, error, isLoading);
+  renderWorkflowInteractionMount("organizer-interactions", "project_organizer", report);
   renderOrganizerSummary(report, isLoading);
   renderOrganizerMap(report);
   renderOrganizerGuided(report);
@@ -5027,6 +5189,7 @@ window.flsPilotControlCenter = {
   renderLogsHistory,
   renderPorts,
   selectPanel,
+  workflowRunBody,
   safeString,
   safeDebugString,
 };

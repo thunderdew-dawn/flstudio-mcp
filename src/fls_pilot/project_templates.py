@@ -117,6 +117,81 @@ def classify_topology(
     return context
 
 
+def resolve_with_user_decisions(
+    template_context: Mapping[str, Any],
+    user_decisions: Iterable[Mapping[str, Any]] | None = None,
+    *,
+    mixer_tracks: Iterable[Mapping[str, Any]] = (),
+    routing_rows: Iterable[Mapping[str, Any]] | None = None,
+    channel_rows: Iterable[Mapping[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Resolve an ambiguous template profile only from an explicit user decision."""
+    context = dict(template_context or {})
+    decision = _template_profile_decision(user_decisions or ())
+    if not decision or not context.get("ambiguous"):
+        return context
+    selected = _decision_selected_profile(decision)
+    candidates = {str(slug) for slug in context.get("candidate_slugs") or ()}
+    if selected == "none":
+        resolved = unmatched_context()
+        resolved.update(
+            {
+                "resolved_by_user": True,
+                "validated_by_user": True,
+                "validation_source": "user_decision",
+                "selected_template_slug": "none",
+                "notes": [
+                    "User confirmed that none of the ambiguous template profiles apply."
+                ],
+            }
+        )
+        return resolved
+    if not selected or selected not in candidates:
+        context["user_decision_ignored"] = True
+        return context
+
+    tracks = [_normalise_track(row) for row in mixer_tracks]
+    tracks = [row for row in tracks if row.get("index") is not None]
+    route_source = list(routing_rows) if routing_rows is not None else tracks
+    route_by = {
+        int(row.get("i", row.get("index"))): list(row.get("routes_to") or [])
+        for row in route_source
+        if isinstance(row, Mapping) and row.get("i", row.get("index")) is not None
+    }
+    name_by = {int(row["index"]): str(row.get("name") or "") for row in tracks}
+    channel_by = _channels_by_index(channel_rows or [])
+    profile = next(
+        (
+            row
+            for row in load_profiles()
+            if str(row.get("template_slug") or "") == selected
+        ),
+        None,
+    )
+    if profile is None:
+        context["user_decision_ignored"] = True
+        return context
+    match = _score_profile(profile, name_by, route_by, channel_by)
+    resolved = _context_from_match(match, (match,), name_by, route_by)
+    resolved.update(
+        {
+            "ambiguous": False,
+            "ambiguity_reason": None,
+            "resolved_by_user": True,
+            "validated_by_user": True,
+            "validation_source": "user_decision",
+            "selected_template_slug": selected,
+        }
+    )
+    resolved["notes"] = [
+        *list(resolved.get("notes") or []),
+        f"Template profile '{selected}' was confirmed by the user.",
+    ]
+    if channel_rows is not None:
+        resolved["channel_summary"] = _channel_summary(channel_rows, resolved)
+    return resolved
+
+
 @lru_cache(maxsize=1)
 def load_profiles() -> tuple[dict[str, Any], ...]:
     """Load compact template profiles from the Knowledgebase."""
@@ -186,6 +261,20 @@ def annotate_tracks(
 def compact_context(template_context: Mapping[str, Any]) -> dict[str, Any] | None:
     """Compact user-facing template context."""
     if not template_context.get("matched"):
+        if template_context.get("resolved_by_user"):
+            return {
+                "template_name": None,
+                "template_slug": None,
+                "confidence_level": None,
+                "ambiguous": False,
+                "resolved_by_user": True,
+                "validated_by_user": bool(template_context.get("validated_by_user")),
+                "validation_source": template_context.get("validation_source"),
+                "selected_template_slug": template_context.get("selected_template_slug"),
+                "summary": dict(template_context.get("summary") or {}),
+                "notes": list(template_context.get("notes") or []),
+                "kb_refs": list(template_context.get("kb_refs") or []),
+            }
         return None
     summary = dict(template_context.get("summary") or {})
     return {
@@ -194,6 +283,10 @@ def compact_context(template_context: Mapping[str, Any]) -> dict[str, Any] | Non
         "confidence_level": template_context.get("confidence_level"),
         "ambiguous": bool(template_context.get("ambiguous")),
         "ambiguity_reason": template_context.get("ambiguity_reason"),
+        "resolved_by_user": bool(template_context.get("resolved_by_user")),
+        "validated_by_user": bool(template_context.get("validated_by_user")),
+        "validation_source": template_context.get("validation_source"),
+        "selected_template_slug": template_context.get("selected_template_slug"),
         "candidate_templates": list(template_context.get("candidate_templates") or []),
         "candidate_slugs": list(template_context.get("candidate_slugs") or []),
         "summary": summary,
@@ -266,6 +359,40 @@ def is_template_control_route(
         if abs(val - expected) <= 0.0001:
             return True
     return False
+
+
+def _template_profile_decision(
+    user_decisions: Iterable[Mapping[str, Any]],
+) -> Mapping[str, Any] | None:
+    for row in reversed(tuple(user_decisions)):
+        request_id = str(
+            row.get("interaction_request_id")
+            or row.get("interaction_id")
+            or row.get("id")
+            or ""
+        ).strip()
+        if request_id != "template.confirm_profile":
+            continue
+        if bool(row.get("skipped")):
+            continue
+        decision = str(row.get("decision") or "").strip().lower()
+        if decision in {"skip", "skipped"}:
+            continue
+        return row
+    return None
+
+
+def _decision_selected_profile(decision: Mapping[str, Any]) -> str:
+    raw = decision.get("selected_value")
+    if raw is None:
+        values = decision.get("selected_values")
+        if values is None:
+            values = decision.get("selected")
+        if isinstance(values, (list, tuple)) and values:
+            raw = values[0]
+    if raw is None:
+        raw = decision.get("value")
+    return str(raw or "").strip()
 
 
 def _score_profile(

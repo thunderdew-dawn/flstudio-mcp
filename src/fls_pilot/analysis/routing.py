@@ -62,9 +62,23 @@ def routing_analysis_report_from_legacy_payload(
         analysis_findings,
         user_decisions,
     )
+    decided = {
+        decision_id
+        for row in user_decisions
+        for decision_id in (
+            str(row.get("interaction_request_id") or "").strip(),
+            str(row.get("interaction_id") or "").strip(),
+            str(row.get("id") or "").strip(),
+        )
+        if decision_id and _decision_satisfies_validation(row)
+    }
     for request in interaction_requests:
         request_id = str(request.get("id") or "").strip()
-        if request_id and request_id not in pending_validation:
+        if (
+            request_id
+            and request_id not in decided
+            and request_id not in pending_validation
+        ):
             pending_validation = (*pending_validation, request_id)
     report_created_at, valid_until = _validity_window(created_at or payload.get("generated_at"))
     source_observations = tuple(details.get("source_observation_ids") or ())
@@ -131,6 +145,19 @@ def _validity_window(value: Any, *, ttl_seconds: float = 120.0) -> tuple[str, st
         created = created.replace(tzinfo=timezone.utc)
     created = created.astimezone(timezone.utc)
     return created.isoformat(), (created + timedelta(seconds=ttl_seconds)).isoformat()
+
+
+def _decision_satisfies_validation(row: dict[str, Any]) -> bool:
+    if bool(row.get("skipped")):
+        return False
+    decision = str(row.get("decision") or "").strip().lower()
+    if decision in {"skip", "skipped"}:
+        return False
+    if decision in {"confirm", "confirmed", "complete", "completed", "selected"}:
+        return True
+    if row.get("confirmed") is True or row.get("completed") is True:
+        return True
+    return any(key in row for key in ("selected", "selected_values", "selected_value"))
 
 
 def _routing_coverage(

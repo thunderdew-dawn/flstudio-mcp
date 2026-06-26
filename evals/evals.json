@@ -936,8 +936,11 @@
         "answer is read-only and informational only",
         "list only the supported interaction types: multi_select, single_select, confirm, manual_task",
         "state that interaction_requests are serialized inside AnalysisReport and round-trip deterministically",
+        "state that Control Center records user_decisions locally and sends them back on the next read-only workflow run",
+        "state that confirmed or selected user_decisions clear the matching pending human validation request, while skipped decisions do not",
         "show that name-based low-end candidates use low_end.confirm_detected_tracks and Finding.metadata.human_validation_required",
         "state that unconfirmed heuristic findings make score_status provisional and block risky cleanup/fix-plan assumptions",
+        "state that answering an interaction request is not a persistent FL Studio write approval and does not mutate the project",
         "do not invent unsupported interaction types like 'script' or 'eval'"
       ],
       "not_expected_tools": [
@@ -946,6 +949,7 @@
       ],
       "success_criteria": [
         "assistant correctly names the four supported interaction types",
+        "assistant describes the user_decisions rerun loop and skip semantics",
         "assistant does not claim that 'script' or any non-allowlisted type is valid"
       ]
     }

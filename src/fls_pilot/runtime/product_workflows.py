@@ -43,7 +43,38 @@ def run_product_workflow(
     if runner is None:
         raise ValueError(f"product workflow execution is not available for {workflow_id!r}")
     report = runner(runtime, bridge=bridge, inputs=payload)
+    user_decisions = _extract_user_decisions(payload)
+    if user_decisions:
+        report = AnalysisReport(
+            **{
+                **report.__dict__,
+                "user_decisions": user_decisions,
+            }
+        )
     return runtime.add_report(report).to_dict()
+
+
+def _extract_user_decisions(inputs: dict[str, Any]) -> tuple[dict[str, Any], ...]:
+    raw = inputs.get("user_decisions")
+    if not isinstance(raw, (list, tuple)):
+        return ()
+    decisions = []
+    for row in raw:
+        if not isinstance(row, dict):
+            continue
+        request_id = str(
+            row.get("interaction_request_id")
+            or row.get("interaction_id")
+            or row.get("id")
+            or ""
+        ).strip()
+        if not request_id:
+            continue
+        decision = dict(row)
+        decision["interaction_request_id"] = request_id
+        decision.setdefault("interaction_id", request_id)
+        decisions.append(decision)
+    return tuple(decisions)
 
 
 def _run_preflight(

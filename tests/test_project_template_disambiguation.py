@@ -119,3 +119,59 @@ def test_trap_and_hiphop_exact_topology_is_ambiguous_and_suppresses_nothing() ->
     assert templates.is_reserved_placeholder(context, 22) is False
     assert templates.is_template_bus(context, 117) is False
     assert templates.compact_context(context)["ambiguous"] is True
+
+
+def test_user_decision_resolves_ambiguous_template_profile() -> None:
+    rows = _live_rows("trap")
+    context = templates.classify_topology(rows, _routes(rows), _channels("trap"))
+
+    resolved = templates.resolve_with_user_decisions(
+        context,
+        [
+            {
+                "interaction_id": "template.confirm_profile",
+                "decision": "selected",
+                "selected": ["trap"],
+            }
+        ],
+        mixer_tracks=rows,
+        routing_rows=_routes(rows),
+        channel_rows=_channels("trap"),
+    )
+
+    compact = templates.compact_context(resolved)
+    assert resolved["ambiguous"] is False
+    assert resolved["template_slug"] == "trap"
+    assert resolved["resolved_by_user"] is True
+    assert resolved["validated_by_user"] is True
+    assert compact["selected_template_slug"] == "trap"
+    assert compact["validated_by_user"] is True
+    assert templates.suppresses(resolved, 24, "suppress_unused_track") is True
+    assert templates.is_reserved_placeholder(resolved, 24) is True
+
+
+def test_user_decision_none_keeps_template_suppressions_disabled() -> None:
+    rows = _live_rows("trap")
+    context = templates.classify_topology(rows, _routes(rows), _channels("trap"))
+
+    resolved = templates.resolve_with_user_decisions(
+        context,
+        [
+            {
+                "interaction_id": "template.confirm_profile",
+                "decision": "selected",
+                "selected": ["none"],
+            }
+        ],
+        mixer_tracks=rows,
+        routing_rows=_routes(rows),
+        channel_rows=_channels("trap"),
+    )
+
+    compact = templates.compact_context(resolved)
+    assert resolved["matched"] is False
+    assert resolved["selected_template_slug"] == "none"
+    assert compact["resolved_by_user"] is True
+    assert compact["selected_template_slug"] == "none"
+    assert templates.suppresses(resolved, 24, "suppress_unused_track") is False
+    assert templates.is_reserved_placeholder(resolved, 24) is False

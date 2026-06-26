@@ -13,6 +13,7 @@ from fls_pilot.analysis import (
     Prerequisite,
     WorkflowRequirementSet,
     heuristic_validation_metadata,
+    pending_human_validation_ids,
     requirement,
 )
 
@@ -188,6 +189,37 @@ def test_analysis_report_without_pack_metadata_still_loads() -> None:
     assert restored.profile_id is None
     assert restored.interaction_requests == ()
     assert restored.user_decisions == ()
+
+
+def test_pending_human_validation_requires_non_skipped_decision() -> None:
+    finding = Finding(
+        id="low_end_off_center_1",
+        rule_id="low_end.off_center",
+        title="Low-end pan risk",
+        severity="medium",
+        risk_score=45,
+        confidence_score=75,
+        evidence_mode="static_snapshot",
+        metadata=heuristic_validation_metadata(
+            evidence_type=EVIDENCE_TYPE_NAME_BASED_DETECTION,
+            interaction_request_id="low_end.confirm_detected_tracks",
+        ),
+    )
+
+    assert pending_human_validation_ids(
+        (finding,),
+        [{"interaction_id": "low_end.confirm_detected_tracks", "decision": "skipped"}],
+    ) == ("low_end.confirm_detected_tracks",)
+    assert pending_human_validation_ids(
+        (finding,),
+        [
+            {
+                "interaction_id": "low_end.confirm_detected_tracks",
+                "decision": "selected",
+                "selected": ["mixer:2"],
+            }
+        ],
+    ) == ()
 
 
 def test_workflow_requirement_set_separates_required_and_optional() -> None:

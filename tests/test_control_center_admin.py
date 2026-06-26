@@ -434,7 +434,7 @@ def test_normal_workflows_route_not_blocked_by_admin_mode(monkeypatch):
     monkeypatch.setattr(
         control_center,
         "_run_mix_review",
-        lambda s: {"ok": True, "workflow": "mix_review"},
+        lambda s, **kwargs: {"ok": True, "workflow": "mix_review"},
     )
     state = _state(admin_enabled=False)
     handler_cls = control_center._handler_factory(state)

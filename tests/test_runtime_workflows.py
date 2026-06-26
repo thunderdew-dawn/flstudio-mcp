@@ -21,6 +21,63 @@ def test_mix_review_runs_and_stores_scoped_report(tmp_path) -> None:
     assert report.snapshot_id == runtime.project_context.snapshot_id
 
 
+def test_legacy_workflow_runner_forwards_user_decisions(tmp_path, monkeypatch) -> None:
+    runtime = RuntimeCore(job_store_path=tmp_path / "jobs.sqlite3")
+    bridge = FakeBridge()
+    calls = []
+
+    def fake_runner(state, *, bridge_override=None, inputs=None):  # noqa: ANN001
+        calls.append({"bridge": bridge_override, "inputs": inputs})
+        return {"ok": True, "workflow": "mix_review"}
+
+    monkeypatch.setattr("fls_pilot.control_center._run_mix_review", fake_runner)
+
+    result = run_workflow(
+        runtime,
+        "mix_review",
+        bridge=bridge,
+        inputs={
+            "user_decisions": [
+                {
+                    "interaction_id": "mix_review.confirm_heuristics",
+                    "decision": "confirmed",
+                }
+            ]
+        },
+    )
+
+    assert result == {"ok": True, "workflow": "mix_review"}
+    assert calls == [
+        {
+            "bridge": bridge,
+            "inputs": {
+                "user_decisions": [
+                    {
+                        "interaction_id": "mix_review.confirm_heuristics",
+                        "decision": "confirmed",
+                    }
+                ]
+            },
+        }
+    ]
+
+
+def test_legacy_workflow_runner_rejects_unknown_inputs(tmp_path) -> None:
+    runtime = RuntimeCore(job_store_path=tmp_path / "jobs.sqlite3")
+
+    try:
+        run_workflow(
+            runtime,
+            "mix_review",
+            bridge=FakeBridge(),
+            inputs={"unsafe": True},
+        )
+    except ValueError as exc:
+        assert "mix_review does not accept workflow inputs" in str(exc)
+    else:
+        raise AssertionError("run_workflow accepted unsupported legacy inputs")
+
+
 def test_all_l1_workflows_share_current_project_scope(tmp_path, monkeypatch) -> None:
     runtime = RuntimeCore(job_store_path=tmp_path / "jobs.sqlite3")
     bridge = FakeBridge()

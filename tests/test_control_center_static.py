@@ -38,6 +38,10 @@ def test_v3_runtime_workflow_copy_exposes_evidence_limits() -> None:
     assert "rendered_master: \"Rendered master audio\"" in js
     assert "static_snapshot_only: \"Project metadata\"" in js
     assert "id=\"producer_audio_evidence\"" in html
+    assert "id=\"mix-review-interactions\"" in html
+    assert "id=\"low-end-interactions\"" in html
+    assert "id=\"routing-audit-interactions\"" in html
+    assert "id=\"organizer-interactions\"" in html
     assert "async function submitAudioAnalysis()" in js
     assert 'audioAnalysisRequest("cancel"' in js
     assert 'audioAnalysisRequest("result"' in js
@@ -768,7 +772,7 @@ controls.state.runtimeWorkflows.preflight = {
 };
 
 controls.renderRuntimeProductPanel("preflight");
-assert.match(textTree(content), /Interaction requests/);
+assert.match(textTree(content), /Workflow needs your input/);
 assert.match(textTree(content), /Confirm the export target is correct/);
 assert.match(textTree(content), /Render a master WAV manually/);
 assert.match(textTree(content), /Pick a quality gate/);
@@ -804,7 +808,19 @@ let manualDecision = controls.state.runtimeWorkflows.preflight.report.user_decis
 assert.strictEqual(manualDecision.type, "manual_task");
 assert.strictEqual(manualDecision.completed, true);
 assert.strictEqual(manualDecision.value, "/tmp/master.wav");
-assert.match(textTree(content), /Saved locally: completed/);
+assert.match(textTree(content), /Saved\. Re-run this workflow to apply your answer: completed/);
+
+const body = controls.workflowRunBody("preflight");
+assert.strictEqual(body.user_decisions.length, 4);
+assert.strictEqual(
+  JSON.stringify(body.user_decisions.map((item) => item.interaction_id).sort()),
+  JSON.stringify([
+    "audio.render_master",
+    "preflight.confirm_export",
+    "preflight.pick_checks",
+    "preflight.pick_quality"
+  ])
+);
 """
     )
 

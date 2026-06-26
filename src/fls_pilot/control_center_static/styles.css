@@ -842,6 +842,14 @@ button { font: inherit; }
   gap: 12px;
 }
 
+.workflow-interaction-mount {
+  display: contents;
+}
+
+.workflow-runtime-interactions.panel {
+  grid-column: 1 / -1;
+}
+
 .workflow-interaction-request {
   display: grid;
   gap: 10px;

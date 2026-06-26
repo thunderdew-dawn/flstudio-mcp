@@ -54,6 +54,37 @@ def test_state_uses_configured_daemon_endpoint(monkeypatch):
     assert state.daemon_port == 9791
 
 
+def test_workflow_inputs_from_body_normalizes_user_decisions() -> None:
+    inputs = control_center._workflow_inputs_from_body(
+        {
+            "inputs": {"unrelated": "ignored by legacy runner"},
+            "user_decisions": [
+                {
+                    "interaction_id": "low_end.confirm_detected_tracks",
+                    "decision": "selected",
+                    "selected": ["mixer:2"],
+                },
+                {"interaction_id": "", "decision": "confirmed"},
+                "not-a-decision",
+            ],
+        }
+    )
+
+    assert inputs == {
+        "unrelated": "ignored by legacy runner",
+        "user_decisions": [
+            {
+                "interaction_id": "low_end.confirm_detected_tracks",
+                "interaction_request_id": "low_end.confirm_detected_tracks",
+                "decision": "selected",
+                "selected": ["mixer:2"],
+                "selected_values": ["mixer:2"],
+                "selected_value": "mixer:2",
+            }
+        ],
+    }
+
+
 def test_status_groups_doctor_findings(monkeypatch):
     findings = [
         _finding("Python Environment"),
@@ -771,7 +802,7 @@ def test_http_routing_audit_endpoint(monkeypatch):
     monkeypatch.setattr(
         control_center,
         "_run_routing_audit",
-        lambda state: {"ok": True, "workflow": "routing_audit", "state": "live"},
+        lambda state, **kwargs: {"ok": True, "workflow": "routing_audit", "state": "live"},
     )
     state = _state(port=0)
     handler_cls = control_center._handler_factory(state)
@@ -809,7 +840,11 @@ def test_http_project_organizer_endpoint(monkeypatch):
     monkeypatch.setattr(
         control_center,
         "_run_project_organizer",
-        lambda state: {"ok": True, "workflow": "project_organizer", "state": "live"},
+        lambda state, **kwargs: {
+            "ok": True,
+            "workflow": "project_organizer",
+            "state": "live",
+        },
     )
     state = _state(port=0)
     handler_cls = control_center._handler_factory(state)
@@ -847,12 +882,12 @@ def test_http_mix_review_and_low_end_endpoints(monkeypatch):
     monkeypatch.setattr(
         control_center,
         "_run_mix_review",
-        lambda state: {"ok": True, "workflow": "mix_review", "state": "live"},
+        lambda state, **kwargs: {"ok": True, "workflow": "mix_review", "state": "live"},
     )
     monkeypatch.setattr(
         control_center,
         "_run_low_end_analysis",
-        lambda state: {
+        lambda state, **kwargs: {
             "ok": True,
             "workflow": "low_end_analysis",
             "title": "Low-End Analysis",
@@ -1040,6 +1075,63 @@ def test_build_mix_review_report_summarizes_levels_findings_and_visuals():
     assert any(row["low_end"] for row in report["visuals"]["stereo_tracks"])
     assert any(row["name"] == "Sub Bass" for row in report["details"]["low_end"]["tracks"])
     assert any(track["plugins"] for track in report["details"]["tracks"])
+
+
+def test_mix_review_user_decision_validates_heuristic_findings():
+    snapshot = {
+        "playing": True,
+        "levels_valid": True,
+        "peak_window": {"source": "sustained_1200ms"},
+        "tracks": [
+            {
+                "index": 0,
+                "name": "Master",
+                "vol_db": 0.0,
+                "peak_db": -3.0,
+                "peak_max": 0.7,
+                "pan": 0.0,
+                "stereo_sep": 0.0,
+                "plugins": [],
+                "routes_to": [],
+            },
+            {
+                "index": 5,
+                "name": "Pad",
+                "vol_db": -7.0,
+                "peak_db": -14.0,
+                "peak_max": 0.2,
+                "pan": 0.0,
+                "stereo_sep": 0.0,
+                "plugins": [],
+                "routes_to": [{"dst": 0, "dst_name": "Master"}],
+            },
+        ],
+        "template_context": {},
+        "gather_errors": [],
+    }
+
+    provisional = control_center._build_mix_review_report(snapshot)
+    heuristic = next(row for row in provisional["findings"] if row["rule"] == "missing_hpf")
+    validated = control_center._build_mix_review_report(
+        snapshot,
+        user_decisions=(
+            {
+                "interaction_id": "mix_review.confirm_heuristics",
+                "decision": "selected",
+                "selected": [heuristic["id"]],
+            },
+        ),
+    )
+    finding = next(row for row in validated["findings"] if row["id"] == heuristic["id"])
+
+    assert provisional["interaction_requests"][0]["id"] == "mix_review.confirm_heuristics"
+    assert provisional["metadata"]["score_status"] == "provisional"
+    assert validated["metadata"]["score_status"] == "final"
+    assert validated["metadata"]["blocked_fix_plan_until_confirmed"] is False
+    assert finding["severity"] == "info"
+    assert finding["metadata"]["human_validation_required"] is False
+    assert finding["metadata"]["validated_by_user"] is True
+    assert finding["metadata"]["user_intent"] == "intentional"
 
 
 def test_build_mix_review_report_surfaces_playback_limitations_when_stopped():

@@ -127,6 +127,56 @@ def test_low_end_name_based_detection_requests_human_validation() -> None:
     assert payload["metadata"]["blocked_fix_plan_until_confirmed"] is True
 
 
+def test_low_end_user_decision_validates_detected_tracks() -> None:
+    report = control_center._build_low_end_analysis_report(
+        {
+            "ok": True,
+            "workflow": "low_end_analysis",
+            "title": "Low-End Analysis",
+            "evidence_mode": "static_snapshot_only",
+            "summary": {"levels_valid": False},
+            "user_decisions": [
+                {
+                    "interaction_id": "low_end.confirm_detected_tracks",
+                    "decision": "selected",
+                    "selected": ["mixer:2"],
+                }
+            ],
+            "details": {
+                "tracks": [
+                    {"track": 2, "name": "Sub Bass", "pan": 0.4},
+                    {"track": 4, "name": "Pad", "pan": 0.0},
+                ],
+                "low_end": {
+                    "tracks": [{"track": 2, "name": "Sub Bass", "pan": 0.4}],
+                    "findings": [
+                        {
+                            "id": "low_end_off_center_1",
+                            "severity": "medium",
+                            "rule": "low_end_off_center",
+                            "title": "Low-End Pan Risk",
+                            "track": "Sub Bass",
+                            "evidence": "pan +0.40",
+                        }
+                    ],
+                },
+            },
+        }
+    )
+
+    payload = report.to_dict()
+    finding = payload["findings"][0]
+
+    assert payload["user_decisions"][0]["interaction_request_id"] == (
+        "low_end.confirm_detected_tracks"
+    )
+    assert payload["metadata"]["score_status"] == "final"
+    assert payload["metadata"]["blocked_fix_plan_until_confirmed"] is False
+    assert "pending_interaction_request_ids" not in payload["metadata"]
+    assert finding["metadata"]["human_validation_required"] is False
+    assert finding["metadata"]["validated_by_user"] is True
+
+
 def test_low_end_report_can_represent_manual_audio_task() -> None:
     report = control_center._build_low_end_analysis_report(
         {

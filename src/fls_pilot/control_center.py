@@ -27,7 +27,9 @@ from . import doctor, kb_policy, protocol
 from . import project_templates as templates
 from .analysis import (
     EVIDENCE_TYPE_NAME_BASED_DETECTION,
+    EVIDENCE_TYPE_PLUGIN_NAME_BASED_DETECTION,
     EVIDENCE_TYPE_ROUTING_BASED_DETECTION,
+    EVIDENCE_TYPE_TEMPLATE_PROFILE_DETECTION,
     AnalysisReport,
     Coverage,
     EntityRef,
@@ -83,6 +85,100 @@ MANUAL_CHECKPOINTS = {
 LOW_END_VALIDATION_REQUEST_ID = "low_end.confirm_detected_tracks"
 ORGANIZER_VALIDATION_REQUEST_ID = "organizer.confirm_cleanup_heuristics"
 ROUTING_VALIDATION_REQUEST_ID = "routing.confirm_cleanup_heuristics"
+MIX_REVIEW_VALIDATION_REQUEST_ID = "mix_review.confirm_heuristics"
+TEMPLATE_PROFILE_VALIDATION_REQUEST_ID = "template.confirm_profile"
+MIX_REVIEW_HEURISTIC_RULES = {
+    "missing_hpf",
+    "missing_compressor",
+    "ungrouped",
+    "eq_clash",
+}
+
+
+def _extract_user_decisions(inputs_or_body: Any) -> tuple[dict[str, Any], ...]:
+    if not isinstance(inputs_or_body, dict):
+        return ()
+    raw = inputs_or_body.get("user_decisions")
+    if raw is None and isinstance(inputs_or_body.get("inputs"), dict):
+        raw = inputs_or_body["inputs"].get("user_decisions")
+    if not isinstance(raw, (list, tuple)):
+        return ()
+    decisions = []
+    for row in raw:
+        decision = _normalize_user_decision(row)
+        if decision is not None:
+            decisions.append(decision)
+    return tuple(decisions)
+
+
+def _workflow_inputs_from_body(body: dict[str, Any]) -> dict[str, Any]:
+    inputs = dict(body.get("inputs") or {}) if isinstance(body.get("inputs"), dict) else {}
+    user_decisions = _extract_user_decisions(body)
+    if user_decisions:
+        inputs["user_decisions"] = [dict(row) for row in user_decisions]
+    return inputs
+
+
+def _normalize_user_decision(row: Any) -> dict[str, Any] | None:
+    if not isinstance(row, dict):
+        return None
+    out = {str(key): value for key, value in row.items()}
+    request_id = _user_decision_request_id(out)
+    if not request_id:
+        return None
+    out["interaction_request_id"] = request_id
+    out.setdefault("interaction_id", request_id)
+    if out.get("workflow_id") is not None:
+        out["workflow_id"] = str(out["workflow_id"])
+    selected_values = _user_decision_selected_values(out)
+    if selected_values:
+        out["selected_values"] = list(selected_values)
+        out.setdefault("selected", list(selected_values))
+        if len(selected_values) == 1:
+            out.setdefault("selected_value", selected_values[0])
+    return out
+
+
+def _user_decision_request_id(row: dict[str, Any]) -> str:
+    return str(
+        row.get("interaction_request_id")
+        or row.get("interaction_id")
+        or row.get("id")
+        or ""
+    ).strip()
+
+
+def _user_decision_selected_values(row: dict[str, Any]) -> tuple[str, ...]:
+    raw = row.get("selected_values")
+    if raw is None:
+        raw = row.get("selected")
+    if raw is None and row.get("selected_value") is not None:
+        raw = (row.get("selected_value"),)
+    if raw is None and row.get("value") is not None:
+        raw = (row.get("value"),)
+    if not isinstance(raw, (list, tuple, set)):
+        return ()
+    values = []
+    for value in raw:
+        text = str(value or "").strip()
+        if text and text not in values:
+            values.append(text)
+    return tuple(values)
+
+
+def _user_decision_satisfies(row: dict[str, Any]) -> bool:
+    if bool(row.get("skipped")):
+        return False
+    decision = str(row.get("decision") or "").strip().lower()
+    if decision in {"skip", "skipped"}:
+        return False
+    if decision in {"confirm", "confirmed", "complete", "completed", "selected"}:
+        return True
+    if row.get("confirmed") is True or row.get("completed") is True:
+        return True
+    return any(key in row for key in ("selected", "selected_values", "selected_value"))
+
+
 def _read_project_version() -> str:
     try:
         project_root = Path(__file__).resolve().parent.parent.parent
@@ -957,13 +1053,17 @@ def _run_mix_review(
     state: ControlCenterState,
     *,
     bridge_override: Any | None = None,
+    inputs: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Run the read-only Mix Review workflow for the Control Center UI."""
+    user_decisions = _extract_user_decisions(inputs or {})
     if bridge_override is None and hasattr(state, "runtime_client"):
         try:
-            return _runtime_client(state).run_workflow("mix_review")
+            return _runtime_client(state).run_workflow("mix_review", inputs=inputs or {})
         except Exception as exc:
             report = _mix_review_unavailable_report(f"{type(exc).__name__}: {exc}")
+            if user_decisions:
+                report["user_decisions"] = [dict(row) for row in user_decisions]
             analysis = _generic_analysis_report_from_legacy(
                 report, "mix_review", "Mix Review"
             )
@@ -986,7 +1086,14 @@ def _run_mix_review(
             )
 
         snapshot = _collect_mix_snapshot(state, bridge)
-        report_payload = _build_mix_review_report(snapshot)
+        snapshot["template_context"] = _resolve_template_context_for_snapshot(
+            snapshot,
+            user_decisions=user_decisions,
+        )
+        report_payload = _build_mix_review_report(
+            snapshot,
+            user_decisions=user_decisions,
+        )
         analysis_report = _generic_analysis_report_from_legacy(
             report_payload,
             "mix_review",
@@ -996,6 +1103,8 @@ def _run_mix_review(
         return analysis_report_for_control_center(analysis_report, report_payload)
     except Exception as exc:
         report = _mix_review_unavailable_report(f"{type(exc).__name__}: {exc}")
+        if user_decisions:
+            report["user_decisions"] = [dict(row) for row in user_decisions]
         analysis_report = _generic_analysis_report_from_legacy(
             report,
             "mix_review",
@@ -1013,13 +1122,20 @@ def _run_low_end_analysis(
     state: ControlCenterState,
     *,
     bridge_override: Any | None = None,
+    inputs: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Run the read-only Low-End Analysis workflow for the Control Center UI."""
+    user_decisions = _extract_user_decisions(inputs or {})
     if bridge_override is None and hasattr(state, "runtime_client"):
         try:
-            return _runtime_client(state).run_workflow("low_end_analysis")
+            return _runtime_client(state).run_workflow(
+                "low_end_analysis",
+                inputs=inputs or {},
+            )
         except Exception as exc:
             report = _low_end_unavailable_report(f"{type(exc).__name__}: {exc}")
+            if user_decisions:
+                report["user_decisions"] = [dict(row) for row in user_decisions]
             analysis = _build_low_end_analysis_report(report)
             return analysis_report_for_control_center(analysis, report)
     bridge = bridge_override
@@ -1038,12 +1154,18 @@ def _run_low_end_analysis(
                 "refresh the connection."
             )
         else:
-            report = _build_low_end_legacy_report(_collect_mix_snapshot(state, bridge))
-        return _store_low_end_report(state, report)
+            snapshot = _collect_mix_snapshot(state, bridge)
+            snapshot["template_context"] = _resolve_template_context_for_snapshot(
+                snapshot,
+                user_decisions=user_decisions,
+            )
+            report = _build_low_end_legacy_report(snapshot)
+        return _store_low_end_report(state, report, user_decisions=user_decisions)
     except Exception as exc:
         return _store_low_end_report(
             state,
             _low_end_unavailable_report(f"{type(exc).__name__}: {exc}"),
+            user_decisions=user_decisions,
         )
     finally:
         if owns_bridge and bridge is not None:
@@ -1054,7 +1176,14 @@ def _run_low_end_analysis(
 def _store_low_end_report(
     state: ControlCenterState,
     legacy_report: dict[str, Any],
+    *,
+    user_decisions: tuple[dict[str, Any], ...] = (),
 ) -> dict[str, Any]:
+    if user_decisions:
+        legacy_report = {
+            **legacy_report,
+            "user_decisions": [dict(row) for row in user_decisions],
+        }
     analysis_report = _build_low_end_analysis_report(legacy_report)
     store = getattr(state, "report_store", None)
     if store is not None:
@@ -1125,6 +1254,7 @@ def _build_low_end_legacy_report(snapshot: dict[str, Any]) -> dict[str, Any]:
         },
         "details": {
             "tracks": low_tracks,
+            "all_tracks": [_mix_track_detail(row) for row in tracks],
             "notes": list(low_end.get("notes") or []),
             "limits": [str(low_end.get("analysis_limits") or "")],
             "gather_errors": list(snapshot.get("gather_errors") or []),
@@ -1203,7 +1333,7 @@ def _low_end_validation_request(low_end_tracks: list[dict[str, Any]]) -> dict[st
 
 def _validation_request_ids(
     *,
-    findings: tuple[Finding, ...],
+    findings: tuple[Any, ...],
     interaction_requests: tuple[dict[str, Any], ...],
     user_decisions: tuple[dict[str, Any], ...] = (),
 ) -> tuple[str, ...]:
@@ -1211,7 +1341,7 @@ def _validation_request_ids(
     decided = {
         str(row.get("interaction_request_id") or row.get("interaction_id") or row.get("id") or "")
         for row in user_decisions
-        if isinstance(row, dict)
+        if isinstance(row, dict) and _user_decision_satisfies(row)
     }
     for request in interaction_requests:
         request_id = str(request.get("id") or "").strip()
@@ -1236,6 +1366,269 @@ def _blocked_until_validation(
     ]
 
 
+def _user_decision_for_request(
+    user_decisions: tuple[dict[str, Any], ...],
+    request_id: str,
+) -> dict[str, Any] | None:
+    for row in reversed(user_decisions):
+        if _user_decision_request_id(row) == request_id and _user_decision_satisfies(row):
+            return row
+    return None
+
+
+def _mark_validated_findings(
+    findings: tuple[Finding, ...],
+    *,
+    user_decisions: tuple[dict[str, Any], ...],
+) -> tuple[Finding, ...]:
+    if not user_decisions:
+        return findings
+    out = []
+    for finding in findings:
+        request_id = str(finding.metadata.get("interaction_request_id") or "").strip()
+        decision = _user_decision_for_request(user_decisions, request_id)
+        if not decision:
+            out.append(finding)
+            continue
+        metadata = {
+            **finding.metadata,
+            "human_validation_required": False,
+            "provisional": False,
+            "validated_by_user": True,
+            "validation_source": "user_decision",
+        }
+        out.append(Finding(**{**finding.__dict__, "metadata": metadata}))
+    return tuple(out)
+
+
+def _apply_group_user_decisions(
+    findings: list[dict[str, Any]],
+    *,
+    request_id: str,
+    user_decisions: tuple[dict[str, Any], ...],
+) -> None:
+    decision = _user_decision_for_request(user_decisions, request_id)
+    if not decision:
+        return
+    intentional_ids = set(_user_decision_selected_values(decision))
+    for row in findings:
+        metadata = row.get("metadata")
+        if not isinstance(metadata, dict):
+            continue
+        if metadata.get("interaction_request_id") != request_id:
+            continue
+        row_id = str(row.get("id") or "")
+        updated = {
+            **metadata,
+            "human_validation_required": False,
+            "provisional": False,
+            "validated_by_user": True,
+            "validation_source": "user_decision",
+        }
+        if row_id in intentional_ids:
+            updated["user_intent"] = "intentional"
+            row["severity"] = "info"
+            row["detail"] = f"{row.get('detail', '').rstrip()} Confirmed intentional by user.".strip()
+        row["metadata"] = updated
+
+
+def _apply_low_end_user_decisions(
+    low_end_tracks: list[dict[str, Any]],
+    all_tracks: list[dict[str, Any]],
+    *,
+    user_decisions: tuple[dict[str, Any], ...],
+) -> list[dict[str, Any]]:
+    decision = _user_decision_for_request(user_decisions, LOW_END_VALIDATION_REQUEST_ID)
+    if not decision:
+        return low_end_tracks
+    selected = set(_user_decision_selected_values(decision))
+    removed = {
+        str(value or "").strip()
+        for value in decision.get("removed_entities") or ()
+        if str(value or "").strip()
+    }
+    role_changes = {
+        str(row.get("entity_id") or "").strip(): str(row.get("role") or "").strip()
+        for row in decision.get("role_changes") or ()
+        if isinstance(row, dict) and str(row.get("entity_id") or "").strip()
+    }
+    out = []
+    seen_entities: set[str] = set()
+    for track in low_end_tracks:
+        item = dict(track)
+        entity_id = _low_end_track_entity_id(item)
+        label = str(item.get("name") or "").strip()
+        if entity_id in removed or label in removed:
+            continue
+        if selected and entity_id not in selected and label not in selected:
+            continue
+        if role_changes.get(entity_id):
+            item["low_end_role"] = role_changes[entity_id]
+        item["validated_by_user"] = True
+        item["validation_source"] = "user_decision"
+        out.append(item)
+        if entity_id:
+            seen_entities.add(entity_id)
+    for added in decision.get("added_entities") or ():
+        if not isinstance(added, dict):
+            continue
+        entity_id = str(added.get("entity_id") or "").strip()
+        if not entity_id or entity_id in seen_entities:
+            continue
+        track = _track_from_entity_id(entity_id, all_tracks)
+        if track is None:
+            continue
+        item = {
+            **track,
+            "low_end": True,
+            "low_end_role": str(added.get("role") or _low_end_role(track.get("name"))),
+            "validated_by_user": True,
+            "validation_source": "user_decision",
+        }
+        out.append(item)
+        seen_entities.add(entity_id)
+    return out
+
+
+def _low_end_track_entity_id(row: dict[str, Any]) -> str:
+    track = _as_int(row.get("track", row.get("index")))
+    return mixer_entity_id(track) if track is not None else ""
+
+
+def _track_from_entity_id(
+    entity_id: str,
+    tracks: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    prefix = "mixer:"
+    if not entity_id.startswith(prefix):
+        return None
+    track = _as_int(entity_id[len(prefix):])
+    if track is None:
+        return None
+    for row in tracks:
+        if _as_int(row.get("track", row.get("index"))) == track:
+            return dict(row)
+    return None
+
+
+def _apply_mix_user_decisions(
+    findings: list[dict[str, Any]],
+    user_decisions: tuple[dict[str, Any], ...],
+) -> None:
+    decision = _user_decision_for_request(user_decisions, MIX_REVIEW_VALIDATION_REQUEST_ID)
+    intentional_ids = set(_user_decision_selected_values(decision or {}))
+    for row in findings:
+        rule = str(row.get("rule") or "")
+        if rule not in MIX_REVIEW_HEURISTIC_RULES:
+            continue
+        evidence_type = (
+            EVIDENCE_TYPE_PLUGIN_NAME_BASED_DETECTION
+            if rule in {"missing_hpf", "missing_compressor", "eq_clash"}
+            else EVIDENCE_TYPE_ROUTING_BASED_DETECTION
+        )
+        metadata = heuristic_validation_metadata(
+            evidence_type=evidence_type,
+            interaction_request_id=MIX_REVIEW_VALIDATION_REQUEST_ID,
+            reason=rule,
+        )
+        if decision:
+            metadata.update(
+                {
+                    "human_validation_required": False,
+                    "provisional": False,
+                    "validated_by_user": True,
+                    "validation_source": "user_decision",
+                }
+            )
+            if str(row.get("id") or "") in intentional_ids:
+                metadata["user_intent"] = "intentional"
+                row["severity"] = "info"
+        row["metadata"] = {**dict(row.get("metadata") or {}), **metadata}
+
+
+def _mix_validation_requests(findings: list[dict[str, Any]]) -> tuple[dict[str, Any], ...]:
+    options = [
+        {
+            "id": str(row.get("id")),
+            "label": str(row.get("title") or row.get("id")),
+            "rule": str(row.get("rule") or ""),
+            "track": row.get("track"),
+        }
+        for row in findings
+        if isinstance(row.get("metadata"), dict)
+        and row["metadata"].get("interaction_request_id") == MIX_REVIEW_VALIDATION_REQUEST_ID
+    ]
+    if not options:
+        return ()
+    return (
+        InteractionRequest(
+            id=MIX_REVIEW_VALIDATION_REQUEST_ID,
+            type="multi_select",
+            title="Confirm mix-review heuristic findings",
+            prompt=(
+                "Which mix-review heuristic findings are intentional sound design "
+                "or should be kept before fix planning is final?"
+            ),
+            options=tuple(options),
+            allow_remove=True,
+            metadata={
+                "reason": "heuristic_mix_review",
+                "finding_ids": [row["id"] for row in options],
+            },
+        ).to_dict(),
+    )
+
+
+def _resolve_template_context_for_snapshot(
+    snapshot: dict[str, Any],
+    *,
+    user_decisions: tuple[dict[str, Any], ...],
+) -> dict[str, Any]:
+    return templates.resolve_with_user_decisions(
+        snapshot.get("template_context") or {},
+        user_decisions,
+        mixer_tracks=snapshot.get("tracks") or [],
+        routing_rows=snapshot.get("routing") or [],
+        channel_rows=snapshot.get("channel_routing") or [],
+    )
+
+
+def _template_profile_validation_request(
+    template_context: dict[str, Any],
+) -> dict[str, Any] | None:
+    if not template_context.get("matched") or not template_context.get("ambiguous"):
+        return None
+    candidate_slugs = list(template_context.get("candidate_slugs") or ())
+    candidate_names = list(template_context.get("candidate_templates") or ())
+    options = []
+    for index, slug in enumerate(candidate_slugs):
+        text = str(slug or "").strip()
+        if not text:
+            continue
+        options.append(
+            {
+                "id": text,
+                "value": text,
+                "label": str(candidate_names[index] if index < len(candidate_names) else text),
+            }
+        )
+    options.append({"id": "none", "value": "none", "label": "None of these"})
+    return InteractionRequest(
+        id=TEMPLATE_PROFILE_VALIDATION_REQUEST_ID,
+        type="single_select",
+        title="Confirm template profile",
+        prompt=(
+            "Multiple template profiles match similarly. Which template is correct?"
+        ),
+        options=tuple(options),
+        metadata={
+            "reason": template_context.get("ambiguity_reason")
+            or "profile_scores_too_close",
+            "evidence_type": EVIDENCE_TYPE_TEMPLATE_PROFILE_DETECTION,
+        },
+    ).to_dict()
+
+
 def _snapshot_evidence_mode(snapshot: dict[str, Any]) -> str:
     live_window = snapshot.get("live_window")
     levels_valid = bool(snapshot.get("levels_valid"))
@@ -1258,6 +1651,12 @@ def _build_low_end_analysis_report(report: dict[str, Any]) -> AnalysisReport:
     low_end = dict(details.get("low_end") or {})
     low_end_findings = [dict(row) for row in low_end.get("findings") or [] if isinstance(row, dict)]
     low_end_tracks = [dict(row) for row in low_end.get("tracks") or [] if isinstance(row, dict)]
+    user_decisions = _extract_user_decisions(report)
+    low_end_tracks = _apply_low_end_user_decisions(
+        low_end_tracks,
+        [dict(row) for row in details.get("all_tracks") or () if isinstance(row, dict)],
+        user_decisions=user_decisions,
+    )
     levels_valid = bool(summary.get("levels_valid"))
     ok = bool(report.get("ok"))
     analysis_mode = _low_end_analysis_mode(summary)
@@ -1303,6 +1702,10 @@ def _build_low_end_analysis_report(report: dict[str, Any]) -> AnalysisReport:
         confidence_score=confidence,
     )
     findings = (*legacy_findings, *rule_findings)
+    findings = _mark_validated_findings(
+        findings,
+        user_decisions=user_decisions,
+    )
     interaction_requests = tuple(
         row
         for row in (_low_end_validation_request(low_end_tracks),)
@@ -1311,6 +1714,7 @@ def _build_low_end_analysis_report(report: dict[str, Any]) -> AnalysisReport:
     pending_validation = _validation_request_ids(
         findings=findings,
         interaction_requests=interaction_requests,
+        user_decisions=user_decisions,
     )
     limits = _unique_strings(
         [
@@ -1410,6 +1814,7 @@ def _build_low_end_analysis_report(report: dict[str, Any]) -> AnalysisReport:
             },
         ),
         interaction_requests=interaction_requests,
+        user_decisions=user_decisions,
         safety={"read_only": True, "project_changes": False},
         metadata={
             "legacy_workflow": report.get("workflow"),
@@ -1666,7 +2071,11 @@ def _mix_review_unavailable_report(message: str) -> dict[str, Any]:
     }
 
 
-def _build_mix_review_report(snapshot: dict[str, Any]) -> dict[str, Any]:
+def _build_mix_review_report(
+    snapshot: dict[str, Any],
+    *,
+    user_decisions: tuple[dict[str, Any], ...] = (),
+) -> dict[str, Any]:
     diagnosis = mix_review.diagnose(snapshot)
     fix_plan = mix_review.plan_fixes(snapshot)
     gain_plan = mix_review.gain_stage_plan(snapshot)
@@ -1680,10 +2089,34 @@ def _build_mix_review_report(snapshot: dict[str, Any]) -> dict[str, Any]:
         _mix_finding_summary(finding, index=index)
         for index, finding in enumerate(diagnosis.get("findings") or [], start=1)
     ]
+    _apply_mix_user_decisions(findings, user_decisions)
     proposals = _mix_proposal_summaries(
         list(fix_plan.get("plans") or []),
         list(gain_plan.get("plans") or []),
     )
+    interaction_requests = _mix_validation_requests(findings)
+    template_request = _template_profile_validation_request(
+        diagnosis.get("template_context") or snapshot.get("template_context") or {}
+    )
+    if template_request is not None:
+        interaction_requests = (*interaction_requests, template_request)
+    pending_validation = _validation_request_ids(
+        findings=tuple(
+            _generic_analysis_finding(
+                row,
+                workflow="mix_review",
+                index=index,
+                evidence_mode=_broad_analysis_mode(
+                    diagnosis.get("evidence_mode", "static_snapshot_only")
+                ),
+                confidence_score=80,
+            )
+            for index, row in enumerate(findings, start=1)
+        ),
+        interaction_requests=interaction_requests,
+        user_decisions=user_decisions,
+    )
+    proposals = _blocked_until_validation(proposals, pending_validation)
     high = sum(1 for row in findings if row["severity"] == "high")
     medium = sum(1 for row in findings if row["severity"] == "medium")
     low = sum(1 for row in findings if row["severity"] == "low")
@@ -1783,6 +2216,9 @@ def _build_mix_review_report(snapshot: dict[str, Any]) -> dict[str, Any]:
             },
             "kb_policy_refs": kb_policy.rule_refs(MIX_POLICY_RULE_IDS),
         },
+        "interaction_requests": list(interaction_requests),
+        "user_decisions": [dict(row) for row in user_decisions],
+        "metadata": provisional_score_metadata(pending_validation),
         "safety": {"read_only": True, "project_changes": False},
     }
 
@@ -2079,15 +2515,22 @@ def _run_project_organizer(
     state: ControlCenterState,
     *,
     bridge_override: Any | None = None,
+    inputs: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Run the read-only Project Organizer workflow for the Control Center UI."""
+    user_decisions = _extract_user_decisions(inputs or {})
     if bridge_override is None and hasattr(state, "runtime_client"):
         try:
-            return _runtime_client(state).run_workflow("project_organizer")
+            return _runtime_client(state).run_workflow(
+                "project_organizer",
+                inputs=inputs or {},
+            )
         except Exception as exc:
             report = _project_organizer_unavailable_report(
                 f"{type(exc).__name__}: {exc}"
             )
+            if user_decisions:
+                report["user_decisions"] = [dict(row) for row in user_decisions]
             analysis = _generic_analysis_report_from_legacy(
                 report, "project_organizer", "Organizer"
             )
@@ -2120,6 +2563,13 @@ def _run_project_organizer(
         patterns = list(static_snapshot.patterns)
         playlist_tracks = list(static_snapshot.playlist_tracks)
         routing = list(static_snapshot.routing)
+        template_context = templates.resolve_with_user_decisions(
+            static_snapshot.template_context,
+            user_decisions,
+            mixer_tracks=mixer_tracks,
+            routing_rows=routing,
+            channel_rows=channel_routing,
+        )
         merged_channels = _merge_channel_snapshots(
             routing_rows=_dict_rows(channel_routing),
             channel_rows=_dict_rows(channel_list),
@@ -2130,7 +2580,8 @@ def _run_project_organizer(
             patterns=_dict_rows(patterns),
             playlist_tracks=_dict_rows(playlist_tracks),
             routing=_dict_rows(routing),
-            template_context=static_snapshot.template_context,
+            template_context=template_context,
+            user_decisions=user_decisions,
         )
         report_payload.setdefault("details", {}).update(
             {
@@ -2147,6 +2598,8 @@ def _run_project_organizer(
         return analysis_report_for_control_center(analysis_report, report_payload)
     except Exception as exc:
         report = _project_organizer_unavailable_report(f"{type(exc).__name__}: {exc}")
+        if user_decisions:
+            report["user_decisions"] = [dict(row) for row in user_decisions]
         analysis_report = _generic_analysis_report_from_legacy(
             report,
             "project_organizer",
@@ -2255,6 +2708,10 @@ def _generic_analysis_report_from_legacy(
         dict(row)
         for row in report.get("user_decisions") or ()
         if isinstance(row, dict)
+    )
+    findings = _mark_validated_findings(
+        findings,
+        user_decisions=user_decisions,
     )
     pending_validation = _validation_request_ids(
         findings=findings,
@@ -2412,6 +2869,7 @@ def _build_project_organizer_report(
     playlist_tracks: list[dict[str, Any]],
     routing: list[dict[str, Any]],
     template_context: dict[str, Any],
+    user_decisions: tuple[dict[str, Any], ...] = (),
 ) -> dict[str, Any]:
     mixer_by_index = {
         idx: dict(row)
@@ -2482,8 +2940,29 @@ def _build_project_organizer_report(
         unnamed_patterns=unnamed_patterns,
         candidate_groups=candidate_groups,
     )
+    _apply_group_user_decisions(
+        findings,
+        request_id=ORGANIZER_VALIDATION_REQUEST_ID,
+        user_decisions=user_decisions,
+    )
     interaction_requests = _organizer_validation_requests(findings)
-    pending_validation = pending_human_validation_ids(findings)
+    template_request = _template_profile_validation_request(template_context)
+    if template_request is not None:
+        interaction_requests = (*interaction_requests, template_request)
+    pending_validation = _validation_request_ids(
+        findings=tuple(
+            _generic_analysis_finding(
+                row,
+                workflow="project_organizer",
+                index=index,
+                evidence_mode="static_snapshot",
+                confidence_score=80,
+            )
+            for index, row in enumerate(findings, start=1)
+        ),
+        interaction_requests=interaction_requests,
+        user_decisions=user_decisions,
+    )
     cleanup_steps = _blocked_until_validation(cleanup_steps, pending_validation)
     naming_rules = [
         step
@@ -2560,6 +3039,7 @@ def _build_project_organizer_report(
             "kb_policy_refs": kb_policy.rule_refs(ORGANIZER_POLICY_RULE_IDS),
         },
         "interaction_requests": list(interaction_requests),
+        "user_decisions": [dict(row) for row in user_decisions],
         "metadata": provisional_score_metadata(pending_validation),
         "safety": {
             "read_only": True,
@@ -3299,13 +3779,20 @@ def _run_routing_audit(
     state: ControlCenterState,
     *,
     bridge_override: Any | None = None,
+    inputs: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Run the read-only Routing Audit workflow for the Control Center UI."""
+    user_decisions = _extract_user_decisions(inputs or {})
     if bridge_override is None and hasattr(state, "runtime_client"):
         try:
-            return _runtime_client(state).run_workflow("routing_audit")
+            return _runtime_client(state).run_workflow(
+                "routing_audit",
+                inputs=inputs or {},
+            )
         except Exception as exc:
             report = _routing_unavailable_report(f"{type(exc).__name__}: {exc}")
+            if user_decisions:
+                report["user_decisions"] = [dict(row) for row in user_decisions]
             analysis = routing_analysis_report_from_legacy_payload(
                 report,
                 workflow="routing_audit",
@@ -3333,7 +3820,13 @@ def _run_routing_audit(
         static_snapshot = state.broker.get_static_project_snapshot(bridge)
         channels = list(static_snapshot.channels)
         routing = list(static_snapshot.routing)
-        template_context = static_snapshot.template_context
+        template_context = templates.resolve_with_user_decisions(
+            static_snapshot.template_context,
+            user_decisions,
+            mixer_tracks=static_snapshot.mixer_tracks,
+            routing_rows=routing,
+            channel_rows=channels,
+        )
         unused_probe = _probe_unused_mixer_tracks(
             bridge,
             tracks=routing,
@@ -3349,11 +3842,14 @@ def _run_routing_audit(
             unused_mixer_track_probe_failed=unused_probe["probe_failed"],
             project_fingerprint=static_snapshot.project_fingerprint,
             source_observation_ids=static_snapshot.source_observation_ids,
+            user_decisions=user_decisions,
         )
         analysis_report = state.report_store.add_report(analysis_report)
         return legacy_report
     except Exception as exc:
         report = _routing_unavailable_report(f"{type(exc).__name__}: {exc}")
+        if user_decisions:
+            report["user_decisions"] = [dict(row) for row in user_decisions]
         analysis_report = routing_analysis_report_from_legacy_payload(
             report,
             workflow="routing_audit",
@@ -3422,6 +3918,7 @@ def _build_routing_audit_report(
     unused_mixer_track_probe_failed: bool = False,
     project_fingerprint: str | None = None,
     source_observation_ids: tuple[str, ...] = (),
+    user_decisions: tuple[dict[str, Any], ...] = (),
 ) -> tuple[AnalysisReport, dict[str, Any]]:
     unrouted_automation_clips = 0
     filtered_channels = []
@@ -3536,8 +4033,29 @@ def _build_routing_audit_report(
         template_context=template_context,
         unused_probe_failed=unused_mixer_track_probe_failed,
     )
+    _apply_group_user_decisions(
+        findings,
+        request_id=ROUTING_VALIDATION_REQUEST_ID,
+        user_decisions=user_decisions,
+    )
     interaction_requests = _routing_validation_requests(findings)
-    pending_validation = pending_human_validation_ids(findings)
+    template_request = _template_profile_validation_request(template_context)
+    if template_request is not None:
+        interaction_requests = (*interaction_requests, template_request)
+    pending_validation = _validation_request_ids(
+        findings=tuple(
+            _generic_analysis_finding(
+                row,
+                workflow="routing_audit",
+                index=index,
+                evidence_mode="static_snapshot",
+                confidence_score=80,
+            )
+            for index, row in enumerate(findings, start=1)
+        ),
+        interaction_requests=interaction_requests,
+        user_decisions=user_decisions,
+    )
 
     track_details = []
     for idx, _row in sorted(track_by_index.items()):
@@ -3599,6 +4117,7 @@ def _build_routing_audit_report(
             "source_observation_ids": list(source_observation_ids),
         },
         "interaction_requests": list(interaction_requests),
+        "user_decisions": [dict(row) for row in user_decisions],
         "metadata": provisional_score_metadata(pending_validation),
         "safety": {"read_only": True, "project_changes": False},
     }
@@ -4278,15 +4797,27 @@ def _handler_factory(state: ControlCenterState):
             elif self.path == "/api/audio-analysis":
                 self._json(_run_audio_analysis_action(state, body))
             elif self.path == "/api/workflows/mix-review":
-                self._json(_run_mix_review(state))
+                self._json(_run_mix_review(state, inputs=_workflow_inputs_from_body(body)))
             elif self.path == "/api/workflows/low-end-analysis":
-                self._json(_run_low_end_analysis(state))
+                self._json(
+                    _run_low_end_analysis(state, inputs=_workflow_inputs_from_body(body))
+                )
             elif self.path == "/api/workflows/project-organizer":
-                self._json(_run_project_organizer(state))
+                self._json(
+                    _run_project_organizer(state, inputs=_workflow_inputs_from_body(body))
+                )
             elif self.path == "/api/workflows/routing-audit":
-                self._json(_run_routing_audit(state))
+                self._json(
+                    _run_routing_audit(state, inputs=_workflow_inputs_from_body(body))
+                )
             elif self.path == "/api/workflows/preflight":
-                self._json(_run_runtime_product_workflow(state, "preflight"))
+                self._json(
+                    _run_runtime_product_workflow(
+                        state,
+                        "preflight",
+                        inputs=_workflow_inputs_from_body(body),
+                    )
+                )
             elif self.path == "/api/workflows/project-health":
                 try:
                     self._json(_runtime_client(state).project_health())
