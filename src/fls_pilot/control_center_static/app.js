@@ -478,6 +478,7 @@ function renderRuntimeProductPanel(workflowId) {
     summary.appendChild(item);
   }
   container.appendChild(summary);
+  container.appendChild(runtimeInteractionRequests(workflowId, report));
   container.appendChild(runtimeReportList("Findings", report.findings, "No findings in available evidence."));
   container.appendChild(runtimeReportList("Limitations", report.limitations, "No additional limitations reported."));
   container.appendChild(runtimeReportList("Next evidence step", report.next_actions, "No next evidence step reported."));
@@ -533,6 +534,197 @@ function runtimeReportList(titleText, rows, emptyText) {
   }
   card.appendChild(list);
   return card;
+}
+
+function runtimeInteractionRequests(workflowId, report) {
+  const card = document.createElement("section");
+  card.className = "workflow-runtime-list workflow-runtime-interactions";
+  const title = document.createElement("h2");
+  title.textContent = "Interaction requests";
+  card.appendChild(title);
+
+  const requests = Array.isArray(report?.interaction_requests) ? report.interaction_requests : [];
+  if (!requests.length) {
+    const empty = document.createElement("p");
+    empty.textContent = "No interaction requests reported.";
+    card.appendChild(empty);
+    return card;
+  }
+
+  for (const request of requests.slice(0, 12)) {
+    if (!request || typeof request !== "object") continue;
+    const item = document.createElement("div");
+    item.className = "workflow-interaction-request";
+
+    const heading = document.createElement("h3");
+    heading.textContent = safeString(request.title || interactionTypeLabel(request.type));
+    const prompt = document.createElement("p");
+    prompt.textContent = safeString(request.prompt || request.id || "Review this request.");
+    item.append(heading, prompt);
+
+    const body = document.createElement("div");
+    body.className = "workflow-interaction-body";
+    renderInteractionControl(body, workflowId, report, request);
+    item.appendChild(body);
+
+    const decision = findUserDecision(report, request.id);
+    if (decision) {
+      const saved = document.createElement("p");
+      saved.className = "workflow-interaction-decision";
+      saved.textContent = `Saved locally: ${formatUserDecision(decision)}`;
+      item.appendChild(saved);
+    }
+    card.appendChild(item);
+  }
+  return card;
+}
+
+function renderInteractionControl(container, workflowId, report, request) {
+  const type = request.type;
+  if (type === "confirm") {
+    const row = document.createElement("div");
+    row.className = "workflow-interaction-actions";
+    row.append(
+      interactionButton("Confirm", true, () => updateUserDecision(workflowId, report, request, { confirmed: true })),
+      interactionButton("Decline", false, () => updateUserDecision(workflowId, report, request, { confirmed: false }))
+    );
+    container.appendChild(row);
+    return;
+  }
+
+  if (type === "manual_task") {
+    const label = document.createElement("label");
+    label.className = "workflow-interaction-option";
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.checked = Boolean(findUserDecision(report, request.id)?.completed);
+    input.addEventListener("change", () => {
+      updateUserDecision(workflowId, report, request, {
+        completed: Boolean(input.checked),
+        value: manualTaskInputValue(container),
+      });
+    });
+    const textNode = document.createElement("span");
+    textNode.textContent = "Task completed";
+    label.append(input, textNode);
+    container.appendChild(label);
+
+    if (request.resume_input?.type) {
+      const resume = document.createElement("input");
+      resume.className = "workflow-interaction-resume";
+      resume.type = "text";
+      resume.placeholder = resumeInputPlaceholder(request.resume_input);
+      resume.value = safeString(findUserDecision(report, request.id)?.value || "");
+      resume.addEventListener("input", () => {
+        updateUserDecision(workflowId, report, request, {
+          completed: Boolean(input.checked),
+          value: resume.value,
+        });
+      });
+      container.appendChild(resume);
+    }
+    return;
+  }
+
+  if (type === "single_select" || type === "multi_select") {
+    const options = Array.isArray(request.options) ? request.options : [];
+    if (!options.length) {
+      const empty = document.createElement("p");
+      empty.textContent = "No options were provided for this request.";
+      container.appendChild(empty);
+      return;
+    }
+    const decision = findUserDecision(report, request.id);
+    const selected = new Set(Array.isArray(decision?.selected) ? decision.selected : []);
+    for (const option of options) {
+      const optionId = safeString(option.id || option.value || option.label);
+      const label = document.createElement("label");
+      label.className = "workflow-interaction-option";
+      const input = document.createElement("input");
+      input.type = type === "single_select" ? "radio" : "checkbox";
+      input.name = `interaction-${safeString(request.id)}`;
+      input.value = optionId;
+      input.checked = selected.size ? selected.has(optionId) : Boolean(option.selected);
+      input.addEventListener("change", () => {
+        const inputs = Array.from(container.querySelectorAll?.("input") || []);
+        const values = inputs
+          .filter(node => node.checked)
+          .map(node => node.value);
+        updateUserDecision(workflowId, report, request, {
+          selected: type === "single_select" ? values.slice(0, 1) : values,
+        });
+      });
+      const textNode = document.createElement("span");
+      textNode.textContent = safeString(option.label || optionId);
+      label.append(input, textNode);
+      container.appendChild(label);
+    }
+    return;
+  }
+
+  const unsupported = document.createElement("p");
+  unsupported.textContent = `Unsupported interaction type: ${safeString(type)}`;
+  container.appendChild(unsupported);
+}
+
+function interactionButton(label, primary, onClick) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = `ghost-button${primary ? " primary-action" : ""}`;
+  button.textContent = label;
+  button.addEventListener("click", onClick);
+  return button;
+}
+
+function updateUserDecision(workflowId, report, request, values) {
+  if (!report || !request?.id) return;
+  const decision = {
+    interaction_id: request.id,
+    type: request.type,
+    ...values,
+  };
+  const existing = Array.isArray(report.user_decisions) ? report.user_decisions : [];
+  report.user_decisions = [
+    ...existing.filter(item => item?.interaction_id !== request.id),
+    decision,
+  ];
+  runtimeWorkflowState(workflowId).report = report;
+  renderRuntimeProductPanel(workflowId);
+}
+
+function findUserDecision(report, requestId) {
+  const decisions = Array.isArray(report?.user_decisions) ? report.user_decisions : [];
+  return decisions.find(item => item?.interaction_id === requestId) || null;
+}
+
+function manualTaskInputValue(container) {
+  const input = container.querySelector?.(".workflow-interaction-resume");
+  return input?.value || "";
+}
+
+function resumeInputPlaceholder(resumeInput) {
+  if (resumeInput.type === "file_path") return "Path to completed file";
+  return safeString(resumeInput.label || resumeInput.type || "Response");
+}
+
+function interactionTypeLabel(type) {
+  const labels = {
+    confirm: "Confirmation",
+    manual_task: "Manual task",
+    single_select: "Single select",
+    multi_select: "Multi select",
+  };
+  return labels[type] || "Interaction";
+}
+
+function formatUserDecision(decision) {
+  if (decision.type === "confirm") return decision.confirmed ? "confirmed" : "declined";
+  if (decision.type === "manual_task") {
+    const suffix = decision.value ? ` (${decision.value})` : "";
+    return `${decision.completed ? "completed" : "not completed"}${suffix}`;
+  }
+  if (Array.isArray(decision.selected)) return decision.selected.join(", ") || "none selected";
+  return "recorded";
 }
 
 function evidenceLabel(value) {

@@ -837,6 +837,64 @@ button { font: inherit; }
   margin-top: 8px;
 }
 
+.workflow-runtime-interactions {
+  display: grid;
+  gap: 12px;
+}
+
+.workflow-interaction-request {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(143, 166, 214, 0.16);
+  border-radius: 8px;
+  background: rgba(8, 18, 35, 0.48);
+}
+
+.workflow-interaction-request h3 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.workflow-interaction-request p {
+  margin: 0;
+}
+
+.workflow-interaction-body,
+.workflow-interaction-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.workflow-interaction-option {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-height: 34px;
+  color: var(--text);
+}
+
+.workflow-interaction-option input {
+  flex: 0 0 auto;
+}
+
+.workflow-interaction-resume {
+  min-height: 36px;
+  min-width: min(100%, 280px);
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+}
+
+.workflow-interaction-decision {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
 .roadmap-status-card-header {
   display: flex; align-items: center; gap: 10px; margin-bottom: 8px;
 }

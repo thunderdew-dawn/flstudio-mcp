@@ -582,6 +582,233 @@ assert.strictEqual(elements.get("connection-ready-banner").style.display, "flex"
     )
 
 
+def test_control_center_static_runtime_interaction_requests_collect_decisions() -> None:
+    _run_node_dom_check(
+        r"""
+const assert = require("assert");
+const fs = require("fs");
+const vm = require("vm");
+
+class ClassList {
+  constructor(element) {
+    this.element = element;
+    this.values = new Set();
+  }
+  setFromString(value) {
+    this.values = new Set(String(value || "").split(/\s+/).filter(Boolean));
+  }
+  sync() {
+    this.element._className = Array.from(this.values).join(" ");
+  }
+  add(name) { this.values.add(name); this.sync(); }
+  remove(name) { this.values.delete(name); this.sync(); }
+  contains(name) { return this.values.has(name); }
+  toggle(name, force) {
+    const enabled = force === undefined ? !this.values.has(name) : Boolean(force);
+    if (enabled) this.values.add(name); else this.values.delete(name);
+    this.sync();
+    return enabled;
+  }
+}
+
+class Element {
+  constructor(tagName = "div", id = "") {
+    this.tagName = tagName.toUpperCase();
+    this.id = id;
+    this.children = [];
+    this.dataset = {};
+    this.disabled = false;
+    this.listeners = {};
+    this.parentElement = null;
+    this.style = {};
+    this.textContent = "";
+    this.title = "";
+    this.type = "";
+    this.name = "";
+    this.value = "";
+    this.checked = false;
+    this.placeholder = "";
+    this._className = "";
+    this.classList = new ClassList(this);
+  }
+  set className(value) {
+    this._className = String(value || "");
+    this.classList.setFromString(this._className);
+  }
+  get className() { return this._className; }
+  set innerHTML(value) {
+    this.children = [];
+    this.textContent = String(value || "");
+  }
+  get innerHTML() { return this.textContent; }
+  append(...nodes) { for (const node of nodes) this.appendChild(node); }
+  appendChild(node) {
+    node.parentElement = this;
+    this.children.push(node);
+    return node;
+  }
+  addEventListener(name, handler) { this.listeners[name] = handler; }
+  querySelector(selector) {
+    return collect(this, (node) => matches(node, selector))[0] || null;
+  }
+  querySelectorAll(selector) {
+    return collect(this, (node) => matches(node, selector));
+  }
+}
+
+function matches(node, selector) {
+  if (selector === "input") return node.tagName === "INPUT";
+  if (selector.startsWith(".")) return node.classList.contains(selector.slice(1));
+  return false;
+}
+
+function collect(root, predicate) {
+  const out = [];
+  function walk(node) {
+    if (predicate(node)) out.push(node);
+    for (const child of node.children || []) walk(child);
+  }
+  walk(root);
+  return out;
+}
+
+function textTree(root) {
+  let out = root.textContent || "";
+  for (const child of root.children || []) out += "\n" + textTree(child);
+  return out;
+}
+
+const elements = new Map();
+function register(id, tagName = "div", className = "") {
+  const element = new Element(tagName, id);
+  element.className = className;
+  elements.set(id, element);
+  return element;
+}
+
+const panel = register("producer_preflight", "main", "status-report");
+const content = register("preflight-runtime-content", "div", "runtime-workflow-content");
+panel.appendChild(content);
+
+const document = {
+  createElement: (tagName) => new Element(tagName),
+  getElementById: (id) => elements.get(id) || null,
+  querySelectorAll: () => [],
+  querySelector: () => null
+};
+
+const context = {
+  Blob,
+  URL,
+  clearInterval,
+  console,
+  document,
+  fetch: async () => { throw new Error("fetch not expected"); },
+  navigator: {},
+  setInterval,
+  setTimeout,
+  window: { __FLS_PILOT_TEST__: true }
+};
+context.window.document = document;
+
+vm.createContext(context);
+vm.runInContext(fs.readFileSync(process.argv[1], "utf8"), context);
+
+const controls = context.window.flsPilotControlCenter;
+controls.state.runtimeWorkflows.preflight = {
+  loading: false,
+  error: null,
+  report: {
+    report_id: "rep_interactions",
+    workflow: "preflight",
+    title: "Preflight",
+    analysis_mode: "static_snapshot",
+    evidence_mode: "static_snapshot_only",
+    freshness: { status: "fresh" },
+    coverage: { score: 100 },
+    confidence_score: 80,
+    findings: [],
+    limitations: [],
+    next_actions: [],
+    user_decisions: [],
+    interaction_requests: [
+      {
+        id: "preflight.confirm_export",
+        type: "confirm",
+        title: "Confirm export target",
+        prompt: "Confirm the export target is correct."
+      },
+      {
+        id: "audio.render_master",
+        type: "manual_task",
+        title: "Render master",
+        prompt: "Render a master WAV manually.",
+        resume_input: { type: "file_path" }
+      },
+      {
+        id: "preflight.pick_quality",
+        type: "single_select",
+        prompt: "Pick a quality gate.",
+        options: [
+          { id: "draft", label: "Draft" },
+          { id: "release", label: "Release" }
+        ]
+      },
+      {
+        id: "preflight.pick_checks",
+        type: "multi_select",
+        prompt: "Pick manual checks.",
+        options: [
+          { id: "mono", label: "Mono", selected: true },
+          { id: "tails", label: "Tails" }
+        ]
+      }
+    ]
+  }
+};
+
+controls.renderRuntimeProductPanel("preflight");
+assert.match(textTree(content), /Interaction requests/);
+assert.match(textTree(content), /Confirm the export target is correct/);
+assert.match(textTree(content), /Render a master WAV manually/);
+assert.match(textTree(content), /Pick a quality gate/);
+assert.match(textTree(content), /Pick manual checks/);
+
+collect(content, (node) => node.tagName === "BUTTON" && node.textContent === "Confirm")[0].listeners.click();
+let confirmDecision = controls.state.runtimeWorkflows.preflight.report.user_decisions.find((item) => item.interaction_id === "preflight.confirm_export");
+assert.strictEqual(confirmDecision.type, "confirm");
+assert.strictEqual(confirmDecision.confirmed, true);
+
+let release = collect(content, (node) => node.tagName === "INPUT" && node.value === "release")[0];
+release.checked = true;
+release.listeners.change();
+let qualityDecision = controls.state.runtimeWorkflows.preflight.report.user_decisions.find((item) => item.interaction_id === "preflight.pick_quality");
+assert.strictEqual(qualityDecision.selected.length, 1);
+assert.strictEqual(qualityDecision.selected[0], "release");
+
+let tails = collect(content, (node) => node.tagName === "INPUT" && node.value === "tails")[0];
+tails.checked = true;
+tails.listeners.change();
+let checksDecision = controls.state.runtimeWorkflows.preflight.report.user_decisions.find((item) => item.interaction_id === "preflight.pick_checks");
+assert.strictEqual(checksDecision.selected.length, 2);
+assert.strictEqual(checksDecision.selected[0], "mono");
+assert.strictEqual(checksDecision.selected[1], "tails");
+
+let resume = collect(content, (node) => node.classList.contains("workflow-interaction-resume"))[0];
+resume.value = "/tmp/master.wav";
+resume.listeners.input();
+let completed = collect(content, (node) => node.tagName === "INPUT" && node.type === "checkbox" && !node.value)[0];
+completed.checked = true;
+completed.listeners.change();
+let manualDecision = controls.state.runtimeWorkflows.preflight.report.user_decisions.find((item) => item.interaction_id === "audio.render_master");
+assert.strictEqual(manualDecision.type, "manual_task");
+assert.strictEqual(manualDecision.completed, true);
+assert.strictEqual(manualDecision.value, "/tmp/master.wav");
+assert.match(textTree(content), /Saved locally: completed/);
+"""
+    )
+
+
 def test_control_center_static_mix_review_render() -> None:
     _run_node_dom_check(
         r"""
