@@ -3,6 +3,19 @@
 
 fls-pilot is built for MCP-compatible clients such as Claude Desktop, ChatGPT Desktop, Cursor, and other local MCP hosts. Users can ask in plain language, while integrators can call resources, prompts, and tools directly.
 
+## Two Transport Layers
+
+MCP connection setup and FL Studio bridge setup are separate:
+
+| Layer | What it connects | Defaults and controls |
+|---|---|---|
+| MCP server transport | Your MCP client to the fls-pilot FastMCP server. | stdio by default. Use `--sse` or `FLS_PILOT_SERVER_TRANSPORT=sse` for SSE/HTTP. `FLS_PILOT_SSE_HOST`, `FLS_PILOT_SSE_PORT`, and `--port` control the SSE listener. |
+| FL Studio bridge transport | fls-pilot to the FLStudioPilot controller script inside FL Studio. | Direct MIDI SysEx by default. Use `FLS_PILOT_TRANSPORT=tcp` to connect through the local daemon at `FLS_PILOT_TCP_HOST` / `FLS_PILOT_TCP_PORT` (`127.0.0.1:9787` by default). |
+
+Do not treat these as the same port or protocol. SSE is for MCP clients such
+as ChatGPT Desktop. Daemon TCP is the local bridge/runtime path used when the
+MCP server process should not own MIDI directly.
+
 ## Client Configuration
 
 Control Center provides the exact configuration snippets needed for each client. Ensure you have completed the [Setup Guide](user-guide/setup.md) before connecting.
@@ -20,6 +33,8 @@ Control Center provides the exact configuration snippets needed for each client.
 === "Claude Desktop (stdio)"
 
     Claude Desktop uses stdio connections. Configure the `fls-pilot` command in `claude_desktop_config.json`.
+    Set `FLS_PILOT_TRANSPORT=tcp` only when you are using the daemon-backed FL
+    Studio bridge path.
     
     ```json
     {
@@ -42,7 +57,7 @@ Control Center provides the exact configuration snippets needed for each client.
     
     1. Name: `fls-pilot`
     2. Command: Path to your `.venv/bin/fls-pilot` executable.
-    3. Ensure `FLS_PILOT_TRANSPORT=tcp` is passed in the environment if connecting via daemon.
+    3. Pass `FLS_PILOT_TRANSPORT=tcp` only when connecting to FL Studio through the daemon.
     
     ![Cursor stdio setup dummy](assets/stdio-setup.svg)
 
