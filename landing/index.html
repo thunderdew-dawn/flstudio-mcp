@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>fls-pilot v3.0 — Local AI Copilot for FL Studio</title>
+  <meta name="description" content="fls-pilot v3.0 is an independent local workflow assistant for FL Studio. Review mix, routing, low-end, project health and export readiness safely with a local AI copilot." />
+  <meta name="theme-color" content="#030713" />
+
+  <meta property="og:title" content="fls-pilot v3.0 — Local AI Copilot for FL Studio" />
+  <meta property="og:description" content="Connect your AI client to FL Studio context. Scan first, explain findings, approve safe next steps." />
+  <meta property="og:type" content="website" />
+  <meta property="og:image" content="assets/control-center-mix-review-1.png" />
+
+  <link rel="preload" href="landing.css" as="style" />
+  <link rel="stylesheet" href="landing.css" />
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header" data-header>
+    <div class="header-glow" aria-hidden="true"></div>
+    <nav class="nav-shell" aria-label="Primary navigation">
+      <a class="brand" href="#top" aria-label="fls-pilot home">
+        <img class="brand-logo" src="assets/fls-pilot-logo-with-title-and-slogan.png" data-fallback-src="https://raw.githubusercontent.com/thunderdew-dawn/fls-pilot/v3/alpha/site/assets/fls-pilot-logo-with-title-and-slogan.png" alt="fls-pilot" />
+        <span class="brand-kicker">v3.0 Founder Edition</span>
+      </a>
+
+      <button class="mobile-menu-button" type="button" aria-expanded="false" aria-controls="site-menu" data-menu-button>
+        <span></span><span></span><span></span>
+        <span class="sr-only">Open navigation</span>
+      </button>
+
+      <div class="site-menu" id="site-menu" data-menu>
+        <a href="#workflows">Workflows</a>
+        <a href="#proof">Demos</a>
+        <a href="#safety">Safety</a>
+        <a href="#pricing">Pricing</a>
+        <a class="nav-cta" href="#pricing">Get Founder Access</a>
+      </div>
+    </nav>
+  </header>
+
+  <main id="main">
+    <section class="hero-section" id="top" aria-labelledby="hero-title">
+      <div class="noise-layer" aria-hidden="true"></div>
+      <div class="hero-grid page-wrap">
+        <div class="hero-copy reveal">
+          <div class="status-row" aria-label="Product status">
+            <span class="pill pill-live"><i></i> Local Control Center</span>
+            <span class="pill pill-version">AI Client Ready</span>
+            <span class="pill pill-price">49.99 € Founder</span>
+          </div>
+
+          <p class="eyebrow">Create more. Check less.</p>
+          <h1 id="hero-title">Your local AI copilot for FL Studio.</h1>
+          <p class="hero-lead">Connect your AI client to FL Studio context and review mix, routing, low-end, project structure and export risks — locally, clearly, and without blind project changes.</p>
+
+          <div class="prompt-card" aria-label="Example prompt">
+            <div class="prompt-topline">
+              <span class="prompt-dot"></span>
+              <strong>Try this prompt</strong>
+              <button type="button" class="copy-button" data-copy="Scan my mix first, explain the top three issues, and do not change anything yet.">Copy</button>
+            </div>
+            <code>Scan my mix first, explain the top three issues, and do not change anything yet.</code>
+          </div>
+
+          <div class="hero-actions">
+            <a class="button button-primary" href="#pricing">Founder Edition — 49.99 €</a>
+            <a class="button button-secondary" href="#proof">Watch workflow demos</a>
+          </div>
+
+          <p class="trust-line">Read-only checks first. Explicit approval before persistent edits. Rollback-first workflow.</p>
+          <p class="disclaimer-line">fls-pilot is an independent local workflow assistant for FL Studio. Not affiliated with or endorsed by Image-Line.</p>
+        </div>
+
+        <div class="hero-visual reveal" aria-label="Control Center preview">
+          <div class="app-frame">
+            <div class="app-topbar">
+              <span class="app-brand-mark">◇</span>
+              <div>
+                <strong>FLS Pilot Control Center</strong>
+                <span>Connected to FL Studio · Local daemon API</span>
+              </div>
+              <span class="pill pill-live compact"><i></i> Live</span>
+            </div>
+            <div class="app-body">
+              <aside class="app-sidebar" aria-hidden="true">
+                <span class="sidebar-title">Project Review</span>
+                <span class="sidebar-item active">◰ Mix Review <em>Read-only</em></span>
+                <span class="sidebar-item">◰ Routing Audit <em>Read-only</em></span>
+                <span class="sidebar-item">◰ Low-End Analysis <em>Read-only</em></span>
+                <span class="sidebar-item">◰ Organizer <em>Read-only</em></span>
+                <span class="sidebar-title">Diagnostics</span>
+                <span class="sidebar-item muted">⚙ Setup Doctor</span>
+                <span class="sidebar-item muted">▣ AI Clients</span>
+              </aside>
+              <div class="app-content">
+                <div class="mini-hero">
+                  <div>
+                    <h2>Mix Review</h2>
+                    <p>Headroom, clipping, tonal balance and mix-action risks.</p>
+                  </div>
+                  <span class="badge-read">Read-only</span>
+                </div>
+                <div class="dashboard-grid">
+                  <div class="dashboard-card score-card">
+                    <span>Mix Health</span>
+                    <strong data-count-to="82">82</strong>
+                    <small>Good with 3 warnings</small>
+                  </div>
+                  <div class="dashboard-card">
+                    <span>Master Peak</span>
+                    <strong>-0.4 dBFS</strong>
+                    <small>Headroom risk</small>
+                  </div>
+                  <div class="dashboard-card wide">
+                    <span>Top finding</span>
+                    <p>Master is close to 0 dBFS. Leave headroom before export or mastering.</p>
+                  </div>
+                  <div class="dashboard-card wide proposal">
+                    <span>Safe next step</span>
+                    <p>Propose one reversible gain-staging adjustment and ask for approval.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="floating-card floating-card-top">
+            <span>AI Client</span>
+            <strong>Claude · ChatGPT · Cursor · MCP Host</strong>
+          </div>
+          <div class="floating-card floating-card-bottom">
+            <span>Safety</span>
+            <strong>Scan → Explain → Approve → Apply → Report</strong>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="proof-strip" aria-label="Quick benefits">
+      <div class="page-wrap proof-grid">
+        <div class="proof-item reveal"><strong>Local</strong><span>FL Studio context stays on your machine.</span></div>
+        <div class="proof-item reveal"><strong>AI-assisted</strong><span>Use your MCP client to ask for focused reviews.</span></div>
+        <div class="proof-item reveal"><strong>Producer-first</strong><span>Mix, routing, low-end, organizer and preflight workflows.</span></div>
+        <div class="proof-item reveal"><strong>Safety-first</strong><span>No persistent project edits without explicit approval.</span></div>
+      </div>
+    </section>
+
+    <section class="section page-wrap" id="workflows" aria-labelledby="workflows-title">
+      <div class="section-heading reveal">
+        <p class="eyebrow">Producer workflows</p>
+        <h2 id="workflows-title">Ask better questions. Get safer next steps.</h2>
+        <p>fls-pilot gives your AI client structured FL Studio context, so it can reason about the project instead of guessing from generic music-production advice.</p>
+      </div>
+
+      <div class="workflow-grid">
+        <article class="workflow-card reveal">
+          <span class="workflow-icon">◰</span>
+          <h3>Mix Review</h3>
+          <p>Review headroom, clipping, level-map risks, stereo width, tonal balance and track-level findings before you keep mixing.</p>
+          <span class="badge-read">Read-only</span>
+        </article>
+        <article class="workflow-card reveal">
+          <span class="workflow-icon">⌁</span>
+          <h3>Routing Audit</h3>
+          <p>Find fragile bus structures, send-routing surprises and tracks that bypass the intended project flow.</p>
+          <span class="badge-read">Read-only</span>
+        </article>
+        <article class="workflow-card reveal">
+          <span class="workflow-icon">▰</span>
+          <h3>Low-End Analysis</h3>
+          <p>Inspect kick, bass, sub focus, stereo safety and master-headroom risk with a dedicated low-end workflow.</p>
+          <span class="badge-read">Read-only</span>
+        </article>
+        <article class="workflow-card reveal">
+          <span class="workflow-icon">▣</span>
+          <h3>Project Organizer</h3>
+          <p>Clean up naming, color, grouping and structure issues so large FL Studio projects remain readable.</p>
+          <span class="badge-read">Read-only</span>
+        </article>
+        <article class="workflow-card reveal">
+          <span class="workflow-icon">◇</span>
+          <h3>Project Health</h3>
+          <p>Get a combined overview of setup, project structure, mix risks, routing and export readiness.</p>
+          <span class="badge-read">Read-only</span>
+        </article>
+        <article class="workflow-card reveal">
+          <span class="workflow-icon">✦</span>
+          <h3>Assisted Edits</h3>
+          <p>When supported, fls-pilot can propose small reversible changes — but only after approval and with rollback details.</p>
+          <span class="badge-approve">Approval required</span>
+        </article>
+      </div>
+    </section>
+
+    <section class="section media-section" id="proof" aria-labelledby="proof-title">
+      <div class="page-wrap">
+        <div class="section-heading reveal">
+          <p class="eyebrow">Real workflow previews</p>
+          <h2 id="proof-title">Show the product instead of explaining it.</h2>
+          <p>Use the existing v3.0 assets to make the landing page feel like the Control Center itself: technical, focused and trustworthy.</p>
+        </div>
+
+        <div class="media-tabs reveal" role="tablist" aria-label="Workflow demo selector">
+          <button class="media-tab active" type="button" role="tab" aria-selected="true" data-media-target="gain">Gain Staging</button>
+          <button class="media-tab" type="button" role="tab" aria-selected="false" data-media-target="routing">Routing</button>
+          <button class="media-tab" type="button" role="tab" aria-selected="false" data-media-target="organizer">Organizer</button>
+          <button class="media-tab" type="button" role="tab" aria-selected="false" data-media-target="eq">EQ Batch</button>
+          <button class="media-tab" type="button" role="tab" aria-selected="false" data-media-target="composition">Composition</button>
+        </div>
+
+        <div class="media-stage reveal">
+          <div class="media-copy">
+            <span class="badge-read">AI workflow demo</span>
+            <h3 data-media-title>Mix Review & Gain Staging</h3>
+            <p data-media-description>Ask for a safe mix scan, understand the top risks and approve only the next reversible step.</p>
+            <ul>
+              <li>Prompt-led review instead of manual menu hunting.</li>
+              <li>Findings explained in producer language.</li>
+              <li>Explicit approval before any persistent project edit.</li>
+            </ul>
+          </div>
+          <figure class="media-frame">
+            <img data-media-image src="assets/ai-apply-gain-staging-example.gif" data-fallback-src="https://raw.githubusercontent.com/thunderdew-dawn/fls-pilot/v3/alpha/site/assets/ai-apply-gain-staging-example.gif" alt="fls-pilot gain staging AI workflow preview" />
+            <figcaption data-media-caption>AI-assisted gain-staging workflow preview.</figcaption>
+          </figure>
+        </div>
+
+        <div class="screenshot-grid reveal" aria-label="Control Center screenshots">
+          <figure>
+            <img src="assets/control-center-mix-review-1.png" data-fallback-src="https://raw.githubusercontent.com/thunderdew-dawn/fls-pilot/v3/alpha/site/assets/control-center-mix-review-1.png" alt="Control Center Mix Review screenshot" />
+            <figcaption>Mix Review</figcaption>
+          </figure>
+          <figure>
+            <img src="assets/control-center-low-end-analysis-1.png" data-fallback-src="https://raw.githubusercontent.com/thunderdew-dawn/fls-pilot/v3/alpha/site/assets/control-center-low-end-analysis-1.png" alt="Control Center Low-End Analysis screenshot" />
+            <figcaption>Low-End Analysis</figcaption>
+          </figure>
+          <figure>
+            <img src="assets/control-center-routing-audit.png" data-fallback-src="https://raw.githubusercontent.com/thunderdew-dawn/fls-pilot/v3/alpha/site/assets/control-center-routing-audit.png" alt="Control Center Routing Audit screenshot" />
+            <figcaption>Routing Audit</figcaption>
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <section class="section page-wrap" id="safety" aria-labelledby="safety-title">
+      <div class="section-heading reveal">
+        <p class="eyebrow">Safety-first model</p>
+        <h2 id="safety-title">Your AI should not blindly change a project.</h2>
+        <p>fls-pilot is designed around a controlled workflow: scan first, explain findings, propose one reversible action, ask for approval, then report before and after.</p>
+      </div>
+
+      <div class="timeline reveal" aria-label="Safety workflow">
+        <div class="timeline-step active" data-step="1"><span>1</span><strong>Scan first</strong><p>Read available FL Studio context without changing the project.</p></div>
+        <div class="timeline-step" data-step="2"><span>2</span><strong>Explain findings</strong><p>Translate technical risks into plain producer language.</p></div>
+        <div class="timeline-step" data-step="3"><span>3</span><strong>Propose one action</strong><p>Keep the next step small, scoped and reversible.</p></div>
+        <div class="timeline-step" data-step="4"><span>4</span><strong>Ask for approval</strong><p>No persistent edit happens without explicit confirmation.</p></div>
+        <div class="timeline-step" data-step="5"><span>5</span><strong>Report & rollback</strong><p>Show what changed, what was verified and how to roll back.</p></div>
+      </div>
+
+      <div class="limits-grid reveal">
+        <article class="limits-card positive">
+          <h3>What fls-pilot is built for</h3>
+          <ul>
+            <li>Local Control Center setup and diagnostics.</li>
+            <li>Read-only mix, routing, low-end and project reviews.</li>
+            <li>MCP context for AI clients and local assistants.</li>
+            <li>Supported small edits with approval and rollback paths.</li>
+          </ul>
+        </article>
+        <article class="limits-card caution">
+          <h3>What it does not claim</h3>
+          <ul>
+            <li>No blind plugin insertion promises.</li>
+            <li>No WAV rendering from FL Studio.</li>
+            <li>No broad UI automation or full-FLP restore claims.</li>
+            <li>No replacement for your ears, taste or creative decisions.</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <section class="section ai-section" id="ai-clients" aria-labelledby="ai-title">
+      <div class="page-wrap ai-grid">
+        <div class="section-heading reveal align-left">
+          <p class="eyebrow">AI client setup</p>
+          <h2 id="ai-title">Bring FL Studio context into the assistant you already use.</h2>
+          <p>fls-pilot is made for MCP-capable clients and local AI workflows. The Control Center guides setup, checks ports and prepares client snippets without editing your config files automatically.</p>
+        </div>
+        <div class="client-panel reveal">
+          <div class="client-row"><span>Claude Desktop</span><strong>Supported MCP host</strong></div>
+          <div class="client-row"><span>ChatGPT Desktop</span><strong>MCP workflow ready</strong></div>
+          <div class="client-row"><span>Cursor</span><strong>Developer + producer workflow</strong></div>
+          <div class="client-row"><span>Local assistants</span><strong>Use MCP context</strong></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section pricing-section" id="pricing" aria-labelledby="pricing-title">
+      <div class="page-wrap pricing-wrap">
+        <div class="pricing-card reveal">
+          <div class="pricing-glow" aria-hidden="true"></div>
+          <span class="eyebrow">Launch offer</span>
+          <h2 id="pricing-title">Founder Edition</h2>
+          <p class="pricing-lead">For FL Studio producers who want a safer local AI workflow for mix review, routing audits, low-end checks, project organization and export readiness.</p>
+
+          <div class="price-line">
+            <span class="price">49.99 €</span>
+            <span class="price-note">one-time founder access</span>
+          </div>
+
+          <ul class="pricing-list">
+            <li>fls-pilot v3.0 local Control Center</li>
+            <li>AI/MCP workflow setup guidance</li>
+            <li>Mix Review, Routing Audit, Low-End Analysis and Organizer workflows</li>
+            <li>Project Health, Preflight and Setup Doctor views</li>
+            <li>Safety-first workflow: scan, explain, approve, report</li>
+            <li>Founder access to v3.0 updates</li>
+          </ul>
+
+          <a class="button button-primary button-large" href="mailto:hello@example.com?subject=fls-pilot%20v3.0%20Founder%20Edition">Get Founder Edition — 49.99 €</a>
+          <p class="checkout-note">Replace this mail link with your checkout provider URL before launch.</p>
+        </div>
+
+        <aside class="pricing-side reveal">
+          <article>
+            <h3>Why 49.99 € works</h3>
+            <p>This is not positioned as a small script. It is a local producer Control Center with AI-client workflows, setup guidance and a safety-first review model.</p>
+          </article>
+          <article>
+            <h3>Future upsell path</h3>
+            <p>Keep Founder Edition focused. Add Pro packs later: genre-aware psytrance checks, deeper audio evidence, advanced low-end analysis and workflow expansions.</p>
+          </article>
+        </aside>
+      </div>
+    </section>
+
+    <section class="section faq-section page-wrap" id="faq" aria-labelledby="faq-title">
+      <div class="section-heading reveal">
+        <p class="eyebrow">FAQ</p>
+        <h2 id="faq-title">Clear expectations sell better than hype.</h2>
+      </div>
+
+      <div class="faq-list reveal">
+        <details open>
+          <summary>Does fls-pilot make music for me?</summary>
+          <p>No. It is designed to help you review technical and workflow details while you stay in creative control.</p>
+        </details>
+        <details>
+          <summary>Does it work with local AI?</summary>
+          <p>Yes. The landing page positions fls-pilot as a local Control Center and MCP workflow assistant that can provide FL Studio context to supported AI clients.</p>
+        </details>
+        <details>
+          <summary>Will it change my FL Studio project automatically?</summary>
+          <p>No persistent project edit should be presented as automatic. The safety model is read-only first, then explanation, proposal, approval and rollback-capable reporting.</p>
+        </details>
+        <details>
+          <summary>Is FL Studio included?</summary>
+          <p>No. FL Studio is required separately. fls-pilot is an independent local workflow assistant for FL Studio. Not affiliated with or endorsed by Image-Line.</p>
+        </details>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="page-wrap footer-grid">
+      <div>
+        <strong>fls-pilot v3.0</strong>
+        <p>Create more. Check less.</p>
+      </div>
+      <div class="footer-links">
+        <a href="#workflows">Workflows</a>
+        <a href="#safety">Safety</a>
+        <a href="#pricing">Pricing</a>
+      </div>
+      <p class="legal"><strong>Independent notice:</strong> fls-pilot is an independent local workflow assistant for FL Studio. Not affiliated with or endorsed by Image-Line. FL Studio is required separately. Replace checkout, support and legal links before launch.</p>
+    </div>
+  </footer>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "fls-pilot v3.0 Founder Edition",
+    "applicationCategory": "MultimediaApplication",
+    "operatingSystem": "Windows 10/11, macOS 12+",
+    "description": "Local AI copilot and Control Center for FL Studio producer workflows including mix review, routing audit, low-end analysis, project organization and export readiness.",
+    "offers": {
+      "@type": "Offer",
+      "price": "49.99",
+      "priceCurrency": "EUR"
+    }
+  }
+  </script>
+  <script src="landing.js" defer></script>
+</body>
+</html>
