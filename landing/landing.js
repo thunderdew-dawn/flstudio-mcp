@@ -1,71 +1,81 @@
 (function () {
+  const assetBase = "assets/";
+  const fallbackBase = "https://raw.githubusercontent.com/thunderdew-dawn/fls-pilot/v3/alpha/site/assets/";
+
   const mediaItems = {
     gain: {
       title: "Mix Review & Gain Staging",
       description: "Ask for a safe mix scan, understand the top risks and approve only the next reversible step.",
-      src: "assets/ai-apply-gain-staging-example.gif",
-      fallback: "https://raw.githubusercontent.com/thunderdew-dawn/fls-pilot/v3/alpha/site/assets/ai-apply-gain-staging-example.gif",
+      filename: "ai-apply-gain-staging-example.gif",
       alt: "fls-pilot gain staging AI workflow preview",
       caption: "AI-assisted gain-staging workflow preview."
     },
     routing: {
       title: "Routing Audit",
-      description: "Let your AI review buses, sends and fragile routing decisions with local FL Studio context.",
-      src: "assets/ai-based-mixer-routing-example.gif",
-      fallback: "https://raw.githubusercontent.com/thunderdew-dawn/fls-pilot/v3/alpha/site/assets/ai-based-mixer-routing-example.gif",
+      description: "Let your assistant review buses, sends and fragile routing decisions with local FL Studio context.",
+      filename: "ai-based-mixer-routing-example.gif",
       alt: "fls-pilot routing audit AI workflow preview",
       caption: "AI-based mixer routing workflow preview."
     },
     organizer: {
       title: "Project Organizer",
-      description: "Use AI-assisted cleanup for colors, names and structure without losing control of the project.",
-      src: "assets/ai-color-my-tracks-example.gif",
-      fallback: "https://raw.githubusercontent.com/thunderdew-dawn/fls-pilot/v3/alpha/site/assets/ai-color-my-tracks-example.gif",
+      description: "Use assisted cleanup for colors, names and structure without losing control of the project.",
+      filename: "ai-color-my-tracks-example.gif",
       alt: "fls-pilot project organizer AI workflow preview",
       caption: "AI-assisted project organization workflow preview."
     },
     eq: {
       title: "Plugin & EQ Workflows",
       description: "Plan safe high-pass and cleanup passes with knowledgebase-backed ranges instead of guessed plugin values.",
-      src: "assets/ai-set-highpass-on-eq-batch-example.gif",
-      fallback: "https://raw.githubusercontent.com/thunderdew-dawn/fls-pilot/v3/alpha/site/assets/ai-set-highpass-on-eq-batch-example.gif",
+      filename: "ai-set-highpass-on-eq-batch-example.gif",
       alt: "fls-pilot EQ batch workflow preview",
       caption: "AI-assisted high-pass EQ batch workflow preview."
     },
     composition: {
       title: "Composition Workflow",
       description: "Use AI as a local creative assistant while keeping production decisions and project safety in your hands.",
-      src: "assets/ai-generate-bassline-example.gif",
-      fallback: "https://raw.githubusercontent.com/thunderdew-dawn/fls-pilot/v3/alpha/site/assets/ai-generate-bassline-example.gif",
+      filename: "ai-generate-bassline-example.gif",
       alt: "fls-pilot composition workflow preview",
       caption: "AI-assisted bassline generation workflow preview."
     }
   };
 
-  const menuButton = document.querySelector("[data-menu-button]");
-  const menu = document.querySelector("[data-menu]");
-  if (menuButton && menu) {
+  const sourceFor = (filename) => `${assetBase}${filename}`;
+  const fallbackFor = (filename) => `${fallbackBase}${filename}`;
+
+  const attachFallback = (img) => {
+    const fallback = img.getAttribute("data-fallback-src");
+    if (!fallback) return;
+
+    img.onerror = () => {
+      const current = new URL(img.src, window.location.href).href;
+      const fallbackUrl = new URL(fallback, window.location.href).href;
+      if (current !== fallbackUrl) {
+        img.src = fallback;
+      }
+    };
+  };
+
+  const setupMenu = () => {
+    const menuButton = document.querySelector("[data-menu-button]");
+    const menu = document.querySelector("[data-menu]");
+    if (!menuButton || !menu) return;
+
     menuButton.addEventListener("click", () => {
       const isOpen = menu.classList.toggle("open");
       menuButton.setAttribute("aria-expanded", String(isOpen));
     });
+
     menu.addEventListener("click", (event) => {
       if (event.target.matches("a")) {
         menu.classList.remove("open");
         menuButton.setAttribute("aria-expanded", "false");
       }
     });
-  }
+  };
 
   const setFallbacks = () => {
-    document.querySelectorAll("img[data-fallback-src]").forEach((img) => {
-      img.addEventListener("error", () => {
-        const fallback = img.getAttribute("data-fallback-src");
-        if (fallback && img.src !== fallback) {
-          img.src = fallback;
-        }
-      }, { once: true });
-    });
+    document.querySelectorAll("img[data-fallback-src]").forEach(attachFallback);
   };
 
   const setupMediaTabs = () => {
@@ -77,24 +87,38 @@
 
     if (!tabs.length || !title || !description || !image || !caption) return;
 
-    tabs.forEach((tab) => {
-      tab.addEventListener("click", () => {
-        const key = tab.getAttribute("data-media-target");
-        const item = mediaItems[key];
-        if (!item) return;
+    const activate = (tab) => {
+      const key = tab.getAttribute("data-media-target");
+      const item = mediaItems[key];
+      if (!item) return;
 
-        tabs.forEach((other) => {
-          const isActive = other === tab;
-          other.classList.toggle("active", isActive);
-          other.setAttribute("aria-selected", String(isActive));
-        });
+      tabs.forEach((other) => {
+        const isActive = other === tab;
+        other.classList.toggle("active", isActive);
+        other.setAttribute("aria-selected", String(isActive));
+      });
 
-        title.textContent = item.title;
-        description.textContent = item.description;
-        image.src = item.src;
-        image.setAttribute("data-fallback-src", item.fallback);
-        image.alt = item.alt;
-        caption.textContent = item.caption;
+      title.textContent = item.title;
+      description.textContent = item.description;
+      image.src = sourceFor(item.filename);
+      image.setAttribute("data-fallback-src", fallbackFor(item.filename));
+      image.alt = item.alt;
+      caption.textContent = item.caption;
+      attachFallback(image);
+    };
+
+    tabs.forEach((tab, index) => {
+      tab.addEventListener("click", () => activate(tab));
+      tab.addEventListener("keydown", (event) => {
+        if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+        event.preventDefault();
+        let nextIndex = index;
+        if (event.key === "ArrowRight") nextIndex = (index + 1) % tabs.length;
+        if (event.key === "ArrowLeft") nextIndex = (index - 1 + tabs.length) % tabs.length;
+        if (event.key === "Home") nextIndex = 0;
+        if (event.key === "End") nextIndex = tabs.length - 1;
+        tabs[nextIndex].focus();
+        activate(tabs[nextIndex]);
       });
     });
   };
@@ -160,10 +184,14 @@
   };
 
   const setupSafetyTicker = () => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
     const steps = Array.from(document.querySelectorAll(".timeline-step"));
     if (!steps.length) return;
 
-    let index = 0;
+    let index = steps.findIndex((step) => step.classList.contains("active"));
+    if (index < 0) index = 0;
+
     window.setInterval(() => {
       steps.forEach((step, stepIndex) => step.classList.toggle("active", stepIndex === index));
       index = (index + 1) % steps.length;
@@ -171,6 +199,7 @@
   };
 
   document.addEventListener("DOMContentLoaded", () => {
+    setupMenu();
     setFallbacks();
     setupMediaTabs();
     setupCopyButtons();
