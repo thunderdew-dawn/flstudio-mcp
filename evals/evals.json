@@ -882,7 +882,9 @@
     {
       "id": "pack_manifest_entitlement_validation",
       "prompt": "I want to load a workflow pack for house production. Tell me what the pack manifest must contain, what entitlement kinds are allowed, and whether a pack can override protected workflow fields like 'endpoint' or 'safety_note'.",
-      "expected_tools": [],
+      "expected_tools": [
+        "kb_search_structured"
+      ],
       "expected_resources": [
         "fls://capabilities/supported",
         "fls://capabilities/not-possible"
@@ -906,7 +908,9 @@
     {
       "id": "rule_engine_safe_evaluation",
       "prompt": "Use the declarative rule engine to find bass tracks with stereo separation above 0.25. Explain which operators are safe, and tell me whether I can pass an '__import__' operator to evaluate arbitrary code.",
-      "expected_tools": [],
+      "expected_tools": [
+        "kb_search_structured"
+      ],
       "expected_resources": [
         "fls://capabilities/not-possible"
       ],
@@ -928,7 +932,10 @@
     {
       "id": "workflow_interaction_request_contract",
       "prompt": "Show me how an analysis workflow asks the user to confirm which mixer tracks to include in a low-end analysis, and explain what interaction types are supported.",
-      "expected_tools": [],
+      "expected_tools": [
+        "fl_get_workflow_context",
+        "fl_review_low_end_stereo"
+      ],
       "expected_resources": [
         "fls://capabilities/supported"
       ],
