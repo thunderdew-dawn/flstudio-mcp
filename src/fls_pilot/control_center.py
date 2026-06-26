@@ -26,6 +26,8 @@ from typing import Any
 from . import doctor, kb_policy, protocol
 from . import project_templates as templates
 from .analysis import (
+    EVIDENCE_TYPE_NAME_BASED_DETECTION,
+    EVIDENCE_TYPE_ROUTING_BASED_DETECTION,
     AnalysisReport,
     Coverage,
     EntityRef,
@@ -35,10 +37,13 @@ from .analysis import (
     StaticSnapshotPolicy,
     analysis_report_for_control_center,
     confidence_from_coverage,
+    heuristic_validation_metadata,
     low_end_health_score,
     mix_health_score,
     mixer_entity_id,
     organizer_score,
+    pending_human_validation_ids,
+    provisional_score_metadata,
     risk_from_severities,
     routing_analysis_report_from_legacy_payload,
     routing_health_score,
@@ -49,6 +54,7 @@ from .music import mix_doctor as mix_review
 from .rules import RuleCondition, RuleDefinition, evaluate_rules
 from .runtime.audio_worker import AUDIO_FEATURE_JOB_KIND, build_audio_job_request
 from .runtime.client import RuntimeClient
+from .runtime.interactions import InteractionRequest
 from .runtime_config import (
     DEFAULT_CONTROL_CENTER_HOST,
     DEFAULT_CONTROL_CENTER_PORT,
@@ -74,6 +80,9 @@ MANUAL_CHECKPOINTS = {
     "ran_mcp_apply",
     "granted_macos_accessibility",
 }
+LOW_END_VALIDATION_REQUEST_ID = "low_end.confirm_detected_tracks"
+ORGANIZER_VALIDATION_REQUEST_ID = "organizer.confirm_cleanup_heuristics"
+ROUTING_VALIDATION_REQUEST_ID = "routing.confirm_cleanup_heuristics"
 def _read_project_version() -> str:
     try:
         project_root = Path(__file__).resolve().parent.parent.parent
@@ -1155,6 +1164,78 @@ def _low_end_role(name: Any) -> str:
     return "other"
 
 
+def _low_end_validation_request(low_end_tracks: list[dict[str, Any]]) -> dict[str, Any] | None:
+    options = []
+    for offset, row in enumerate(low_end_tracks[:24], start=1):
+        track = _as_int(row.get("track"))
+        name = str(row.get("name") or "").strip() or (
+            _display_track_name(track, None) if track is not None else f"Candidate {offset}"
+        )
+        options.append(
+            {
+                "id": (
+                    mixer_entity_id(track)
+                    if track is not None
+                    else f"low_end:candidate:{offset}"
+                ),
+                "label": name,
+                "track": track,
+                "role": str(row.get("low_end_role") or _low_end_role(name)),
+                "source": EVIDENCE_TYPE_NAME_BASED_DETECTION,
+            }
+        )
+    if not options:
+        return None
+    return InteractionRequest(
+        id=LOW_END_VALIDATION_REQUEST_ID,
+        type="multi_select",
+        title="Confirm low-end tracks",
+        prompt="Are these low-end tracks complete and correctly detected?",
+        options=tuple(options),
+        allow_add_by_index=True,
+        allow_remove=True,
+        metadata={
+            "reason": EVIDENCE_TYPE_NAME_BASED_DETECTION,
+            "allowed_roles": ["kick", "sub", "bass", "808", "boom", "other"],
+        },
+    ).to_dict()
+
+
+def _validation_request_ids(
+    *,
+    findings: tuple[Finding, ...],
+    interaction_requests: tuple[dict[str, Any], ...],
+    user_decisions: tuple[dict[str, Any], ...] = (),
+) -> tuple[str, ...]:
+    pending = list(pending_human_validation_ids(findings, user_decisions))
+    decided = {
+        str(row.get("interaction_request_id") or row.get("interaction_id") or row.get("id") or "")
+        for row in user_decisions
+        if isinstance(row, dict)
+    }
+    for request in interaction_requests:
+        request_id = str(request.get("id") or "").strip()
+        if request_id and request_id not in decided and request_id not in pending:
+            pending.append(request_id)
+    return tuple(pending)
+
+
+def _blocked_until_validation(
+    rows: list[dict[str, Any]],
+    pending_ids: tuple[str, ...],
+) -> list[dict[str, Any]]:
+    if not pending_ids:
+        return rows
+    return [
+        {
+            **dict(row),
+            "blocked_until_human_validation": True,
+            "blocked_until_interaction_request_ids": list(pending_ids),
+        }
+        for row in rows
+    ]
+
+
 def _snapshot_evidence_mode(snapshot: dict[str, Any]) -> str:
     live_window = snapshot.get("live_window")
     levels_valid = bool(snapshot.get("levels_valid"))
@@ -1222,6 +1303,15 @@ def _build_low_end_analysis_report(report: dict[str, Any]) -> AnalysisReport:
         confidence_score=confidence,
     )
     findings = (*legacy_findings, *rule_findings)
+    interaction_requests = tuple(
+        row
+        for row in (_low_end_validation_request(low_end_tracks),)
+        if row is not None
+    )
+    pending_validation = _validation_request_ids(
+        findings=findings,
+        interaction_requests=interaction_requests,
+    )
     limits = _unique_strings(
         [
             *list(details.get("limits") or []),
@@ -1319,6 +1409,7 @@ def _build_low_end_analysis_report(report: dict[str, Any]) -> AnalysisReport:
                 "label": "Analyze a manually bounced audio file for stronger low-end evidence.",
             },
         ),
+        interaction_requests=interaction_requests,
         safety={"read_only": True, "project_changes": False},
         metadata={
             "legacy_workflow": report.get("workflow"),
@@ -1326,6 +1417,7 @@ def _build_low_end_analysis_report(report: dict[str, Any]) -> AnalysisReport:
             "low_end_summary": low_end.get("summary") or {},
             "low_end_track_count": len(low_end_tracks),
             "rule_evaluation_errors": rule_errors,
+            **provisional_score_metadata(pending_validation),
         },
     )
 
@@ -1359,6 +1451,14 @@ def _low_end_analysis_finding(
                 str(row.get("track") or _display_track_name(track_index, None)),
             ),
         )
+    metadata = {"legacy_finding": row}
+    if rule.startswith("low_end_"):
+        metadata.update(
+            heuristic_validation_metadata(
+                evidence_type=EVIDENCE_TYPE_NAME_BASED_DETECTION,
+                interaction_request_id=LOW_END_VALIDATION_REQUEST_ID,
+            )
+        )
     return Finding(
         id=str(row.get("id") or f"{rule}_{index}"),
         rule_id=f"low_end.{rule}",
@@ -1377,7 +1477,7 @@ def _low_end_analysis_finding(
             },
         ),
         limitations=("Mixer pan/stereo metadata cannot prove true low-band phase behavior.",),
-        metadata={"legacy_finding": row},
+        metadata=metadata,
     )
 
 
@@ -1455,6 +1555,10 @@ def _low_end_rule_findings(
                     ),
                     metadata={
                         **match.metadata,
+                        **heuristic_validation_metadata(
+                            evidence_type=EVIDENCE_TYPE_NAME_BASED_DETECTION,
+                            interaction_request_id=LOW_END_VALIDATION_REQUEST_ID,
+                        ),
                         "declarative_rule": True,
                     },
                 )
@@ -2142,6 +2246,23 @@ def _generic_analysis_report_from_legacy(
         )
         for index, row in enumerate(legacy_findings, start=1)
     )
+    interaction_requests = tuple(
+        dict(row)
+        for row in report.get("interaction_requests") or ()
+        if isinstance(row, dict)
+    )
+    user_decisions = tuple(
+        dict(row)
+        for row in report.get("user_decisions") or ()
+        if isinstance(row, dict)
+    )
+    pending_validation = _validation_request_ids(
+        findings=findings,
+        interaction_requests=interaction_requests,
+        user_decisions=user_decisions,
+    )
+    metadata = dict(report.get("metadata") or {})
+    metadata.update(provisional_score_metadata(pending_validation))
 
     return AnalysisReport(
         workflow=workflow,
@@ -2164,7 +2285,10 @@ def _generic_analysis_report_from_legacy(
         findings=findings,
         limitations=tuple(limitations),
         source_observations=tuple(details.get("source_observation_ids") or ()),
+        interaction_requests=interaction_requests,
+        user_decisions=user_decisions,
         safety=report.get("safety") or {"read_only": True},
+        metadata=metadata,
     )
 
 
@@ -2207,6 +2331,7 @@ def _generic_analysis_finding(
                 str(row.get("track_name") or row.get("track") or ""),
             ),
         )
+    row_metadata = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
     return Finding(
         id=str(row.get("id") or f"{workflow}.{rule}.{index}"),
         rule_id=f"{workflow}.{rule}",
@@ -2217,7 +2342,7 @@ def _generic_analysis_finding(
         evidence_mode=evidence_mode,
         entities=entities,
         evidence=(dict(row),),
-        metadata={"legacy_finding": row},
+        metadata={**dict(row_metadata), "legacy_finding": row},
     )
 
 
@@ -2357,6 +2482,9 @@ def _build_project_organizer_report(
         unnamed_patterns=unnamed_patterns,
         candidate_groups=candidate_groups,
     )
+    interaction_requests = _organizer_validation_requests(findings)
+    pending_validation = pending_human_validation_ids(findings)
+    cleanup_steps = _blocked_until_validation(cleanup_steps, pending_validation)
     naming_rules = [
         step
         for step in cleanup_steps
@@ -2399,6 +2527,7 @@ def _build_project_organizer_report(
             "steps": cleanup_steps,
             "mode": "proposal",
             "apply_tool": "fl_apply_project_cleanup_step",
+            "blocked_until_human_validation": bool(pending_validation),
         },
         "guided": _organizer_guided_context(findings, cleanup_steps),
         "standards": _organizer_standards(naming_rules, color_rules),
@@ -2430,6 +2559,8 @@ def _build_project_organizer_report(
             ],
             "kb_policy_refs": kb_policy.rule_refs(ORGANIZER_POLICY_RULE_IDS),
         },
+        "interaction_requests": list(interaction_requests),
+        "metadata": provisional_score_metadata(pending_validation),
         "safety": {
             "read_only": True,
             "project_changes": False,
@@ -2657,6 +2788,10 @@ def _organizer_findings(
         "Default Channel Names",
         "Channels with empty or default-looking names.",
         unnamed_channels,
+        metadata=_organizer_heuristic_metadata(
+            EVIDENCE_TYPE_NAME_BASED_DETECTION,
+            reason="default_channel_name",
+        ),
     )
     _append_organizer_finding(
         findings,
@@ -2665,6 +2800,10 @@ def _organizer_findings(
         "Channels Need Mixer Targets",
         "Channels routed only to Master or with unknown routing.",
         routing_cleanup,
+        metadata=_organizer_heuristic_metadata(
+            EVIDENCE_TYPE_ROUTING_BASED_DETECTION,
+            reason="master_or_unknown_routing",
+        ),
     )
     _append_organizer_finding(
         findings,
@@ -2673,6 +2812,10 @@ def _organizer_findings(
         "Default Pattern Names",
         "Patterns with empty or default-looking names.",
         unnamed_patterns,
+        metadata=_organizer_heuristic_metadata(
+            EVIDENCE_TYPE_NAME_BASED_DETECTION,
+            reason="default_pattern_name",
+        ),
     )
     _append_organizer_finding(
         findings,
@@ -2681,6 +2824,10 @@ def _organizer_findings(
         "Playlist Track Names",
         "Playlist tracks with empty or default-looking names.",
         unnamed_playlist_tracks,
+        metadata=_organizer_heuristic_metadata(
+            EVIDENCE_TYPE_NAME_BASED_DETECTION,
+            reason="default_playlist_track_name",
+        ),
     )
     _append_organizer_finding(
         findings,
@@ -2718,6 +2865,10 @@ def _organizer_findings(
                 "detail": "Direct Master source tracks could be grouped after bus review.",
                 "count": len(candidate_groups),
                 "items": candidate_groups,
+                "metadata": _organizer_heuristic_metadata(
+                    EVIDENCE_TYPE_ROUTING_BASED_DETECTION,
+                    reason="grouping_candidate",
+                ),
             }
         )
     compact_template = templates.compact_context(template_context)
@@ -2753,18 +2904,61 @@ def _append_organizer_finding(
     title: str,
     detail: str,
     items: list[dict[str, Any]],
+    metadata: dict[str, Any] | None = None,
 ) -> None:
     if not items:
         return
-    findings.append(
+    row = {
+        "id": finding_id,
+        "severity": severity,
+        "title": title,
+        "detail": detail,
+        "count": len(items),
+        "items": items[:8],
+    }
+    if metadata:
+        row["metadata"] = metadata
+    findings.append(row)
+
+
+def _organizer_heuristic_metadata(evidence_type: str, *, reason: str) -> dict[str, Any]:
+    return heuristic_validation_metadata(
+        evidence_type=evidence_type,
+        interaction_request_id=ORGANIZER_VALIDATION_REQUEST_ID,
+        reason=reason,
+    )
+
+
+def _organizer_validation_requests(findings: list[dict[str, Any]]) -> tuple[dict[str, Any], ...]:
+    options = [
         {
-            "id": finding_id,
-            "severity": severity,
-            "title": title,
-            "detail": detail,
-            "count": len(items),
-            "items": items[:8],
+            "id": str(row.get("id")),
+            "label": str(row.get("title") or row.get("id")),
+            "count": int(row.get("count") or 0),
+            "reason": dict(row.get("metadata") or {}).get("reason"),
         }
+        for row in findings
+        if isinstance(row.get("metadata"), dict)
+        and row["metadata"].get("human_validation_required")
+    ]
+    if not options:
+        return ()
+    return (
+        InteractionRequest(
+            id=ORGANIZER_VALIDATION_REQUEST_ID,
+            type="multi_select",
+            title="Confirm organizer cleanup candidates",
+            prompt=(
+                "Which organizer findings are intentional or should be kept before "
+                "cleanup planning is final?"
+            ),
+            options=tuple(options),
+            allow_remove=True,
+            metadata={
+                "reason": "heuristic_cleanup_validation",
+                "finding_ids": [row["id"] for row in options],
+            },
+        ).to_dict(),
     )
 
 
@@ -3342,6 +3536,8 @@ def _build_routing_audit_report(
         template_context=template_context,
         unused_probe_failed=unused_mixer_track_probe_failed,
     )
+    interaction_requests = _routing_validation_requests(findings)
+    pending_validation = pending_human_validation_ids(findings)
 
     track_details = []
     for idx, _row in sorted(track_by_index.items()):
@@ -3402,6 +3598,8 @@ def _build_routing_audit_report(
             "project_fingerprint": project_fingerprint,
             "source_observation_ids": list(source_observation_ids),
         },
+        "interaction_requests": list(interaction_requests),
+        "metadata": provisional_score_metadata(pending_validation),
         "safety": {"read_only": True, "project_changes": False},
     }
     analysis_report = routing_analysis_report_from_legacy_payload(
@@ -3630,6 +3828,9 @@ def _routing_findings(
                 "detail": "Generator channels route through inserts that feed Master directly.",
                 "count": len(direct_to_master),
                 "items": direct_to_master[:8],
+                "metadata": _routing_heuristic_metadata(
+                    reason="master_routed_or_ungrouped"
+                ),
             }
         )
     if unrouted_channels:
@@ -3667,6 +3868,7 @@ def _routing_findings(
                 ),
                 "count": len(unused_mixer_tracks),
                 "items": unused_mixer_tracks[:8],
+                "metadata": _routing_heuristic_metadata(reason="unused_mixer_track"),
             }
         )
     if unused_probe_failed:
@@ -3704,6 +3906,46 @@ def _routing_findings(
             }
         )
     return findings
+
+
+def _routing_heuristic_metadata(*, reason: str) -> dict[str, Any]:
+    return heuristic_validation_metadata(
+        evidence_type=EVIDENCE_TYPE_ROUTING_BASED_DETECTION,
+        interaction_request_id=ROUTING_VALIDATION_REQUEST_ID,
+        reason=reason,
+    )
+
+
+def _routing_validation_requests(findings: list[dict[str, Any]]) -> tuple[dict[str, Any], ...]:
+    options = [
+        {
+            "id": str(row.get("id")),
+            "label": str(row.get("title") or row.get("id")),
+            "count": int(row.get("count") or 0),
+            "reason": dict(row.get("metadata") or {}).get("reason"),
+        }
+        for row in findings
+        if isinstance(row.get("metadata"), dict)
+        and row["metadata"].get("human_validation_required")
+    ]
+    if not options:
+        return ()
+    return (
+        InteractionRequest(
+            id=ROUTING_VALIDATION_REQUEST_ID,
+            type="multi_select",
+            title="Confirm routing cleanup candidates",
+            prompt=(
+                "Which routing findings are intentional before cleanup planning is final?"
+            ),
+            options=tuple(options),
+            allow_remove=True,
+            metadata={
+                "reason": EVIDENCE_TYPE_ROUTING_BASED_DETECTION,
+                "finding_ids": [row["id"] for row in options],
+            },
+        ).to_dict(),
+    )
 
 
 def _routing_health_label(score: int) -> str:
@@ -3920,7 +4162,10 @@ def _handler_factory(state: ControlCenterState):
             try:
                 data = resources.files(STATIC_PACKAGE).joinpath(name).read_bytes()
             except FileNotFoundError:
-                self._json({"ok": False, "error": "static asset not found"}, status=HTTPStatus.NOT_FOUND)
+                self._json(
+                    {"ok": False, "error": "static asset not found"},
+                    status=HTTPStatus.NOT_FOUND,
+                )
                 return
             self.send_response(HTTPStatus.OK)
             self.send_header("Content-Type", content_type)
@@ -3992,7 +4237,9 @@ def _handler_factory(state: ControlCenterState):
                 if not self._require_admin():
                     return
                 self._json(_admin_list_workflow_runs(state))
-            elif self.path.startswith("/api/admin/workflow-runs/") and not self.path.endswith("/cancel"):
+            elif self.path.startswith("/api/admin/workflow-runs/") and not self.path.endswith(
+                "/cancel"
+            ):
                 run_id = self.path[len("/api/admin/workflow-runs/"):]
                 if not run_id or "/" in run_id:
                     self._json({"ok": False, "error": "not found"}, status=HTTPStatus.NOT_FOUND)
@@ -4078,7 +4325,9 @@ def _handler_factory(state: ControlCenterState):
                 if not self._require_admin():
                     return
                 self._json(_admin_run_workflow(state, workflow_id, body))
-            elif self.path.endswith("/cancel") and self.path.startswith("/api/admin/workflow-runs/"):
+            elif self.path.endswith("/cancel") and self.path.startswith(
+                "/api/admin/workflow-runs/"
+            ):
                 run_id = self.path[len("/api/admin/workflow-runs/"):-len("/cancel")]
                 if not run_id:
                     self._json({"ok": False, "error": "not found"}, status=HTTPStatus.NOT_FOUND)

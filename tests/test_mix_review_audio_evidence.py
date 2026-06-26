@@ -38,6 +38,10 @@ def test_mix_review_degrades_explicitly_without_audio(tmp_path) -> None:
     try:
         report = run_workflow(runtime, "mix_review", bridge=FakeBridge())
         assert report["metadata"]["evidence_level"] == 1
+        assert report["metadata"]["evidence_level_label"] == "static_project_snapshot"
+        assert report["metadata"]["audio_evidence_status"] == "missing"
+        assert report["metadata"]["automatic_fl_render"] is False
+        assert report["metadata"]["evidence_level_4"]["status"] == "planned"
         assert report["coverage"]["status"] == "partial"
         assert report["prerequisites"][-1]["id"] == "rendered_audio_features"
         assert report["prerequisites"][-1]["status"] == "missing"
@@ -64,6 +68,8 @@ def test_mix_review_uses_linked_rendered_master(tmp_path) -> None:
         report = run_workflow(runtime, "mix_review", bridge=bridge)
         assert report["analysis_mode"] == "hybrid"
         assert report["metadata"]["evidence_level"] == 2
+        assert report["metadata"]["evidence_level_label"] == "rendered_master_audio"
+        assert report["metadata"]["audio_evidence_status"] == "available"
         assert report["prerequisites"][-1]["status"] == "ok"
         assert "rendered_audio_features" not in report["coverage"]["missing"]
         assert any(

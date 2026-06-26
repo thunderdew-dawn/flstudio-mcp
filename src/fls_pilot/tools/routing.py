@@ -21,11 +21,14 @@ from pydantic import Field
 from .. import kb_policy, operations, protocol, safety, workflow_report
 from .. import project_templates as templates
 from ..analysis import (
+    EVIDENCE_TYPE_ROUTING_BASED_DETECTION,
     get_analysis_broker,
+    heuristic_validation_metadata,
     routing_analysis_report_from_legacy_payload,
     serialize_analysis_report,
 )
 from ..connection import fetch_all_pages, get_bridge
+from ..runtime.interactions import InteractionRequest
 from .registration import RETIRED_LOW_LEVEL_TOOLS, hide_retired_tools
 from .targets import mixer_track_error
 
@@ -109,6 +112,11 @@ def _routing_review_findings(
                 "detail": "Generator channels route through inserts that feed Master directly.",
                 "count": len(direct_to_master),
                 "items": direct_to_master[:8],
+                "metadata": heuristic_validation_metadata(
+                    evidence_type=EVIDENCE_TYPE_ROUTING_BASED_DETECTION,
+                    interaction_request_id="routing.confirm_cleanup_heuristics",
+                    reason="master_routed_or_ungrouped",
+                ),
             }
         )
     if not findings:
@@ -123,6 +131,34 @@ def _routing_review_findings(
             }
         )
     return findings
+
+
+def _routing_validation_request(findings: list[dict]) -> dict | None:
+    options = [
+        {
+            "id": str(row.get("id")),
+            "label": str(row.get("title") or row.get("id")),
+            "count": int(row.get("count") or 0),
+            "reason": dict(row.get("metadata") or {}).get("reason"),
+        }
+        for row in findings
+        if isinstance(row.get("metadata"), dict)
+        and row["metadata"].get("human_validation_required")
+    ]
+    if not options:
+        return None
+    return InteractionRequest(
+        id="routing.confirm_cleanup_heuristics",
+        type="multi_select",
+        title="Confirm routing cleanup candidates",
+        prompt="Which routing findings are intentional before cleanup planning is final?",
+        options=tuple(options),
+        allow_remove=True,
+        metadata={
+            "reason": EVIDENCE_TYPE_ROUTING_BASED_DETECTION,
+            "finding_ids": [row["id"] for row in options],
+        },
+    ).to_dict()
 
 
 def detect_cleanup(bridge, *, max_plugin_checks: int = 60) -> dict:
@@ -444,6 +480,11 @@ def register(mcp: FastMCP) -> None:
                         }
                     )
 
+        findings = _routing_review_findings(
+            unrouted_channels=unrouted,
+            direct_to_master=direct_to_master,
+        )
+        interaction_request = _routing_validation_request(findings)
         legacy_payload = {
             "ok": True,
             "workflow": "routing_review",
@@ -454,12 +495,12 @@ def register(mcp: FastMCP) -> None:
                 "unrouted_channels": len(unrouted),
                 "generators_direct_to_master": len(direct_to_master),
             },
-            "findings": _routing_review_findings(
-                unrouted_channels=unrouted,
-                direct_to_master=direct_to_master,
-            ),
+            "findings": findings,
             "unrouted_channels": unrouted,
             "generators_direct_to_master": direct_to_master,
+            "interaction_requests": (
+                [interaction_request] if interaction_request is not None else []
+            ),
             "template_context": templates.compact_context(template_context),
             "note": "Use this data to plan bus structures or correct routing.",
             "details": {
