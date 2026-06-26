@@ -30,7 +30,7 @@ jobs:
       - name: Install package
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e ".[dev]"
+          python -m pip install -e ".[dev,audio]"
 
       - name: Compile core Python
         run: python -m compileall src tests/test_bridge_mock.py scripts/audit_tool_safety.py scripts/audit_anti_vibe.py scripts/check_tool_registration_baseline.py scripts/check_github_project_fingerprint.py scripts/check_release_tag.py scripts/validate_github_labels.py
