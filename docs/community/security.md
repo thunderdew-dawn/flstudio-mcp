@@ -7,8 +7,8 @@ release line.
 
 ## Reporting A Vulnerability
 
-Please report security issues privately by email or through GitHub private
-vulnerability reporting when it is available for this repository.
+Please report security issues privately through GitHub Private Vulnerability Reporting.
+If that is not available, contact <fls-pilot@posteo.org>.
 
 Do not open public issues for vulnerabilities that could expose user systems,
 local file paths, credentials, MIDI bridge state, or unsafe host-automation
