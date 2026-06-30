@@ -13,9 +13,11 @@ from . import __version__, connection, protocol, safety
 
 READ_COMMANDS = {
     protocol.CMD_GET_PROJECT_STATE,
+    protocol.CMD_GET_PROJECT_METADATA,
     protocol.CMD_GET_PLAY_STATE,
     protocol.CMD_GET_SONG_POS,
     protocol.CMD_GET_TEMPO,
+    protocol.CMD_LIST_PLAYLIST_MARKERS,
     protocol.CMD_CHANNEL_LIST,
     protocol.CMD_MIXER_LIST_TRACKS,
     protocol.CMD_PATTERN_LIST,
@@ -226,6 +228,7 @@ def _collect_live_reads(snapshot: dict[str, Any], bridge) -> None:
     play_state = _safe_bridge_call(bridge, protocol.CMD_GET_PLAY_STATE)
     song_position = _safe_bridge_call(bridge, protocol.CMD_GET_SONG_POS)
     tempo = _safe_bridge_call(bridge, protocol.CMD_GET_TEMPO)
+    markers = _safe_bridge_call(bridge, protocol.CMD_LIST_PLAYLIST_MARKERS)
     if play_state["ok"] or song_position["ok"] or tempo["ok"]:
         play_data = play_state.get("data") if play_state["ok"] else {}
         snapshot["transport"].update(
@@ -234,6 +237,7 @@ def _collect_live_reads(snapshot: dict[str, Any], bridge) -> None:
                 **(play_data if isinstance(play_data, dict) else {}),
                 "song_position": song_position.get("data") if song_position["ok"] else None,
                 "tempo": tempo.get("data") if tempo["ok"] else None,
+                "markers": markers.get("data") if markers["ok"] else None,
             }
         )
     else:
@@ -245,6 +249,15 @@ def _collect_live_reads(snapshot: dict[str, Any], bridge) -> None:
                 ),
             }
         )
+
+    metadata = _safe_bridge_call(bridge, protocol.CMD_GET_PROJECT_METADATA)
+    if metadata["ok"]:
+        snapshot["project"]["metadata"] = metadata["data"]
+    else:
+        snapshot["project"]["metadata"] = {
+            "state": "unavailable",
+            "error": metadata["error"],
+        }
 
     snapshot["resources"]["channels"] = _safe_fetch_resource(
         bridge, protocol.CMD_CHANNEL_LIST, "channels"
@@ -369,8 +382,11 @@ def _evidence_feed(snapshot: dict[str, Any]) -> list[dict[str, Any]]:
     generated_at = snapshot["generated_at"]
     bridge = snapshot["bridge"]
     project = snapshot["project"]
+    transport = snapshot["transport"]
     resources = snapshot["resources"]
     safety_state = snapshot["safety"]
+    metadata = project.get("metadata") if isinstance(project.get("metadata"), dict) else {}
+    markers = transport.get("markers") if isinstance(transport.get("markers"), dict) else {}
     items = [
         {
             "label": "Bridge heartbeat",
@@ -387,6 +403,29 @@ def _evidence_feed(snapshot: dict[str, Any]) -> list[dict[str, Any]]:
             "source": "fl://project equivalent",
             "timestamp": generated_at,
             "detail": project.get("error") or "Tempo, transport, and project counts.",
+        },
+        {
+            "label": "Project metadata",
+            "state": metadata.get("state", "unavailable"),
+            "value": _display_value(metadata.get("title")),
+            "source": "general.getProjectTitle/Author/Genre",
+            "timestamp": generated_at,
+            "detail": (
+                metadata.get("error")
+                or "Title, author, and genre are read-only; metadata writes are API-limited."
+            ),
+        },
+        {
+            "label": "Playlist time markers",
+            "state": markers.get("state", "unavailable"),
+            "value": _display_value(markers.get("total")),
+            "source": "arrangement.getMarkerName",
+            "timestamp": generated_at,
+            "detail": (
+                markers.get("reason")
+                or markers.get("position_note")
+                or "Marker names are available for transient navigation."
+            ),
         },
         {
             "label": "Channel summary",

@@ -3949,6 +3949,28 @@ details[open] .raw-report-summary::before { content: "▼ Raw"; }
 
 .counter-grid span { color: #c1cce0; font-size: 11px; font-weight: 800; text-transform: uppercase; }
 
+.project-meta-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  margin: 0;
+  padding: 0 18px 20px;
+}
+
+.project-meta-list div {
+  min-width: 0;
+  padding: 10px 12px;
+  background: rgba(9, 19, 36, 0.28);
+  border: 1px solid rgba(143, 166, 214, 0.1);
+}
+
+.project-meta-list dd {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* ─── Transport ──────────────────────────────────────────────────────────── */
 .transport-layout {
   display: grid; grid-template-columns: minmax(0, 1fr) 136px;
@@ -4003,6 +4025,149 @@ dd { margin: 6px 0 0; color: var(--green); font-size: 17px; font-weight: 760; fo
 .status-orb.is-recording span {
   width: 26px; height: 26px; margin-left: 0; background-color: #ffb0ba;
   border: none; border-radius: 999px; filter: drop-shadow(0 0 16px rgba(255, 95, 114, 0.9));
+}
+
+.transport-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 14px 24px 0;
+}
+
+.transport-button {
+  min-width: 74px;
+  min-height: 34px;
+  padding: 8px 12px;
+  color: #dbe8ff;
+  background: rgba(13, 29, 54, 0.72);
+  border: 1px solid rgba(143, 166, 214, 0.26);
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 850;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.transport-button:hover,
+.transport-button.is-active {
+  color: #effcff;
+  border-color: rgba(82, 216, 255, 0.68);
+  box-shadow: 0 0 18px rgba(82, 216, 255, 0.18);
+}
+
+.transport-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.54;
+}
+
+.transport-record.is-active {
+  border-color: rgba(255, 95, 114, 0.78);
+  box-shadow: 0 0 18px rgba(255, 95, 114, 0.24);
+}
+
+.transport-feedback {
+  min-height: 18px;
+  margin: 8px 24px 0;
+  color: #c7d3ea;
+  font-size: 12px;
+}
+
+.playlist-marker-panel {
+  display: grid;
+  gap: 10px;
+  padding: 12px 24px 0;
+}
+
+.playlist-marker-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.ghost-button.compact {
+  min-height: 28px;
+  padding: 6px 9px;
+  font-size: 11px;
+}
+
+.playlist-marker-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 34px;
+}
+
+.playlist-marker-button {
+  max-width: 160px;
+  min-height: 30px;
+  padding: 7px 10px;
+  color: #dbe8ff;
+  background: rgba(18, 31, 58, 0.7);
+  border: 1px solid rgba(143, 166, 214, 0.24);
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 780;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.playlist-marker-button:hover {
+  border-color: rgba(112, 251, 160, 0.58);
+  color: #eefdf4;
+}
+
+.playlist-marker-empty {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.live-playback-mount {
+  margin: 0 0 24px;
+}
+
+.live-playback-panel {
+  display: grid;
+  gap: 14px;
+  padding: 18px 22px;
+}
+
+.live-playback-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.live-playback-grid div {
+  min-width: 0;
+  padding: 10px 12px;
+  background: rgba(9, 19, 36, 0.34);
+  border: 1px solid rgba(143, 166, 214, 0.12);
+}
+
+.live-playback-grid span {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.live-playback-grid strong {
+  display: block;
+  min-width: 0;
+  margin-top: 5px;
+  overflow: hidden;
+  color: #52d8ff;
+  font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 @keyframes orbBreath {

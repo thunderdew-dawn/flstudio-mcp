@@ -65,6 +65,7 @@ REQUIRED_TOOLS_SAMPLE = {
     "fl_plugin",
     "fl_piano_roll",
     "fl_batch",
+    "fl_get_project_metadata",
     "kb_search",
     "kb_get",
 }

@@ -67,6 +67,7 @@ except Exception:
 # ---------------------------------------------------------------------------
 
 PROTOCOL_VERSION = 3
+CONTROLLER_BUILD = "channels-v43"
 MAX_SYSEX_WIRE_SAFE = 1000
 
 SYSEX_MANUFACTURER = 0x7D
@@ -115,6 +116,8 @@ def OnInit():
     print(
         "[FLStudioPilot] Ready. FL "
         + str(_fl_version)
+        + ", controller "
+        + CONTROLLER_BUILD
         + ", protocol v"
         + str(PROTOCOL_VERSION)
         + "."
@@ -154,7 +157,7 @@ def _handle_request_sysex(event, source):
     magic are ignored so we coexist with other devices on the same input port.
 
     FL builds differ in which callback delivers incoming SysEx: some use
-    OnMidiMsg, FL 21+/scripting-v40 uses OnSysEx. Both delegate here.
+    OnMidiMsg, newer MIDI scripting builds use OnSysEx. Both delegate here.
     """
     sysex = getattr(event, "sysex", None)
     if sysex is None:
@@ -241,7 +244,7 @@ def OnMidiMsg(event):
 
 
 def OnSysEx(event):
-    """FL 21+ / MIDI scripting v40 delivers incoming SysEx here."""
+    """Newer FL MIDI scripting builds deliver incoming SysEx here."""
     event.handled = _handle_request_sysex(event, "OnSysEx")
 
 
@@ -433,7 +436,7 @@ def _h_ping(params):
     return {
         "fl_version": _fl_version,
         "protocol_version": PROTOCOL_VERSION,
-        "build": "channels-v40",  # reload marker -- bump to verify reloads take
+        "build": CONTROLLER_BUILD,  # reload marker -- bump to verify reloads take
         "ts": time.time(),
     }
 
@@ -488,14 +491,16 @@ def _h_play(params):
 
 
 def _h_stop(params):
-    if _is_playing():
-        transport.stop()
+    transport.stop()
     return {"playing": False, "recording": _is_recording()}
 
 
 def _h_pause(params):
     if _is_playing():
-        transport.globalTransport(midi.FPT_Pause, 1)
+        play_command = getattr(midi, "FPT_Play", None)
+        if play_command is None:
+            raise _ClientError("midi.FPT_Play unavailable")
+        transport.globalTransport(play_command, 1)
     return {"playing": _is_playing(), "recording": _is_recording()}
 
 
@@ -598,6 +603,45 @@ def _h_get_project_state(params):
         "channel_count": channels.channelCount(),
         "mixer_track_count": mixer.trackCount(),
     }
+
+
+def _safe_general_string(name):
+    fn = getattr(general, name, None)
+    if not callable(fn):
+        return None, name + " unavailable"
+    try:
+        return str(fn() or ""), None
+    except Exception as e:
+        return None, name + ": " + str(e)
+
+
+def _h_get_project_metadata(params):
+    title, title_error = _safe_general_string("getProjectTitle")
+    author, author_error = _safe_general_string("getProjectAuthor")
+    genre, genre_error = _safe_general_string("getProjectGenre")
+    errors = {}
+    for key, error in (
+        ("title", title_error),
+        ("author", author_error),
+        ("genre", genre_error),
+    ):
+        if error:
+            errors[key] = error
+    out = {
+        "title": title,
+        "author": author,
+        "genre": genre,
+        "write_support": {
+            "state": "api-limited",
+            "reason": "Documented FL Studio MIDI scripting API exposes metadata getters, not setters.",
+        },
+    }
+    if errors:
+        out["state"] = "partial"
+        out["errors"] = errors
+    else:
+        out["state"] = "live"
+    return out
 
 
 def _mixer_track_dict(i):
@@ -1634,6 +1678,103 @@ def _h_channel_selected(p):
     return {"selected": idx, "name": channels.getChannelName(idx)}
 
 
+def _playlist_marker_api_limited(reason):
+    return {
+        "state": "api-limited",
+        "markers": [],
+        "total": 0,
+        "position_supported": False,
+        "navigation_supported": False,
+        "reason": reason,
+    }
+
+
+def _playlist_marker_names(max_markers):
+    if arrangement is None:
+        return None, "arrangement module not available"
+    get_marker_name = getattr(arrangement, "getMarkerName", None)
+    if not callable(get_marker_name):
+        return None, "arrangement.getMarkerName unavailable"
+    markers = []
+    for idx in range(max_markers):
+        try:
+            name = get_marker_name(idx)
+        except Exception as e:
+            if idx == 0:
+                return None, "arrangement.getMarkerName: " + str(e)
+            break
+        if name is None or str(name) == "":
+            break
+        markers.append({"index": idx, "name": str(name), "position_supported": False})
+    return markers, None
+
+
+def _h_list_playlist_markers(p):
+    max_markers = _int_param(p, "max_markers", default=64, min_value=1, max_value=128)
+    markers, error = _playlist_marker_names(max_markers)
+    if error:
+        return _playlist_marker_api_limited(error)
+    return {
+        "state": "live",
+        "markers": markers,
+        "total": len(markers),
+        "position_supported": False,
+        "navigation_supported": arrangement is not None and callable(
+            getattr(arrangement, "jumpToMarker", None)
+        ),
+        "position_note": (
+            "FL Studio exposes playlist marker names and relative marker navigation "
+            "through the documented arrangement API; stable marker time readback is "
+            "not exposed."
+        ),
+    }
+
+
+def _jump_marker_delta(delta):
+    jump = getattr(arrangement, "jumpToMarker", None) if arrangement is not None else None
+    if not callable(jump):
+        raise _ClientError("arrangement.jumpToMarker unavailable")
+    try:
+        jump(int(delta), 1)
+    except TypeError:
+        jump(int(delta))
+
+
+def _h_jump_playlist_marker_relative(p):
+    delta = _int_param(p, "delta", min_value=-1, max_value=1)
+    if delta == 0:
+        raise _ClientError("delta must be -1 or 1")
+    _jump_marker_delta(delta)
+    out = _h_get_song_pos({})
+    out.update({"ok": True, "delta": delta, "readback": "song_position"})
+    return out
+
+
+def _h_jump_playlist_marker(p):
+    index = _int_param(p, "index", min_value=0, max_value=127)
+    max_markers = _int_param(p, "max_markers", default=64, min_value=1, max_value=128)
+    markers, error = _playlist_marker_names(max_markers)
+    if error:
+        return _playlist_marker_api_limited(error)
+    if index >= len(markers):
+        raise _ClientError("marker index out of range")
+    _h_set_song_pos({"ms": 0})
+    for _ in range(index + 1):
+        _jump_marker_delta(1)
+    out = _h_get_song_pos({})
+    out.update(
+        {
+            "ok": True,
+            "target": markers[index],
+            "markers_total": len(markers),
+            "readback": "song_position",
+            "exact_marker_index_readback": False,
+            "navigation_strategy": "song_start_plus_relative_marker_jumps",
+        }
+    )
+    return out
+
+
 def _h_arrange_add_marker(p):
     if arrangement is None:
         return {"ok": False, "error": "arrangement module not available"}
@@ -2428,6 +2569,7 @@ _HANDLERS = {
     "get_song_position": _h_get_song_pos,
     "set_song_position": _h_set_song_pos,
     "get_project_state": _h_get_project_state,
+    "get_project_metadata": _h_get_project_metadata,
     "mixer_list_tracks": _h_mixer_list_tracks,
     "mixer_get_track": _h_mixer_get_track,
     "mixer_selected": _h_mixer_selected,
@@ -2468,6 +2610,9 @@ _HANDLERS = {
     "arrange_new_pattern": _h_arrange_new_pattern,
     "arrange_clone_pattern": _h_arrange_clone_pattern,
     "arrange_add_marker": _h_arrange_add_marker,
+    "list_playlist_markers": _h_list_playlist_markers,
+    "jump_playlist_marker": _h_jump_playlist_marker,
+    "jump_playlist_marker_relative": _h_jump_playlist_marker_relative,
     "channel_select": _h_channel_select,
     "channel_selected": _h_channel_selected,
     "ensure_piano_roll": _h_ensure_piano_roll,

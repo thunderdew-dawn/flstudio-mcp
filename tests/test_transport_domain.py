@@ -42,6 +42,14 @@ class FakeBridge:
             return {"playing": self.playing, "recording": self.recording}
         if command == protocol.CMD_GET_PLAY_STATE:
             return {"playing": self.playing, "recording": self.recording}
+        if command == protocol.CMD_LIST_PLAYLIST_MARKERS:
+            return {
+                "state": "live",
+                "total": 2,
+                "markers": [{"index": 0, "name": "BREAKDOWN"}, {"index": 1, "name": "DROP #1"}],
+            }
+        if command == protocol.CMD_JUMP_PLAYLIST_MARKER:
+            return {"ok": True, "target": {"index": params["index"], "name": "DROP #1"}}
         raise AssertionError(f"unexpected command: {command}")
 
 
@@ -118,6 +126,26 @@ def test_transport_domain_transient_action(transport_mcp) -> None:
 
     assert result == {"playing": True, "recording": False}
     assert bridge.calls == [(protocol.CMD_PLAY, {})]
+
+
+def test_transport_domain_lists_playlist_markers(transport_mcp) -> None:
+    mcp, bridge = transport_mcp
+
+    result = _call(mcp, "list_markers")
+
+    assert result["total"] == 2
+    assert result["markers"][1]["name"] == "DROP #1"
+    assert bridge.calls == [(protocol.CMD_LIST_PLAYLIST_MARKERS, {})]
+
+
+def test_transport_domain_jumps_to_playlist_marker(transport_mcp) -> None:
+    mcp, bridge = transport_mcp
+
+    result = _call(mcp, "jump_to_marker", {"index": 1})
+
+    assert result["ok"] is True
+    assert result["target"]["index"] == 1
+    assert bridge.calls == [(protocol.CMD_JUMP_PLAYLIST_MARKER, {"index": 1})]
 
 
 def test_transport_domain_rejects_invalid_action(transport_mcp) -> None:

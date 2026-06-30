@@ -91,6 +91,10 @@
           "command": "get_project_state"
         },
         {
+          "constant": "CMD_GET_PROJECT_METADATA",
+          "command": "get_project_metadata"
+        },
+        {
           "constant": "CMD_MIXER_LIST_TRACKS",
           "command": "mixer_list_tracks"
         },
@@ -231,6 +235,10 @@
           "command": "mixer_get_peaks"
         },
         {
+          "constant": "CMD_MIXER_GET_ALL_PEAKS",
+          "command": "mixer_get_all_peaks"
+        },
+        {
           "constant": "CMD_MIXER_SET_COLOR",
           "command": "mixer_set_color"
         },
@@ -269,6 +277,18 @@
         {
           "constant": "CMD_ARRANGE_ADD_MARKER",
           "command": "arrange_add_marker"
+        },
+        {
+          "constant": "CMD_LIST_PLAYLIST_MARKERS",
+          "command": "list_playlist_markers"
+        },
+        {
+          "constant": "CMD_JUMP_PLAYLIST_MARKER",
+          "command": "jump_playlist_marker"
+        },
+        {
+          "constant": "CMD_JUMP_PLAYLIST_MARKER_RELATIVE",
+          "command": "jump_playlist_marker_relative"
         },
         {
           "constant": "CMD_ENSURE_PIANO_ROLL",
@@ -359,6 +379,18 @@
           "command": "mixer_probe_eq_type"
         },
         {
+          "constant": "CMD_MIXER_PROBE_EQ_GAIN",
+          "command": "mixer_probe_eq_gain"
+        },
+        {
+          "constant": "CMD_MIXER_PROBE_EQ_FREQ",
+          "command": "mixer_probe_eq_freq"
+        },
+        {
+          "constant": "CMD_MIXER_PROBE_EQ_Q",
+          "command": "mixer_probe_eq_q"
+        },
+        {
           "constant": "CMD_GET_TIME_SIG",
           "command": "get_time_sig"
         },
@@ -375,10 +407,6 @@
         {
           "command": "ping",
           "handler": "_h_ping"
-        },
-        {
-          "command": "bridge_eval",
-          "handler": "lambda"
         },
         {
           "command": "get_tempo",
@@ -427,6 +455,10 @@
         {
           "command": "get_project_state",
           "handler": "_h_get_project_state"
+        },
+        {
+          "command": "get_project_metadata",
+          "handler": "_h_get_project_metadata"
         },
         {
           "command": "mixer_list_tracks",
@@ -589,6 +621,18 @@
           "handler": "_h_arrange_add_marker"
         },
         {
+          "command": "list_playlist_markers",
+          "handler": "_h_list_playlist_markers"
+        },
+        {
+          "command": "jump_playlist_marker",
+          "handler": "_h_jump_playlist_marker"
+        },
+        {
+          "command": "jump_playlist_marker_relative",
+          "handler": "_h_jump_playlist_marker_relative"
+        },
+        {
           "command": "channel_select",
           "handler": "_h_channel_select"
         },
@@ -697,22 +741,6 @@
           "handler": "_h_mixer_set_eq"
         },
         {
-          "command": "mixer_probe_eq_type",
-          "handler": "_h_mixer_probe_eq_type"
-        },
-        {
-          "command": "mixer_probe_eq_gain",
-          "handler": "_h_mixer_probe_eq_gain"
-        },
-        {
-          "command": "mixer_probe_eq_freq",
-          "handler": "_h_mixer_probe_eq_freq"
-        },
-        {
-          "command": "mixer_probe_eq_q",
-          "handler": "_h_mixer_probe_eq_q"
-        },
-        {
           "command": "mixer_format_event_value",
           "handler": "_h_mixer_format_event_value"
         },
@@ -727,9 +755,25 @@
         {
           "command": "channel_set_steps",
           "handler": "_h_channel_set_steps"
+        },
+        {
+          "command": "mixer_probe_eq_type",
+          "handler": "_h_mixer_probe_eq_type"
+        },
+        {
+          "command": "mixer_probe_eq_gain",
+          "handler": "_h_mixer_probe_eq_gain"
+        },
+        {
+          "command": "mixer_probe_eq_freq",
+          "handler": "_h_mixer_probe_eq_freq"
+        },
+        {
+          "command": "mixer_probe_eq_q",
+          "handler": "_h_mixer_probe_eq_q"
         }
       ],
-      "handler_count": 89
+      "handler_count": 92
     },
     "source_files": {
       "protocol": "src/fls_pilot/protocol.py",

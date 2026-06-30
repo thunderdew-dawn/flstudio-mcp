@@ -99,6 +99,7 @@ CMD_SET_SONG_POS = "set_song_position"
 
 # Project (Phase 1) -- aggregate read
 CMD_GET_PROJECT_STATE = "get_project_state"
+CMD_GET_PROJECT_METADATA = "get_project_metadata"
 
 # Mixer (Phase 2)
 CMD_MIXER_LIST_TRACKS = "mixer_list_tracks"
@@ -168,6 +169,9 @@ CMD_API_PROBE = "api_probe"
 CMD_ARRANGE_NEW_PATTERN = "arrange_new_pattern"  # find empty + jumpTo + name
 CMD_ARRANGE_CLONE_PATTERN = "arrange_clone_pattern"  # clonePattern + rename
 CMD_ARRANGE_ADD_MARKER = "arrange_add_marker"  # addAutoTimeMarker at a bar
+CMD_LIST_PLAYLIST_MARKERS = "list_playlist_markers"
+CMD_JUMP_PLAYLIST_MARKER = "jump_playlist_marker"
+CMD_JUMP_PLAYLIST_MARKER_RELATIVE = "jump_playlist_marker_relative"
 
 # Note-bridge hardening -- ensure the Piano roll is open before a note-write
 CMD_ENSURE_PIANO_ROLL = "ensure_piano_roll"  # open/focus Piano Roll, optionally retarget

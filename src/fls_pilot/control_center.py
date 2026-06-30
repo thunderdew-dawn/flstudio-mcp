@@ -23,7 +23,7 @@ from importlib import resources
 from pathlib import Path
 from typing import Any
 
-from . import doctor, kb_policy, protocol
+from . import doctor, kb_policy, operations, protocol
 from . import project_templates as templates
 from .analysis import (
     EVIDENCE_TYPE_NAME_BASED_DETECTION,
@@ -92,6 +92,18 @@ MIX_REVIEW_HEURISTIC_RULES = {
     "missing_compressor",
     "ungrouped",
     "eq_clash",
+}
+CONTROL_CENTER_TRANSPORT_ACTIONS = {
+    "get_play_state",
+    "get_song_position",
+    "list_markers",
+    "play",
+    "stop",
+    "pause",
+    "record",
+    "set_song_position",
+    "jump_to_marker",
+    "jump_marker_relative",
 }
 
 
@@ -437,6 +449,86 @@ def _ui_service_actions(
             ports.get("sse") or {},
         ),
     }
+
+
+def _transport_snapshot_from_bridge(bridge: TCPBridge) -> dict[str, Any]:
+    """Collect a small live transport snapshot for the Control Center."""
+
+    out: dict[str, Any] = {"state": "live"}
+    try:
+        play_state = bridge.call(protocol.CMD_GET_PLAY_STATE)
+        if isinstance(play_state, dict):
+            out.update(play_state)
+    except Exception as exc:
+        out["play_state_error"] = f"{type(exc).__name__}: {exc}"
+    try:
+        out["song_position"] = bridge.call(protocol.CMD_GET_SONG_POS)
+    except Exception as exc:
+        out["song_position_error"] = f"{type(exc).__name__}: {exc}"
+    try:
+        out["tempo"] = bridge.call(protocol.CMD_GET_TEMPO)
+    except Exception as exc:
+        out["tempo_error"] = f"{type(exc).__name__}: {exc}"
+    try:
+        out["markers"] = bridge.call(protocol.CMD_LIST_PLAYLIST_MARKERS)
+    except Exception as exc:
+        out["markers"] = {
+            "state": "unavailable",
+            "markers": [],
+            "total": 0,
+            "reason": f"{type(exc).__name__}: {exc}",
+        }
+    return out
+
+
+def _control_transport(state: ControlCenterState, body: dict[str, Any]) -> dict[str, Any]:
+    """Run one read-only/transient transport action for the local GUI."""
+
+    action = str(body.get("action") or "get_status")
+    params = dict(body.get("params") or {}) if isinstance(body.get("params"), dict) else {}
+    daemon_host, daemon_port = _selected_daemon_endpoint(state)
+    bridge = TCPBridge(daemon_host, daemon_port)
+    try:
+        wait = getattr(bridge, "wait_for_heartbeat", None)
+        if callable(wait):
+            wait(timeout=1.0)
+        if not bool(getattr(bridge, "is_alive", lambda: False)()):
+            return {
+                "ok": False,
+                "state": "unavailable",
+                "error": "No fresh FL Studio controller heartbeat.",
+                "transport": {"state": "unavailable"},
+            }
+        if action == "get_status":
+            return {"ok": True, "action": action, "transport": _transport_snapshot_from_bridge(bridge)}
+        if action not in CONTROL_CENTER_TRANSPORT_ACTIONS:
+            return {"ok": False, "error": f"Unsupported transport action: {action}"}
+        try:
+            prepared = operations.prepare_operation("transport", action, params)
+        except operations.OperationValidationError as exc:
+            return {"ok": False, "error": str(exc)}
+        if prepared.safety_class not in {operations.READ_ONLY, operations.TRANSIENT}:
+            return {
+                "ok": False,
+                "error": f"Transport action {action} is not available in the GUI safety class.",
+            }
+        result = bridge.call(prepared.command.command, prepared.command.params)
+        return {
+            "ok": True,
+            "action": action,
+            "result": result,
+            "transport": _transport_snapshot_from_bridge(bridge),
+        }
+    except Exception as exc:
+        return {
+            "ok": False,
+            "state": "unavailable",
+            "error": f"{type(exc).__name__}: {exc}",
+            "transport": {"state": "unavailable"},
+        }
+    finally:
+        with contextlib.suppress(Exception):
+            bridge.close()
 
 
 def _ui_service_action(
@@ -4688,6 +4780,7 @@ def _handler_factory(state: ControlCenterState):
                 return
             self.send_response(HTTPStatus.OK)
             self.send_header("Content-Type", content_type)
+            self.send_header("Cache-Control", "no-store")
             self.send_header("Content-Length", str(len(data)))
             self.end_headers()
             self.wfile.write(data)
@@ -4796,6 +4889,8 @@ def _handler_factory(state: ControlCenterState):
                 self._json(_confirm_step(state, step))
             elif self.path == "/api/audio-analysis":
                 self._json(_run_audio_analysis_action(state, body))
+            elif self.path == "/api/transport":
+                self._json(_control_transport(state, body))
             elif self.path == "/api/workflows/mix-review":
                 self._json(_run_mix_review(state, inputs=_workflow_inputs_from_body(body)))
             elif self.path == "/api/workflows/low-end-analysis":

@@ -479,6 +479,35 @@ def _validate_song_position(params: Mapping[str, Any]) -> dict[str, Any]:
     return {name: value}
 
 
+def _validate_marker_index(params: Mapping[str, Any]) -> dict[str, Any]:
+    _reject_unknown(params, {"index", "max_markers"})
+    out = {"index": _non_bool_int(params, "index")}
+    if "max_markers" in params:
+        max_markers = _non_bool_int(params, "max_markers", minimum=1)
+        if max_markers > 128:
+            raise OperationValidationError("max_markers must be 1..128")
+        out["max_markers"] = max_markers
+    return out
+
+
+def _validate_marker_list(params: Mapping[str, Any]) -> dict[str, Any]:
+    _reject_unknown(params, {"max_markers"})
+    if "max_markers" not in params:
+        return {}
+    max_markers = _non_bool_int(params, "max_markers", minimum=1)
+    if max_markers > 128:
+        raise OperationValidationError("max_markers must be 1..128")
+    return {"max_markers": max_markers}
+
+
+def _validate_marker_delta(params: Mapping[str, Any]) -> dict[str, Any]:
+    _reject_unknown(params, {"delta"})
+    delta = _non_bool_int(params, "delta", minimum=-1)
+    if delta not in {-1, 1}:
+        raise OperationValidationError("delta must be -1 or 1")
+    return {"delta": delta}
+
+
 def _validate_step(params: Mapping[str, Any]) -> dict[str, Any]:
     if not isinstance(params, Mapping):
         raise OperationValidationError("each step must be a mapping")
@@ -1544,6 +1573,12 @@ _DEFAULT_SPECS = (
     ),
     _read_spec(
         domain="transport",
+        action="list_markers",
+        validator=_validate_marker_list,
+        command=protocol.CMD_LIST_PLAYLIST_MARKERS,
+    ),
+    _read_spec(
+        domain="transport",
         action="get_tempo",
         validator=_validate_empty,
         command=protocol.CMD_GET_TEMPO,
@@ -1579,6 +1614,18 @@ _DEFAULT_SPECS = (
         action="set_song_position",
         validator=_validate_song_position,
         command=protocol.CMD_SET_SONG_POS,
+    ),
+    _transient_spec(
+        domain="transport",
+        action="jump_to_marker",
+        validator=_validate_marker_index,
+        command=protocol.CMD_JUMP_PLAYLIST_MARKER,
+    ),
+    _transient_spec(
+        domain="transport",
+        action="jump_marker_relative",
+        validator=_validate_marker_delta,
+        command=protocol.CMD_JUMP_PLAYLIST_MARKER_RELATIVE,
     ),
     _persistent_write_spec(
         domain="transport",

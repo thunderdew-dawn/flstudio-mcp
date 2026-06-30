@@ -195,6 +195,20 @@
               <div><strong id="pattern-count">Unavailable</strong><span>Patterns</span></div>
               <div><strong id="playlist-count">Unavailable</strong><span>Playlist Tracks</span></div>
             </div>
+            <dl class="project-meta-list">
+              <div>
+                <dt>Title</dt>
+                <dd id="project-title">Unavailable</dd>
+              </div>
+              <div>
+                <dt>Author</dt>
+                <dd id="project-author">Unavailable</dd>
+              </div>
+              <div>
+                <dt>Genre</dt>
+                <dd id="project-genre">Unavailable</dd>
+              </div>
+            </dl>
           </article>
 
           <!-- Transport -->
@@ -215,6 +229,27 @@
                 </div>
               </dl>
               <div class="status-orb" id="status-orb" aria-hidden="true"><span></span></div>
+            </div>
+            <div class="transport-controls" aria-label="Live playback controls">
+              <button class="transport-button" type="button" data-transport-action="play" id="transport-play"
+                title="Start playback">Play</button>
+              <button class="transport-button" type="button" data-transport-action="pause" id="transport-pause"
+                title="Pause at the current playhead position">Pause</button>
+              <button class="transport-button" type="button" data-transport-action="stop" id="transport-stop"
+                title="Stop playback. FL Studio returns the playhead to the start cue.">Stop</button>
+              <button class="transport-button transport-record" type="button" data-transport-action="record"
+                id="transport-record" title="Toggle record arm. Start playback as well to record in FL Studio.">Record</button>
+            </div>
+            <p class="transport-feedback" id="transport-feedback" role="status"></p>
+            <div class="playlist-marker-panel">
+              <div class="playlist-marker-heading">
+                <span>Playlist Markers</span>
+                <button class="ghost-button compact" type="button" data-marker-relative="-1"
+                  id="marker-previous">Previous</button>
+                <button class="ghost-button compact" type="button" data-marker-relative="1"
+                  id="marker-next">Next</button>
+              </div>
+              <div class="playlist-marker-strip" id="playlist-marker-strip"></div>
             </div>
             <div class="wave-bars" aria-hidden="true"></div>
           </article>
@@ -321,6 +356,8 @@
           <button class="ghost-button" id="mix-refresh-status" type="button">Refresh Status</button>
         </div>
       </section>
+
+      <div class="live-playback-mount" data-live-playback="mix_review"></div>
 
       <div id="mix-review-feedback" class="mix-review-feedback" role="status"></div>
 
@@ -477,6 +514,8 @@
           <button class="ghost-button" id="low-end-refresh-status" type="button">Refresh Status</button>
         </div>
       </section>
+
+      <div class="live-playback-mount" data-live-playback="low_end_analysis"></div>
 
       <div id="low-end-feedback" class="low-end-feedback" role="status"></div>
 
@@ -1116,6 +1155,7 @@
           <p>Review project metadata before export. Level evidence, render settings, and mastering remain separate checks.</p>
         </div>
       </section>
+      <div class="live-playback-mount" data-live-playback="preflight"></div>
       <div class="runtime-workflow-content" id="preflight-runtime-content"></div>
     </main>
 

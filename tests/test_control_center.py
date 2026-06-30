@@ -54,6 +54,58 @@ def test_state_uses_configured_daemon_endpoint(monkeypatch):
     assert state.daemon_port == 9791
 
 
+def test_control_transport_allows_only_transient_marker_navigation(monkeypatch):
+    class FakeTCPBridge:
+        def __init__(self, host: str, port: int) -> None:
+            self.host = host
+            self.port = port
+            self.calls: list[tuple[str, dict]] = []
+            self.closed = False
+
+        def wait_for_heartbeat(self, timeout: float = 1.0) -> bool:
+            return True
+
+        def is_alive(self) -> bool:
+            return True
+
+        def call(self, command: str, params: dict | None = None):
+            from fls_pilot import protocol
+
+            payload = dict(params or {})
+            self.calls.append((command, payload))
+            if command == protocol.CMD_JUMP_PLAYLIST_MARKER:
+                return {"ok": True, "target": {"index": payload["index"], "name": "DROP #1"}}
+            if command == protocol.CMD_GET_PLAY_STATE:
+                return {"playing": True, "recording": False}
+            if command == protocol.CMD_GET_SONG_POS:
+                return {"position_beats": 32.0}
+            if command == protocol.CMD_GET_TEMPO:
+                return {"bpm": 128.0}
+            if command == protocol.CMD_LIST_PLAYLIST_MARKERS:
+                return {"state": "live", "total": 1, "markers": [{"index": 0, "name": "DROP #1"}]}
+            raise AssertionError(f"unexpected command: {command}")
+
+        def close(self) -> None:
+            self.closed = True
+
+    monkeypatch.setattr(control_center, "TCPBridge", FakeTCPBridge)
+
+    payload = control_center._control_transport(
+        _state(),
+        {"action": "jump_to_marker", "params": {"index": 0}},
+    )
+
+    assert payload["ok"] is True
+    assert payload["result"]["target"]["name"] == "DROP #1"
+    assert payload["transport"]["markers"]["total"] == 1
+
+    denied = control_center._control_transport(
+        _state(),
+        {"action": "set_tempo", "params": {"bpm": 130}},
+    )
+    assert denied["ok"] is False
+
+
 def test_workflow_inputs_from_body_normalizes_user_decisions() -> None:
     inputs = control_center._workflow_inputs_from_body(
         {

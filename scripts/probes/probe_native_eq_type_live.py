@@ -29,7 +29,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from fls_pilot import protocol, safety  # noqa: E402
 from fls_pilot.connection import FLCommandFailed, get_bridge  # noqa: E402
 
-EXPECTED_BUILD = "channels-v40"
+EXPECTED_BUILD = "channels-v43"
 HIGH_PASS_TYPE = 3
 
 

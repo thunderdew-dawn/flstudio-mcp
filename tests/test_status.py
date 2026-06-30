@@ -30,12 +30,31 @@ class FakeBridge:
                 "channel_count": 3,
                 "mixer_track_count": 4,
             }
+        if command == protocol.CMD_GET_PROJECT_METADATA:
+            return {
+                "state": "live",
+                "title": "Marker Test",
+                "author": "Producer",
+                "genre": "Electronic",
+                "write_support": {"state": "api-limited"},
+            }
         if command == protocol.CMD_GET_PLAY_STATE:
             return {"playing": True, "recording": False}
         if command == protocol.CMD_GET_SONG_POS:
-            return "65:02:11"
+            return {"position_beats": 65.0, "position_ms": 26896}
         if command == protocol.CMD_GET_TEMPO:
             return 145.0
+        if command == protocol.CMD_LIST_PLAYLIST_MARKERS:
+            return {
+                "state": "live",
+                "total": 3,
+                "markers": [
+                    {"index": 0, "name": "OUTRO", "position_supported": False},
+                    {"index": 1, "name": "BREAKDOWN", "position_supported": False},
+                    {"index": 2, "name": "DROP #1", "position_supported": False},
+                ],
+                "position_supported": False,
+            }
         if command == protocol.CMD_CHANNEL_LIST:
             return {
                 "total": 3,
@@ -92,7 +111,9 @@ def test_collect_status_is_read_only(monkeypatch) -> None:
     assert snapshot["mode"] == "read-only"
     assert snapshot["bridge"]["state"] == "live"
     assert snapshot["project"]["tempo_bpm"] == 145.0
+    assert snapshot["project"]["metadata"]["title"] == "Marker Test"
     assert snapshot["project"]["playlist_track_count"] == 2
+    assert snapshot["transport"]["markers"]["total"] == 3
     assert bridge.closed is True
     assert {command for command, _ in bridge.calls} <= status.READ_COMMANDS
 

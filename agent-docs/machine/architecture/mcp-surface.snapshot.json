@@ -14,12 +14,12 @@
   "payload": {
     "tool_safety_summary": {
       "external-write": 2,
-      "read-only": 70,
+      "read-only": 71,
       "server-state": 5,
       "transient": 6,
       "write-safe-required": 84
     },
-    "tools_total": 167,
+    "tools_total": 168,
     "tool_module_slices": {
       "arrange": {
         "path": "agent-docs/machine/architecture/mcp-tools/arrange.snapshot.json",
@@ -140,12 +140,12 @@
       },
       "mixer_core": {
         "path": "agent-docs/machine/architecture/mcp-tools/mixer_core.snapshot.json",
-        "tools_total": 30,
+        "tools_total": 31,
         "safety_class_counts": {
-          "external-write": 1,
-          "read-only": 9,
+          "read-only": 10,
+          "write-safe-required": 16,
           "server-state": 4,
-          "write-safe-required": 16
+          "external-write": 1
         },
         "destructive_hint_true_count": 2
       },

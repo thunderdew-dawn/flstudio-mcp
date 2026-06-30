@@ -91,6 +91,14 @@
                 "project_identity_change",
                 "audio_source_hash_changed"
               ]
+            },
+            {
+              "id": "live_meter_window",
+              "observation_kind": "live_meter_window",
+              "required": false,
+              "evidence_mode": "live_runtime",
+              "invalidates_on": [],
+              "ttl_seconds": 2
             }
           ]
         },
@@ -163,6 +171,14 @@
                 "project_identity_change",
                 "audio_source_hash_changed"
               ]
+            },
+            {
+              "id": "live_meter_window",
+              "observation_kind": "live_meter_window",
+              "required": false,
+              "evidence_mode": "live_runtime",
+              "invalidates_on": [],
+              "ttl_seconds": 2
             }
           ]
         },

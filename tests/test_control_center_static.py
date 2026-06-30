@@ -38,6 +38,12 @@ def test_v3_runtime_workflow_copy_exposes_evidence_limits() -> None:
     assert "rendered_master: \"Rendered master audio\"" in js
     assert "static_snapshot_only: \"Project metadata\"" in js
     assert "id=\"producer_audio_evidence\"" in html
+    assert "id=\"project-title\"" in html
+    assert "id=\"transport-play\"" in html
+    assert "id=\"playlist-marker-strip\"" in html
+    assert "data-live-playback=\"mix_review\"" in html
+    assert "data-live-playback=\"low_end_analysis\"" in html
+    assert "data-live-playback=\"preflight\"" in html
     assert "id=\"mix-review-interactions\"" in html
     assert "id=\"low-end-interactions\"" in html
     assert "id=\"routing-audit-interactions\"" in html
@@ -45,6 +51,21 @@ def test_v3_runtime_workflow_copy_exposes_evidence_limits() -> None:
     assert "async function submitAudioAnalysis()" in js
     assert 'audioAnalysisRequest("cancel"' in js
     assert 'audioAnalysisRequest("result"' in js
+
+
+def test_live_transport_polling_does_not_disable_controls() -> None:
+    js = APP_JS.read_text("utf-8")
+
+    refresh_start = js.index("async function refreshTransportStatus()")
+    action_start = js.index("async function transportAction(")
+    refresh_body = js[refresh_start:action_start]
+
+    assert "polling: false" in js
+    assert "state.transport.polling = true" in refresh_body
+    assert "state.transport.polling = false" in refresh_body
+    assert "state.transport.loading = true" not in refresh_body
+    assert "state.transport.loading = false" not in refresh_body
+    assert "button.disabled = state.transport.loading;" in js
 
 
 def test_control_center_static_runtime_and_disconnect_behaviour() -> None:

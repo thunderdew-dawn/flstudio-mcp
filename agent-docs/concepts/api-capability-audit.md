@@ -101,6 +101,37 @@ They now route through the safety layer. Piano Roll writes are backed by FL
 Studio undo: the generated scripts wrap edits in `flp.score.undoSection()` when
 available, and MCP rollback invokes `general.undoUp()`.
 
+## Project Metadata and Playlist Markers
+
+Status: `documented` for read-only project metadata getters and playlist marker
+names; `api-limited` for metadata setters and stable marker time readback.
+
+Useful API:
+
+- `general.getProjectTitle`
+- `general.getProjectAuthor`
+- `general.getProjectGenre`
+- `arrangement.getMarkerName`
+- `arrangement.jumpToMarker`
+
+Current shipped behavior:
+
+- `fl_get_project_metadata` reads title, author, and genre and reports metadata
+  writes as API-limited because documented setters are not available.
+- `fl_transport(action="list_markers")` reads playlist marker names when the
+  arrangement module exposes them.
+- `fl_transport(action="jump_to_marker")` and
+  `fl_transport(action="jump_marker_relative")` are transient playback
+  navigation controls. They do not edit playlist clips or marker data.
+
+Known limitations:
+
+- Marker time/position readback is not exposed through the documented
+  arrangement API, so UI marker lists show names and navigate through transient
+  marker jumps without claiming exact marker time readback.
+- Playlist clip placement, movement, deletion, and deep clip editing remain
+  unsupported.
+
 ## Dynamic Mixer Track Handling
 
 Status: `documented` for reading the current mixer-track count; `probe-needed`

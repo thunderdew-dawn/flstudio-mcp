@@ -14,11 +14,11 @@
   "payload": {
     "operation_registry": {
       "summary": {
-        "total": 65,
+        "total": 68,
         "by_safety_class": {
-          "read-only": 25,
+          "read-only": 26,
           "write-safe-required": 34,
-          "transient": 6
+          "transient": 8
         },
         "by_domain": {
           "channel": 13,
@@ -28,7 +28,7 @@
           "pattern": 9,
           "playlist": 7,
           "plugin": 4,
-          "transport": 12
+          "transport": 15
         }
       },
       "operations": [
@@ -124,8 +124,8 @@
           "domain": "channel",
           "action": "set_steps",
           "safety_class": "write-safe-required",
-          "batch_eligible": true,
-          "batch_category": "persistent_write",
+          "batch_eligible": false,
+          "batch_category": "excluded",
           "requires_write_contract": true
         },
         {
@@ -483,6 +483,30 @@
         {
           "domain": "transport",
           "action": "get_time_signature",
+          "safety_class": "read-only",
+          "batch_eligible": true,
+          "batch_category": "read_only",
+          "requires_write_contract": false
+        },
+        {
+          "domain": "transport",
+          "action": "jump_marker_relative",
+          "safety_class": "transient",
+          "batch_eligible": false,
+          "batch_category": "transient",
+          "requires_write_contract": false
+        },
+        {
+          "domain": "transport",
+          "action": "jump_to_marker",
+          "safety_class": "transient",
+          "batch_eligible": false,
+          "batch_category": "transient",
+          "requires_write_contract": false
+        },
+        {
+          "domain": "transport",
+          "action": "list_markers",
           "safety_class": "read-only",
           "batch_eligible": true,
           "batch_category": "read_only",

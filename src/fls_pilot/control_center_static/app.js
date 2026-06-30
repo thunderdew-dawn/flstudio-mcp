@@ -27,6 +27,18 @@ const state = {
     error: null,
     lastRun: null
   },
+  transport: {
+    loading: false,
+    polling: false,
+    error: null,
+    pollTimer: null,
+    lastAppliedKey: "",
+    lastMetric: null,
+    lastPlaying: false,
+    lastLivePosition: null,
+    stopResetDetected: false,
+    wrapCount: 0
+  },
   audioAnalysis: {
     loading: false,
     jobs: [],
@@ -142,6 +154,135 @@ async function api(path, options = {}) {
   return type.includes("application/json") ? response.json() : response.text();
 }
 
+function statusReportData() {
+  return getStatusReport() || {};
+}
+
+function setStatusTransport(transport) {
+  if (!state.status || !transport) return;
+  const report = getStatusReport();
+  if (report) report.transport = transport;
+  if (state.status.status_report) state.status.status_report.transport = transport;
+  if (state.status.dashboard) state.status.dashboard.transport = transport;
+}
+
+function positionMetric(position) {
+  if (!position || typeof position !== "object") return null;
+  for (const key of ["position_beats", "beats", "position_ticks", "ticks", "position_ms", "ms"]) {
+    const value = Number(position[key]);
+    if (Number.isFinite(value)) return { key, value };
+  }
+  return null;
+}
+
+function observeTransport(transport, sourceKey = "") {
+  if (!transport || typeof transport !== "object") return;
+  const playing = Boolean(transport.playing);
+  const metric = positionMetric(transport.song_position);
+  const key = [
+    sourceKey,
+    playing ? "playing" : "stopped",
+    transport.recording ? "recording" : "idle",
+    metric ? `${metric.key}:${metric.value}` : "no-position"
+  ].join("|");
+  if (key && key === state.transport.lastAppliedKey) return;
+  state.transport.lastAppliedKey = key;
+
+  if (playing && metric) {
+    if (
+      state.transport.lastPlaying
+      && state.transport.lastMetric
+      && state.transport.lastMetric.key === metric.key
+      && metric.value + 0.5 < state.transport.lastMetric.value
+    ) {
+      state.transport.wrapCount += 1;
+    }
+    state.transport.lastMetric = metric;
+    state.transport.lastLivePosition = transport.song_position;
+    state.transport.stopResetDetected = false;
+  }
+
+  if (!playing && state.transport.lastPlaying && metric && state.transport.lastMetric) {
+    state.transport.stopResetDetected =
+      state.transport.lastMetric.key === metric.key
+      && metric.value + 0.5 < state.transport.lastMetric.value;
+  }
+  state.transport.lastPlaying = playing;
+}
+
+function applyTransportSnapshot(transport, sourceKey = "") {
+  if (!transport || typeof transport !== "object") return;
+  setStatusTransport(transport);
+  observeTransport(transport, sourceKey);
+}
+
+async function refreshTransportStatus() {
+  if (state.transport.loading || state.transport.polling) return;
+  state.transport.polling = true;
+  try {
+    const response = await api("/api/transport", {
+      method: "POST",
+      body: JSON.stringify({ action: "get_status" })
+    });
+    if (!response.ok) throw new Error(response.error || "Transport unavailable");
+    applyTransportSnapshot(response.transport, `transport:${Date.now()}`);
+    state.transport.error = null;
+    renderProjectData();
+    renderLivePlaybackMounts();
+  } catch (error) {
+    state.transport.error = error.message;
+    renderTransportFeedback(error.message, true);
+  } finally {
+    state.transport.polling = false;
+  }
+}
+
+async function transportAction(action, params = {}) {
+  state.transport.loading = true;
+  renderTransportButtons();
+  try {
+    const response = await api("/api/transport", {
+      method: "POST",
+      body: JSON.stringify({ action, params })
+    });
+    if (!response.ok) throw new Error(response.error || "Transport action failed");
+    applyTransportSnapshot(response.transport, `action:${action}:${Date.now()}`);
+    state.transport.error = null;
+    renderTransportFeedback(transportActionLabel(action, response.result));
+    renderProjectData();
+    renderLivePlaybackMounts();
+  } catch (error) {
+    state.transport.error = error.message;
+    renderTransportFeedback(error.message, true);
+  } finally {
+    state.transport.loading = false;
+    renderTransportButtons();
+  }
+}
+
+function transportActionLabel(action, result) {
+  const labels = {
+    play: "Playback started.",
+    pause: "Playback paused.",
+    stop: "Playback stopped.",
+    record: result?.recording ? "Record armed. Press Play to record." : "Record disarmed.",
+    jump_to_marker: "Moved to marker.",
+    jump_marker_relative: "Moved to marker.",
+    set_song_position: "Playhead moved."
+  };
+  return labels[action] || "Transport updated.";
+}
+
+function syncTransportPolling(live) {
+  if (window.__FLS_PILOT_TEST__) return;
+  if (live && !state.transport.pollTimer) {
+    state.transport.pollTimer = setInterval(refreshTransportStatus, 1000);
+  } else if (!live && state.transport.pollTimer) {
+    clearInterval(state.transport.pollTimer);
+    state.transport.pollTimer = null;
+  }
+}
+
 let loadingInterval = null;
 
 async function refresh() {
@@ -216,6 +357,7 @@ function render() {
   renderRuntime();
   renderClients();
   renderProjectData();
+  renderLivePlaybackMounts();
   renderMixReview();
   renderLowEndAnalysis();
   renderAudioAnalysis();
@@ -231,6 +373,7 @@ function render() {
   renderPlannedWorkflows();
   renderNextAction();
   renderConnectionReadyBanner();
+  syncTransportPolling(live);
 }
 
 function renderWorkflowCatalogState() {
@@ -2058,16 +2201,18 @@ function renderProjectData() {
   if (typeof patCount === "number") patCount = Math.max(1, patCount);
   text("pattern-count", patCount);
   text("playlist-count", project.playlist_track_count == null ? count(resources.playlist) : project.playlist_track_count);
+  renderProjectMetadata(project.metadata || {});
 
   // Transport
   const transport = data.transport || {};
+  applyTransportSnapshot(transport, state.status?.generated_at || "");
   let playing = transport.playing;
   if (playing == null) playing = project.playing;
   let recording = transport.recording;
   if (recording == null) recording = project.recording;
 
   text("record-state", recording == null ? "Unavailable" : recording ? "ON" : "OFF");
-  text("song-position", formatPosition(transport.song_position));
+  text("song-position", formatTransportPosition(transport));
 
   const statusOrb = document.getElementById("status-orb");
   if (statusOrb) {
@@ -2076,6 +2221,9 @@ function renderProjectData() {
     else if (playing) statusOrb.classList.add("is-playing");
     else if (playing === false) statusOrb.classList.add("is-stopped");
   }
+  renderTransportButtons();
+  renderTransportFeedback();
+  renderMarkerStrip("playlist-marker-strip", markerRows(transport), true);
 
   // Safety (read-only-context)
   const safety = data.safety || {};
@@ -2142,6 +2290,133 @@ function renderProjectData() {
       table.appendChild(row);
     });
   }
+}
+
+function renderProjectMetadata(metadata) {
+  text("project-title", metadata.title || "Unavailable");
+  text("project-author", metadata.author || "Unavailable");
+  text("project-genre", metadata.genre || "Unavailable");
+}
+
+function formatTransportPosition(transport) {
+  const current = formatPosition(transport?.song_position);
+  if (!transport || current === "Unavailable") return current;
+  const pieces = [current];
+  if (state.transport.stopResetDetected && state.transport.lastLivePosition) {
+    pieces.push(`Last ${formatPosition(state.transport.lastLivePosition)}`);
+  }
+  if (state.transport.wrapCount > 0) {
+    pieces.push(`Loop ${state.transport.wrapCount}`);
+  }
+  return pieces.join(" · ");
+}
+
+function markerRows(transport) {
+  const markers = transport?.markers?.markers;
+  return Array.isArray(markers) ? markers : [];
+}
+
+function renderMarkerStrip(containerId, markers, enabled) {
+  const container = typeof containerId === "string" ? byId(containerId) : containerId;
+  if (!container) return;
+  container.innerHTML = "";
+  if (!markers.length) {
+    const empty = document.createElement("span");
+    empty.className = "playlist-marker-empty";
+    empty.textContent = "No playlist markers";
+    container.appendChild(empty);
+    return;
+  }
+  for (const marker of markers) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "playlist-marker-button";
+    button.textContent = marker.name || `Marker ${Number(marker.index) + 1}`;
+    button.title = "Move playhead to marker";
+    button.disabled = !enabled || state.transport.loading;
+    button.addEventListener("click", () => {
+      transportAction("jump_to_marker", { index: Number(marker.index) || 0 });
+    });
+    container.appendChild(button);
+  }
+}
+
+function renderTransportButtons() {
+  const data = getStatusReport() || {};
+  const transport = data.transport || {};
+  const playing = Boolean(transport.playing);
+  const recording = Boolean(transport.recording);
+  for (const button of document.querySelectorAll("[data-transport-action]")) {
+    const action = button.dataset.transportAction;
+    button.disabled = state.transport.loading;
+    button.classList.toggle("is-active", (action === "play" && playing) || (action === "record" && recording));
+  }
+}
+
+function renderTransportFeedback(message, isError = false) {
+  const node = byId("transport-feedback");
+  if (!node) return;
+  const fallback = state.transport.error || "";
+  node.textContent = message || fallback;
+  node.classList.toggle("is-error", Boolean(isError || fallback));
+}
+
+function renderLivePlaybackMounts() {
+  const data = getStatusReport() || {};
+  const project = data.project || {};
+  const transport = data.transport || {};
+  const markers = markerRows(transport);
+  for (const mount of document.querySelectorAll("[data-live-playback]")) {
+    mount.innerHTML = "";
+    const panel = document.createElement("article");
+    panel.className = "panel live-playback-panel";
+
+    const heading = document.createElement("div");
+    heading.className = "panel-heading";
+    const title = document.createElement("h2");
+    title.textContent = "Live Playback";
+    const badge = document.createElement("span");
+    badge.className = "badge badge-neutral";
+    badge.textContent = transport.playing ? "Level 2" : "Level 1";
+    heading.append(title, badge);
+
+    const grid = document.createElement("div");
+    grid.className = "live-playback-grid";
+    for (const [label, value] of [
+      ["Position", formatTransportPosition(transport)],
+      ["Tempo", bpm(project.tempo_bpm || transport.tempo?.bpm || transport.tempo)],
+      ["Record", transport.recording ? "ON" : "OFF"],
+      ["Markers", markers.length ? String(markers.length) : "None"]
+    ]) {
+      const item = document.createElement("div");
+      const key = document.createElement("span");
+      key.textContent = label;
+      const val = document.createElement("strong");
+      val.textContent = safeString(value);
+      item.append(key, val);
+      grid.appendChild(item);
+    }
+
+    const controls = document.createElement("div");
+    controls.className = "transport-controls";
+    for (const action of ["play", "pause", "stop", "record"]) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = action === "record" ? "transport-button transport-record" : "transport-button";
+      button.dataset.transportAction = action;
+      button.textContent = action.charAt(0).toUpperCase() + action.slice(1);
+      button.addEventListener("click", () => transportAction(action));
+      controls.appendChild(button);
+    }
+
+    const markerStrip = document.createElement("div");
+    markerStrip.className = "playlist-marker-strip";
+    renderMarkerStrip(markerStrip, markers, true);
+
+    panel.append(heading, grid, controls, markerStrip);
+    mount.appendChild(panel);
+  }
+  renderTransportButtons();
 }
 
 // ─── Mix Review ──────────────────────────────────────────────────────────────
@@ -5044,6 +5319,17 @@ function formatPosition(value) {
   if (typeof value === "object") {
     if (value.song_position != null) return formatPosition(value.song_position);
     if (value.position != null) return formatPosition(value.position);
+    const beats = Number(value.position_beats ?? value.beats);
+    if (Number.isFinite(beats)) return `${beats.toFixed(2)} beats`;
+    const ms = Number(value.position_ms ?? value.ms);
+    if (Number.isFinite(ms)) {
+      const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+      const minutes = Math.floor(totalSeconds / 60);
+      const seconds = String(totalSeconds % 60).padStart(2, "0");
+      return `${minutes}:${seconds}`;
+    }
+    const ticks = Number(value.position_ticks ?? value.ticks);
+    if (Number.isFinite(ticks)) return `${Math.round(ticks)} ticks`;
     return "Unavailable";
   }
   const str = String(value);
@@ -5069,6 +5355,17 @@ function wireEvents() {
 
   const refreshButton = document.getElementById("refresh-button");
   if (refreshButton) refreshButton.addEventListener("click", refresh);
+
+  document.querySelectorAll(".transport-panel [data-transport-action]").forEach(button => {
+    button.addEventListener("click", () => transportAction(button.dataset.transportAction));
+  });
+
+  document.querySelectorAll("[data-marker-relative]").forEach(button => {
+    button.addEventListener("click", () => {
+      const delta = Number(button.dataset.markerRelative);
+      transportAction("jump_marker_relative", { delta });
+    });
+  });
 
   const runMixButton = document.getElementById("run-mix-review");
   if (runMixButton) runMixButton.addEventListener("click", runMixReview);
@@ -5158,6 +5455,8 @@ function wireEvents() {
 window.flsPilotControlCenter = {
   state,
   processAction,
+  transportAction,
+  refreshTransportStatus,
   runMixReview,
   runLowEndAnalysis,
   runRoutingAudit,
@@ -5172,6 +5471,7 @@ window.flsPilotControlCenter = {
   renderMixReview,
   renderLowEndAnalysis,
   renderProjectData,
+  renderLivePlaybackMounts,
   renderRoutingAudit,
   renderProjectOrganizer,
   renderProjectHealth,

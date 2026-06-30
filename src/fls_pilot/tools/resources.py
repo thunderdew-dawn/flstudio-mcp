@@ -38,12 +38,16 @@ _DOMAIN_TOOLS = {
         "get_play_state",
         "play",
         "stop",
+        "pause",
         "toggle_play",
         "record",
         "get_song_position",
         "set_song_position",
         "get_time_signature",
         "set_time_signature",
+        "list_markers",
+        "jump_to_marker",
+        "jump_marker_relative",
     ],
     "fl_mixer": [
         "list",
@@ -228,7 +232,13 @@ def register(mcp: FastMCP) -> None:
     @mcp.resource("fl://project")
     def project() -> dict:
         """Tempo, transport, and channel/mixer/pattern counts."""
-        return _safe(lambda: get_bridge().call(protocol.CMD_GET_PROJECT_STATE))
+        def _do():
+            b = get_bridge()
+            out = dict(b.call(protocol.CMD_GET_PROJECT_STATE))
+            out["metadata"] = b.call(protocol.CMD_GET_PROJECT_METADATA)
+            return out
+
+        return _safe(_do)
 
     @mcp.resource("fl://transport")
     def transport() -> dict:
@@ -239,6 +249,7 @@ def register(mcp: FastMCP) -> None:
             out = dict(b.call(protocol.CMD_GET_PLAY_STATE))
             out["song_position"] = b.call(protocol.CMD_GET_SONG_POS)
             out["tempo"] = b.call(protocol.CMD_GET_TEMPO)
+            out["markers"] = b.call(protocol.CMD_LIST_PLAYLIST_MARKERS)
             return out
 
         return _safe(_do)

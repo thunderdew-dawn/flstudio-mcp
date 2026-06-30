@@ -47,6 +47,18 @@ def register(mcp: FastMCP) -> None:
         """
         return get_bridge().call(protocol.CMD_GET_PROJECT_STATE)
 
+    @mcp.tool(annotations={"title": "Get project metadata", **_RO})
+    def fl_get_project_metadata() -> dict:
+        """Return FL Studio project title, author, and genre when available.
+
+        FL Studio exposes documented metadata getters for these fields, but no
+        documented setters. This tool is intentionally read-only and reports
+        metadata writes as API-limited.
+
+        Safety: Read-Only.
+        """
+        return get_bridge().call(protocol.CMD_GET_PROJECT_METADATA)
+
     @mcp.tool(annotations={"title": "Get mixer state", **_RO})
     def fl_get_mixer_state() -> dict:
         """All mixer tracks (index, name, volume, pan, mute, solo). Names in

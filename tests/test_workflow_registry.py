@@ -51,6 +51,14 @@ def test_default_catalog_uses_canonical_ids_and_backend_health() -> None:
     assert "sidechaining" not in catalog
 
 
+def test_level_two_workflows_declare_optional_live_meter_window() -> None:
+    for workflow_id in ("mix_review", "low_end_analysis", "preflight"):
+        requirements = DEFAULT_WORKFLOW_REGISTRY.get(workflow_id).requirements
+        assert requirements is not None
+        optional_ids = {row.id for row in requirements.optional}
+        assert "live_meter_window" in optional_ids
+
+
 def test_effective_registry_attaches_pack_metadata_without_overriding_core() -> None:
     base = DEFAULT_WORKFLOW_REGISTRY.get("low_end_analysis")
     manifest = load_pack_manifest(

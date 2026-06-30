@@ -1,8 +1,8 @@
 {
   "snapshot_version": 1,
-  "as_of": "2026-06-20",
+  "as_of": "2026-06-30",
   "status": "governed",
-  "governance_note": "Architecture snapshot unchanged. fls_pilot.packs (local_pack_metadata component) and fls_pilot.rules (analysis_runtime component) are already captured as governed source-of-truth paths in this snapshot. The corrective-patch changes in this batch — test isolation, audit_anti_vibe.py isinstance guard, and evals additions — are small-behaviour-preserving fixes with no public-surface, safety-posture, protocol/controller, or trust-boundary effect. No governed or generated architecture fact changed.",
+  "governance_note": "Updated for read-only project metadata, playlist marker read/navigation, Control Center live playback controls, and Level 2 live-meter workflow declarations. Persistent-write safety posture is unchanged; new playback and marker navigation actions are transient.",
   "project": {
     "name": "fls-pilot",
     "package_version": "3.0.0rc1",
@@ -238,8 +238,8 @@
       "registration_source": "src/fls_pilot/server.py",
       "tool_modules_source": "src/fls_pilot/tools/",
       "baseline": {
-        "registered_public_tools": 91,
-        "static_audited_tools": 167,
+        "registered_public_tools": 92,
+        "static_audited_tools": 168,
         "check": "python scripts/check_tool_registration_baseline.py"
       },
       "resources": [

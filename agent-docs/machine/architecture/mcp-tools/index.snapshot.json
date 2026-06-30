@@ -124,12 +124,12 @@
     },
     "mixer_core": {
       "path": "agent-docs/machine/architecture/mcp-tools/mixer_core.snapshot.json",
-      "tools_total": 30,
+      "tools_total": 31,
       "safety_class_counts": {
-        "external-write": 1,
-        "read-only": 9,
+        "read-only": 10,
+        "write-safe-required": 16,
         "server-state": 4,
-        "write-safe-required": 16
+        "external-write": 1
       },
       "destructive_hint_true_count": 2
     },
