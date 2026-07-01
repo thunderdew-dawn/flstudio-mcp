@@ -3,7 +3,7 @@
   "suite": "fls-pilot-v3-production-workflows",
   "description": "Prompt-level regression evals for the fls-pilot 3.0 runtime surface. The suite checks agent tool/resource selection, current product workflow names, Knowledgebase-backed value discipline, hard API limits, Control Center/runtime evidence handling, and rollback-first write behavior.",
   "target_package": "fls-pilot",
-  "target_version": "3.0.0rc1",
+  "target_version": "3.0.0b3",
   "last_updated": "2026-06-30",
   "source_of_truth": [
     "README.md",

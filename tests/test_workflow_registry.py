@@ -67,7 +67,7 @@ def test_effective_registry_attaches_pack_metadata_without_overriding_core() -> 
             "version": "1.0.0",
             "title": "House Pack",
             "publisher": "FLS Pilot",
-            "min_app_version": "3.0.0rc1",
+            "min_app_version": "3.0.0b3",
             "workflows": [
                 {
                     "workflow_id": "low_end_analysis",
@@ -107,7 +107,7 @@ def test_effective_registry_rejects_unknown_pack_profile() -> None:
             "version": "1.0.0",
             "title": "House Pack",
             "publisher": "FLS Pilot",
-            "min_app_version": "3.0.0rc1",
+            "min_app_version": "3.0.0b3",
             "workflows": [
                 {
                     "workflow_id": "low_end_analysis",

@@ -5,7 +5,7 @@
   "governance_note": "Updated for read-only project metadata, playlist marker read/navigation, Control Center live playback controls, and Level 2 live-meter workflow declarations. Persistent-write safety posture is unchanged; new playback and marker navigation actions are transient.",
   "project": {
     "name": "fls-pilot",
-    "package_version": "3.0.0rc1",
+    "package_version": "3.0.0b3",
     "repository": "thunderdew-dawn/fls-pilot",
     "architecture_contract": "agent-docs/contracts/architecture-governance.md",
     "human_overview": "agent-docs/concepts/architecture.md"

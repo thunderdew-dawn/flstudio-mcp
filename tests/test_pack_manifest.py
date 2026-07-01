@@ -11,7 +11,7 @@ def _manifest_payload() -> dict:
         "version": "1.0.0",
         "title": "House Production Pack",
         "publisher": "FLS Pilot",
-        "min_app_version": "3.0.0rc1",
+        "min_app_version": "3.0.0b3",
         "workflows": [
             {
                 "workflow_id": "low_end_analysis",
