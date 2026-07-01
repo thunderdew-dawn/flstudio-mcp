@@ -15,7 +15,13 @@ const state = {
   routingAudit: {
     loading: false,
     report: null,
-    error: null
+    error: null,
+    level2: {
+      stage: "idle",
+      decision: null,
+      markerName: null,
+      loopDurationSeconds: null
+    }
   },
   projectOrganizer: {
     loading: false,
@@ -85,6 +91,18 @@ const DEFAULT_WORKFLOW_CATALOG = [
   { id: "sidechain_routing_check", panel_id: "producer_sidechaining", title: "Sidechain Routing Check", group: "Roadmap", maturity: "planned", enabled: false, endpoint: null, action_label: null, safety_note: "Planned after v3.0. Plugin detector settings remain a manual check." },
   { id: "plugin_assistant", panel_id: "producer_plugin_assistant", title: "Plugin Assistant", group: "Roadmap", maturity: "planned", enabled: false, endpoint: null, action_label: null, safety_note: "Planned after v3.0. Plugin loading remains manual." },
   { id: "preset_assistant", panel_id: "producer_preset_assistant", title: "Preset Assistant", group: "Roadmap", maturity: "planned", enabled: false, endpoint: null, action_label: null, safety_note: "Planned after v3.0. Preset loading remains manual." }
+];
+
+const ROUTING_LEVEL2_MARKER_NAMES = [
+  "loudest",
+  "loudest section",
+  "drop",
+  "main drop",
+  "chorus",
+  "full mix",
+  "test loop",
+  "routing test",
+  "analysis loop"
 ];
 
 // ─── Setup Doctor Layers ──────────────────────────────────────────────────────
@@ -3403,26 +3421,119 @@ function formatSigned(value) {
 }
 
 // ─── Routing Audit ───────────────────────────────────────────────────────────
-async function runRoutingAudit() {
+function routingAuditOptions() {
+  const mode = document.getElementById("routing-check-mode")?.value || "level_1_static";
+  const compliance = document.getElementById("routing-template-compliance")?.value || "auto_detect";
+  const selected = document.getElementById("routing-template-profile")?.value || "";
+  const options = {
+    routing_check_mode: mode,
+    template_compliance: compliance,
+  };
+  if (compliance === "manual_select" && selected) {
+    options.selected_template_profile = selected;
+  }
+  if (mode === "level_2_signal_flow") {
+    const level2 = state.routingAudit.level2 || {};
+    if (level2.decision) options.playback_decision = level2.decision;
+    if (level2.markerName) options.marker_name = level2.markerName;
+    if (level2.loopDurationSeconds) options.loop_duration_seconds = level2.loopDurationSeconds;
+  }
+  return options;
+}
+
+function routingTemplateProfiles() {
+  const rows = state.routingAudit.report?.details?.template_profile_catalog
+    || state.status?.ui?.template_profile_catalog
+    || [];
+  return Array.isArray(rows) ? rows : [];
+}
+
+function populateRoutingTemplateProfiles() {
+  const select = document.getElementById("routing-template-profile");
+  if (!select) return;
+  const previous = select.value;
+  const profiles = routingTemplateProfiles();
+  select.innerHTML = "";
+  if (!profiles.length) {
+    const option = document.createElement("option");
+    option.value = "";
+    option.textContent = "No profiles loaded";
+    select.appendChild(option);
+    return;
+  }
+  for (const profile of profiles) {
+    const option = document.createElement("option");
+    option.value = profile.profile_id || "";
+    option.textContent = profile.display_name || profile.profile_id || "Template Profile";
+    select.appendChild(option);
+  }
+  if (previous && [...select.options].some(option => option.value === previous)) {
+    select.value = previous;
+  }
+}
+
+function resetRoutingLevel2Flow() {
+  state.routingAudit.level2 = {
+    stage: "idle",
+    decision: null,
+    markerName: null,
+    loopDurationSeconds: null
+  };
+}
+
+function routingLevel2Ready() {
+  const level2 = state.routingAudit.level2 || {};
+  return ["ready_auto", "ready_manual", "ready_existing_loop"].includes(level2.stage);
+}
+
+async function runRoutingAuditWithCurrentOptions() {
   state.routingAudit.loading = true;
   state.routingAudit.error = null;
   renderRoutingAudit();
   try {
     const result = await api("/api/workflows/routing-audit", {
       method: "POST",
-      body: JSON.stringify(workflowRunBody("routing_audit"))
+      body: JSON.stringify(workflowRunBody("routing_audit", routingAuditOptions()))
     });
     state.routingAudit.report = result;
     syncWorkflowUserDecisions("routing_audit", result);
     state.routingAudit.error = result?.ok === false
       ? (result.error || "Routing Audit unavailable.")
       : null;
+    if (
+      result?.routing_check_level === 2
+      && result?.details?.signal_flow
+      && result.details.signal_flow.available === false
+    ) {
+      state.routingAudit.level2 = {
+        ...state.routingAudit.level2,
+        stage: "fallback"
+      };
+    }
   } catch (error) {
     state.routingAudit.error = `Routing Audit failed: ${error.message}`;
   } finally {
     state.routingAudit.loading = false;
     renderRoutingAudit();
   }
+}
+
+async function runRoutingAudit() {
+  const options = routingAuditOptions();
+  if (options.routing_check_mode !== "level_2_signal_flow") {
+    resetRoutingLevel2Flow();
+    await runRoutingAuditWithCurrentOptions();
+    return;
+  }
+  if (!routingLevel2Ready()) {
+    state.routingAudit.level2 = {
+      ...state.routingAudit.level2,
+      stage: "choose"
+    };
+    renderRoutingAudit();
+    return;
+  }
+  await runRoutingAuditWithCurrentOptions();
 }
 
 function renderRoutingAudit() {
@@ -3436,12 +3547,293 @@ function renderRoutingAudit() {
   setRunButton("run-routing-audit", isLoading, "Run Routing Audit");
 
   renderRoutingFeedback(report, error, isLoading);
+  renderRoutingControls(report);
   renderWorkflowInteractionMount("routing-audit-interactions", "routing_audit", report);
   renderRoutingSummary(report, isLoading);
   renderRoutingGraph(report);
   renderRoutingFindings(report);
   renderRoutingRisks(report);
   renderRoutingTables(report);
+}
+
+function renderRoutingControls(report) {
+  populateRoutingTemplateProfiles();
+  const compliance = document.getElementById("routing-template-compliance")?.value || "auto_detect";
+  const profileWrap = document.getElementById("routing-template-profile-wrap");
+  if (profileWrap) profileWrap.hidden = compliance !== "manual_select";
+
+  const status = document.getElementById("routing-template-status");
+  if (status) {
+    const template = report?.details?.template_status || {};
+    if (compliance === "off") {
+      status.textContent = "Template Compliance: Off";
+    } else if (template.display_name && template.profile_source === "manual_select") {
+      status.textContent = `Selected template: ${safeString(template.display_name)} / Confidence: ${safeString(template.confidence)}`;
+    } else if (template.display_name) {
+      status.textContent = `Detected template: ${safeString(template.display_name)} / Confidence: ${safeString(template.confidence)}`;
+    } else if (compliance === "manual_select") {
+      status.textContent = "Selected template: choose a profile before running compliance checks.";
+    } else {
+      status.textContent = "Template Compliance: Auto-detect";
+    }
+  }
+
+  renderRoutingLevel2Flow(report);
+}
+
+function renderRoutingLevel2Flow(report) {
+  const container = document.getElementById("routing-level2-flow");
+  if (!container) return;
+  container.innerHTML = "";
+  const mode = document.getElementById("routing-check-mode")?.value || "level_1_static";
+  if (mode !== "level_2_signal_flow") return;
+
+  const level2 = state.routingAudit.level2 || {};
+  const stage = level2.stage || "idle";
+  if (stage === "idle") {
+    container.appendChild(routingLevel2Notice(
+      "Signal Flow Assisted Routing Audit (Lvl 2)",
+      "Level 2 requires playback to collect simple signal-flow data such as peak activity and level changes. Lower your monitoring volume before continuing.",
+      [
+        ["Prepare Level 2", () => {
+          state.routingAudit.level2 = { ...level2, stage: "choose" };
+          renderRoutingAudit();
+        }]
+      ]
+    ));
+    return;
+  }
+
+  if (stage === "choose") {
+    container.appendChild(routingLevel2Notice(
+      "Signal Flow Assisted Routing Audit (Lvl 2)",
+      "Do you want FLS Pilot to start playback automatically?",
+      [
+        ["Start playback automatically", () => startRoutingLevel2Automatic()],
+        ["I will start playback manually", () => showRoutingManualPlayback()],
+        ["Cancel Level 2 check", () => {
+          resetRoutingLevel2Flow();
+          const modeSelect = document.getElementById("routing-check-mode");
+          if (modeSelect) modeSelect.value = "level_1_static";
+          renderRoutingAudit();
+        }]
+      ]
+    ));
+    return;
+  }
+
+  if (stage === "marker_found") {
+    const marker = level2.marker || {};
+    container.appendChild(routingLevel2Notice(
+      "Analysis Marker Found",
+      `FLS Pilot found a possible analysis marker: "${safeString(marker.name)}". Use this marker for the Signal Flow Assisted Routing Audit (Lvl 2)?`,
+      [
+        ["Use marker and start playback", () => useRoutingMarkerAndStart(marker)],
+        ["Choose another marker", () => showRoutingMarkerChooser()],
+        ["I will set the loop manually", () => showRoutingManualLoopPrompt()],
+        ["Cancel", () => { resetRoutingLevel2Flow(); renderRoutingAudit(); }]
+      ]
+    ));
+    return;
+  }
+
+  if (stage === "choose_marker") {
+    container.appendChild(routingMarkerChooser());
+    return;
+  }
+
+  if (stage === "no_marker") {
+    container.appendChild(routingLevel2Notice(
+      "Set An Analysis Loop",
+      "No suitable analysis marker was found. Please set a playlist marker or loop around the loudest or most representative section of the song. Recommended loop length: 8-60 seconds.",
+      [
+        ["I have set the marker/loop - continue", () => {
+          state.routingAudit.level2 = {
+            stage: "ready_existing_loop",
+            decision: "start_playback_automatically",
+            markerName: null,
+            loopDurationSeconds: 16
+          };
+          runRoutingAuditWithCurrentOptions();
+        }],
+        ["I will start playback manually", () => showRoutingManualPlayback()],
+        ["Run Static Routing & Settings Audit (Lvl 1) instead", () => runRoutingLevel1Instead()],
+        ["Cancel", () => { resetRoutingLevel2Flow(); renderRoutingAudit(); }]
+      ]
+    ));
+    return;
+  }
+
+  if (stage === "manual") {
+    container.appendChild(routingLevel2Notice(
+      "Manual Playback",
+      "Please start playback in FL Studio and loop the loudest or most representative section of the song. Recommended loop length: 8-60 seconds.",
+      [
+        ["Playback is running - start analysis", () => {
+          state.routingAudit.level2 = {
+            stage: "ready_manual",
+            decision: "manual_playback_running",
+            markerName: null,
+            loopDurationSeconds: 16
+          };
+          runRoutingAuditWithCurrentOptions();
+        }],
+        ["Run Level 1", () => runRoutingLevel1Instead()],
+        ["Cancel", () => { resetRoutingLevel2Flow(); renderRoutingAudit(); }]
+      ]
+    ));
+    return;
+  }
+
+  if (stage === "fallback") {
+    container.appendChild(routingLevel2Notice(
+      "Signal Flow Data Unavailable",
+      "Signal Flow Assisted Routing Audit (Lvl 2) could not collect signal-flow data. You can either set a loop and try again, or run Static Routing & Settings Audit (Lvl 1) instead.",
+      [
+        ["Try Level 2 again", () => {
+          state.routingAudit.level2 = { stage: "choose", decision: null, markerName: null, loopDurationSeconds: null };
+          renderRoutingAudit();
+        }],
+        ["Run Level 1", () => runRoutingLevel1Instead()],
+        ["Cancel", () => { resetRoutingLevel2Flow(); renderRoutingAudit(); }]
+      ]
+    ));
+    return;
+  }
+
+  if (routingLevel2Ready()) {
+    container.appendChild(routingLevel2Notice(
+      "Level 2 Ready",
+      "Playback evidence is ready for a signal-flow assisted routing audit.",
+      [
+        ["Run Signal Flow Assisted Routing Audit (Lvl 2)", () => runRoutingAuditWithCurrentOptions()],
+        ["Reset", () => { resetRoutingLevel2Flow(); renderRoutingAudit(); }]
+      ]
+    ));
+  }
+}
+
+function routingLevel2Notice(titleText, bodyText, actions = []) {
+  const panel = document.createElement("div");
+  panel.className = "routing-level2-card";
+  const title = document.createElement("strong");
+  title.textContent = titleText;
+  const body = document.createElement("p");
+  body.textContent = bodyText;
+  const actionRow = document.createElement("div");
+  actionRow.className = "routing-level2-actions";
+  for (const [label, handler] of actions) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = label.includes("Run") || label.includes("Use") || label.includes("start")
+      ? "ghost-button primary-action"
+      : "ghost-button";
+    button.textContent = label;
+    button.addEventListener("click", handler);
+    actionRow.appendChild(button);
+  }
+  panel.append(title, body, actionRow);
+  return panel;
+}
+
+function routingAnalysisMarkers() {
+  const markers = markerRows(getStatusReport()?.transport || {});
+  return markers.filter(marker => {
+    const name = String(marker.name || "").toLowerCase();
+    return ROUTING_LEVEL2_MARKER_NAMES.some(token => name.includes(token));
+  });
+}
+
+function startRoutingLevel2Automatic() {
+  const markers = routingAnalysisMarkers();
+  if (markers.length) {
+    state.routingAudit.level2 = {
+      ...state.routingAudit.level2,
+      stage: "marker_found",
+      marker: markers[0],
+      markerName: markers[0].name || null
+    };
+  } else {
+    state.routingAudit.level2 = {
+      ...state.routingAudit.level2,
+      stage: "no_marker",
+      decision: null,
+      markerName: null
+    };
+  }
+  renderRoutingAudit();
+}
+
+function showRoutingMarkerChooser() {
+  state.routingAudit.level2 = {
+    ...state.routingAudit.level2,
+    stage: "choose_marker"
+  };
+  renderRoutingAudit();
+}
+
+function routingMarkerChooser() {
+  const markers = markerRows(getStatusReport()?.transport || {});
+  const panel = routingLevel2Notice(
+    "Choose Analysis Marker",
+    "Select the playlist marker that starts the loudest or most representative section.",
+    []
+  );
+  const row = panel.querySelector(".routing-level2-actions");
+  for (const marker of markers) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "ghost-button";
+    button.textContent = marker.name || `Marker ${Number(marker.index) + 1}`;
+    button.addEventListener("click", () => useRoutingMarkerAndStart(marker));
+    row.appendChild(button);
+  }
+  const manual = document.createElement("button");
+  manual.type = "button";
+  manual.className = "ghost-button";
+  manual.textContent = "I will set the loop manually";
+  manual.addEventListener("click", showRoutingManualLoopPrompt);
+  row.appendChild(manual);
+  return panel;
+}
+
+function showRoutingManualLoopPrompt() {
+  state.routingAudit.level2 = {
+    ...state.routingAudit.level2,
+    stage: "no_marker"
+  };
+  renderRoutingAudit();
+}
+
+function showRoutingManualPlayback() {
+  state.routingAudit.level2 = {
+    stage: "manual",
+    decision: "manual_playback",
+    markerName: null,
+    loopDurationSeconds: null
+  };
+  renderRoutingAudit();
+}
+
+async function useRoutingMarkerAndStart(marker) {
+  state.routingAudit.level2 = {
+    stage: "ready_auto",
+    decision: "start_playback_automatically",
+    markerName: marker?.name || null,
+    loopDurationSeconds: 16
+  };
+  if (marker && marker.index != null) {
+    await transportAction("jump_to_marker", { index: Number(marker.index) || 0 });
+  }
+  await transportAction("play");
+  await runRoutingAuditWithCurrentOptions();
+}
+
+async function runRoutingLevel1Instead() {
+  resetRoutingLevel2Flow();
+  const modeSelect = document.getElementById("routing-check-mode");
+  if (modeSelect) modeSelect.value = "level_1_static";
+  await runRoutingAuditWithCurrentOptions();
 }
 
 function renderRoutingFeedback(report, error, isLoading) {
@@ -3609,7 +4001,7 @@ function renderRoutingFindings(report) {
     const title = document.createElement("strong");
     title.textContent = safeString(finding.title);
     const detail = document.createElement("span");
-    detail.textContent = safeString(finding.detail);
+    detail.textContent = safeString(finding.detail || finding.evidence?.[0]?.detail);
     body.append(title, detail);
 
     const count = document.createElement("span");
@@ -3764,16 +4156,16 @@ function routingScoreState(score) {
 
 function routingSeverityClass(severity) {
   const value = String(severity || "").toLowerCase();
-  if (value === "critical") return "is-critical";
-  if (value === "warning") return "is-warning";
+  if (value === "critical" || value === "high" || value === "error") return "is-critical";
+  if (value === "warning" || value === "medium") return "is-warning";
   if (value === "ok") return "is-ok";
   return "is-info";
 }
 
 function routingSeverityIcon(severity) {
   const value = String(severity || "").toLowerCase();
-  if (value === "critical") return "!";
-  if (value === "warning") return "△";
+  if (value === "critical" || value === "high" || value === "error") return "!";
+  if (value === "warning" || value === "medium") return "△";
   if (value === "ok") return "✓";
   return "i";
 }
@@ -5390,6 +5782,22 @@ function wireEvents() {
 
   const routingRefreshButton = document.getElementById("routing-refresh-status");
   if (routingRefreshButton) routingRefreshButton.addEventListener("click", refresh);
+
+  const routingMode = document.getElementById("routing-check-mode");
+  if (routingMode) routingMode.addEventListener("change", () => {
+    resetRoutingLevel2Flow();
+    renderRoutingAudit();
+  });
+
+  const routingTemplateCompliance = document.getElementById("routing-template-compliance");
+  if (routingTemplateCompliance) routingTemplateCompliance.addEventListener("change", () => {
+    renderRoutingAudit();
+  });
+
+  const routingTemplateProfile = document.getElementById("routing-template-profile");
+  if (routingTemplateProfile) routingTemplateProfile.addEventListener("change", () => {
+    renderRoutingAudit();
+  });
 
   const runOrganizerButton = document.getElementById("run-project-organizer");
   if (runOrganizerButton) runOrganizerButton.addEventListener("click", runProjectOrganizer);

@@ -22,9 +22,11 @@ from .. import kb_policy, operations, protocol, safety, workflow_report
 from .. import project_templates as templates
 from ..analysis import (
     EVIDENCE_TYPE_ROUTING_BASED_DETECTION,
+    StaticSnapshotPolicy,
     get_analysis_broker,
     heuristic_validation_metadata,
     routing_analysis_report_from_legacy_payload,
+    routing_checks,
     serialize_analysis_report,
 )
 from ..connection import fetch_all_pages, get_bridge
@@ -70,6 +72,15 @@ def _no_write_report(*, workflow: str, title: str, status: str, ok: bool = True)
         notes=["No FL Studio project state was changed."],
         ok=ok,
     )
+
+
+def _as_int(value) -> int | None:
+    if isinstance(value, bool) or value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 # --- server-side judgement helpers (pure) -----------------------------------
@@ -432,17 +443,68 @@ def register(mcp: FastMCP) -> None:
     # --- Phase 1: Routing Review 2.0 ---
 
     @mcp.tool(annotations={"title": "Review routing", **_RO})
-    def fl_review_routing() -> dict:
+    def fl_review_routing(
+        routing_check_mode: Annotated[
+            str,
+            Field(
+                description=(
+                    "Routing check mode: level_1_static or level_2_signal_flow. "
+                    "Level 2 reads meter evidence only; it never starts playback."
+                )
+            ),
+        ] = routing_checks.ROUTING_MODE_LEVEL_1,
+        template_compliance: Annotated[
+            str,
+            Field(description="Template compliance mode: auto_detect, manual_select, or off."),
+        ] = routing_checks.TEMPLATE_COMPLIANCE_AUTO,
+        selected_template_profile: Annotated[
+            str | None,
+            Field(
+                description="Template profile slug used when template_compliance is manual_select."
+            ),
+        ] = None,
+    ) -> dict:
         """Analyze project routing to find structural issues like generators routed to Master,
         unrouted channels, or missing bus structures.
 
         Safety: Read-Only.
         """
         bridge = get_bridge()
-        snapshot = get_analysis_broker().get_static_project_snapshot(bridge)
-        channels = list(snapshot.channels)
+        options = routing_checks.routing_audit_options_from_inputs(
+            {
+                "routing_check_mode": routing_check_mode,
+                "template_compliance": template_compliance,
+                "selected_template_profile": selected_template_profile,
+            }
+        )
+        snapshot = get_analysis_broker().get_static_project_snapshot(
+            bridge,
+            StaticSnapshotPolicy(include_patterns=False, include_playlist=False),
+        )
+        try:
+            channel_controls = fetch_all_pages(bridge, protocol.CMD_CHANNEL_LIST, "channels").get(
+                "channels", []
+            )
+        except Exception:
+            channel_controls = []
+        channels = routing_checks.merge_channel_control_rows(
+            list(snapshot.channels),
+            [dict(row) for row in channel_controls if isinstance(row, dict)],
+        )
+        mixer_tracks = list(snapshot.mixer_tracks)
         tracks = list(snapshot.routing)
         template_context = snapshot.template_context
+        signal_flow = None
+        if options.level == 2:
+            signal_flow = routing_checks.capture_signal_flow_evidence(
+                bridge,
+                tracks=[
+                    track
+                    for row in (*mixer_tracks, *tracks)
+                    if (track := _as_int(row.get("i", row.get("index")))) is not None
+                ],
+                playback_used=False,
+            )
 
         unrouted = []
         direct_to_master = []
@@ -484,16 +546,66 @@ def register(mcp: FastMCP) -> None:
             unrouted_channels=unrouted,
             direct_to_master=direct_to_master,
         )
+        extra_findings = [
+            *routing_checks.channel_mixer_discrepancy_findings(
+                channels=channels,
+                mixer_tracks=mixer_tracks,
+            ),
+        ]
+        template_compliance_result = routing_checks.template_compliance_result(
+            channels=channels,
+            routing=tracks,
+            mixer_tracks=mixer_tracks,
+            template_context=template_context,
+            options=options,
+            signal_flow=signal_flow,
+        )
+        extra_findings.extend(template_compliance_result["findings"])
+        if options.level == 2:
+            extra_findings.extend(
+                routing_checks.level_2_signal_findings(
+                    channels=channels,
+                    routing=tracks,
+                    mixer_tracks=mixer_tracks,
+                    signal_flow=signal_flow,
+                )
+            )
+        if extra_findings:
+            findings = [row for row in findings if row.get("id") != "routing_clear"]
+            findings.extend(extra_findings)
         interaction_request = _routing_validation_request(findings)
         legacy_payload = {
             "ok": True,
             "workflow": "routing_review",
             "title": "Routing Review",
+            "analysis_mode": "hybrid" if options.level == 2 else "static_snapshot",
+            "evidence_mode": options.static_evidence_mode,
+            "routing_check_level": options.level,
+            "display_name": options.display_name,
+            "template_compliance_enabled": template_compliance_result["enabled"],
+            "template_compliance_mode": options.template_compliance,
+            "template_profile_source": template_compliance_result["summary"].get("profile_source"),
+            "detected_template_profile": (templates.compact_context(template_context) or {}).get(
+                "template_slug"
+            ),
+            "selected_template_profile": options.selected_template_profile,
+            "template_detection_confidence": template_compliance_result["summary"].get(
+                "confidence"
+            ),
+            "playback_required": options.playback_required,
+            "playback_used": bool(signal_flow and signal_flow.get("playback_used")),
+            "template_compliance_summary": template_compliance_result["summary"],
+            "limitations": list((signal_flow or {}).get("limitations") or []),
             "summary": {
                 "channels": len(channels),
                 "mixer_tracks": len(tracks),
                 "unrouted_channels": len(unrouted),
                 "generators_direct_to_master": len(direct_to_master),
+                "channel_mixer_discrepancies": sum(
+                    int(row.get("count") or 0)
+                    for row in extra_findings
+                    if str(row.get("id") or "").startswith("channel_mixer_")
+                ),
             },
             "findings": findings,
             "unrouted_channels": unrouted,
@@ -516,6 +628,17 @@ def register(mcp: FastMCP) -> None:
                 ],
                 "routes": tracks,
                 "template_context": templates.compact_context(template_context),
+                "template_status": routing_checks.template_status_payload(
+                    template_context=template_context,
+                    options=options,
+                    compliance_summary=template_compliance_result["summary"],
+                ),
+                "signal_flow": signal_flow
+                or {
+                    "available": False,
+                    "playback_used": False,
+                    "track_peaks": {},
+                },
                 "project_fingerprint": snapshot.project_fingerprint,
                 "source_observation_ids": list(snapshot.source_observation_ids),
                 "policy_notes": [

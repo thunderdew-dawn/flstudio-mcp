@@ -1,8 +1,8 @@
 {
   "snapshot_version": 1,
-  "as_of": "2026-06-30",
+  "as_of": "2026-07-01",
   "status": "governed",
-  "governance_note": "Updated for read-only project metadata, playlist marker read/navigation, Control Center live playback controls, and Level 2 live-meter workflow declarations. Persistent-write safety posture is unchanged; new playback and marker navigation actions are transient.",
+  "governance_note": "Updated for Routing Audit Level 1/Level 2 modes, template-compliance selection, MCP fl_review_routing mode/profile arguments, and Control Center Level 2 playback confirmation/fallback behavior. Persistent-write safety posture is unchanged; Level 2 uses transient playback controls in the UI and read-only meter snapshots.",
   "project": {
     "name": "fls-pilot",
     "package_version": "3.0.0b3",
@@ -350,7 +350,22 @@
     "legacy_report_compatibility": "unsupported",
     "audio_features_contract": "fls-pilot.audio-features.v1",
     "audio_artifact_contract": "fls-pilot.audio-artifact.v1",
-    "evidence_link_contract": "fls-pilot.evidence-link.v1"
+    "evidence_link_contract": "fls-pilot.evidence-link.v1",
+    "routing_audit_contract": {
+      "levels": [
+        "level_1_static",
+        "level_2_signal_flow"
+      ],
+      "template_compliance_modes": [
+        "auto_detect",
+        "manual_select",
+        "off"
+      ],
+      "level_1_evidence_mode": "static_snapshot_only",
+      "level_2_evidence_mode": "static_snapshot_plus_meter_snapshot",
+      "level_2_playback_policy": "Control Center requires an explicit user choice before transient playback; MCP fl_review_routing reads meter evidence only and never starts playback.",
+      "persistent_writes": false
+    }
   },
   "safety": {
     "contract": "agent-docs/concepts/safety-contract.md",

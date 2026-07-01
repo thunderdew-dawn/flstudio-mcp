@@ -29,26 +29,36 @@ def test_v3_runtime_workflow_copy_exposes_evidence_limits() -> None:
     html = INDEX_HTML.read_text("utf-8")
     js = APP_JS.read_text("utf-8")
 
-    assert "Preflight <span class=\"badge badge-ok\">Read-only</span>" in html
+    assert 'Preflight <span class="badge badge-ok">Read-only</span>' in html
     assert "Level evidence, render settings, and mastering remain separate checks." in html
-    assert "Jam 2 Project <span class=\"badge badge-planned\">Planned</span>" in html
+    assert 'Jam 2 Project <span class="badge badge-planned">Planned</span>' in html
     assert "It is not part of the v3.0 release scope." in html
     assert "/api/workflows/jam-2-project" not in js
     assert "/api/workflows/plugin-assistant" not in js
-    assert "rendered_master: \"Rendered master audio\"" in js
-    assert "static_snapshot_only: \"Project metadata\"" in js
-    assert "id=\"producer_audio_evidence\"" in html
-    assert "id=\"project-title\"" in html
-    assert "id=\"transport-play\"" in html
-    assert "id=\"playlist-marker-strip\"" in html
-    assert "data-live-playback=\"mix_review\"" in html
-    assert "data-live-playback=\"low_end_analysis\"" in html
-    assert "data-live-playback=\"preflight\"" in html
-    assert "id=\"mix-review-interactions\"" in html
-    assert "id=\"low-end-interactions\"" in html
-    assert "id=\"routing-audit-interactions\"" in html
-    assert "id=\"organizer-interactions\"" in html
+    assert 'rendered_master: "Rendered master audio"' in js
+    assert 'static_snapshot_only: "Project metadata"' in js
+    assert 'id="producer_audio_evidence"' in html
+    assert 'id="project-title"' in html
+    assert 'id="transport-play"' in html
+    assert 'id="playlist-marker-strip"' in html
+    assert 'data-live-playback="mix_review"' in html
+    assert 'data-live-playback="low_end_analysis"' in html
+    assert 'data-live-playback="preflight"' in html
+    assert 'id="mix-review-interactions"' in html
+    assert 'id="low-end-interactions"' in html
+    assert 'id="routing-audit-interactions"' in html
+    assert 'id="organizer-interactions"' in html
+    assert "Routing Check Mode" in html
+    assert "Static Routing &amp; Settings Audit (Lvl 1)" in html
+    assert "Signal Flow Assisted Routing Audit (Lvl 2)" in html
+    assert "Template Compliance" in html
+    assert "Auto-detect Template Compliance" in html
+    assert "Select Template Profile" in html
+    assert "Template Compliance Off" in html
     assert "async function submitAudioAnalysis()" in js
+    assert "function renderRoutingLevel2Flow" in js
+    assert "Start playback automatically" in js
+    assert "Playback is running - start analysis" in js
     assert 'audioAnalysisRequest("cancel"' in js
     assert 'audioAnalysisRequest("result"' in js
 

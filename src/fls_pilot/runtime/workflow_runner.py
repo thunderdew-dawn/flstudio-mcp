@@ -63,7 +63,7 @@ def run_workflow(
             bridge=bridge,
             inputs=inputs,
         )
-    safe_inputs = _legacy_workflow_inputs(inputs)
+    safe_inputs = _legacy_workflow_inputs(inputs, workflow_id=workflow_id)
     if safe_inputs is None:
         raise ValueError(f"{workflow_id} does not accept workflow inputs")
     payload = runner(state, bridge_override=bridge, inputs=safe_inputs)
@@ -75,17 +75,38 @@ def run_workflow(
     return analysis_report_for_control_center(upgraded, payload)
 
 
-def _legacy_workflow_inputs(inputs: dict[str, Any] | None) -> dict[str, Any] | None:
+def _legacy_workflow_inputs(
+    inputs: dict[str, Any] | None,
+    *,
+    workflow_id: str = "",
+) -> dict[str, Any] | None:
     payload = dict(inputs or {})
     if not payload:
         return {}
     allowed = {"user_decisions"}
+    if workflow_id == "routing_audit":
+        allowed.update(
+            {
+                "routing_check_mode",
+                "template_compliance",
+                "template_compliance_mode",
+                "selected_template_profile",
+                "template_profile_id",
+                "template_slug",
+                "playback_decision",
+                "marker_name",
+                "loop_duration_seconds",
+            }
+        )
     if any(key not in allowed for key in payload):
         return None
+    out = {key: value for key, value in payload.items() if key in allowed}
     user_decisions = payload.get("user_decisions")
-    if not isinstance(user_decisions, (list, tuple)):
-        return None
-    return {"user_decisions": [dict(row) for row in user_decisions if isinstance(row, dict)]}
+    if user_decisions is not None:
+        if not isinstance(user_decisions, (list, tuple)):
+            return None
+        out["user_decisions"] = [dict(row) for row in user_decisions if isinstance(row, dict)]
+    return out
 
 
 def _apply_audio_evidence(
@@ -99,8 +120,7 @@ def _apply_audio_evidence(
     stems = tuple(
         row
         for row in observations
-        if (row.payload if isinstance(row.payload, dict) else {}).get("evidence_kind")
-        == "stem"
+        if (row.payload if isinstance(row.payload, dict) else {}).get("evidence_kind") == "stem"
     )
     audio_available = master is not None
     required = report.coverage.required + 1
@@ -135,9 +155,7 @@ def _apply_audio_evidence(
             "level_label": EVIDENCE_LEVEL_LABELS[evidence_level],
             "status": "available",
             "master": master_payload,
-            "stems": [
-                dict(row.payload) for row in stems if isinstance(row.payload, dict)
-            ],
+            "stems": [dict(row.payload) for row in stems if isinstance(row.payload, dict)],
             "automatic_fl_render": False,
         }
     else:

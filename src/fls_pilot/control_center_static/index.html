@@ -727,6 +727,32 @@
 
       <div id="routing-audit-feedback" class="routing-audit-feedback" role="status"></div>
 
+      <section class="panel routing-controls-panel" aria-label="Routing audit controls">
+        <div class="routing-control-grid">
+          <label class="workflow-runtime-input" for="routing-check-mode">
+            <span>Routing Check Mode</span>
+            <select id="routing-check-mode">
+              <option value="level_1_static">Static Routing &amp; Settings Audit (Lvl 1)</option>
+              <option value="level_2_signal_flow">Signal Flow Assisted Routing Audit (Lvl 2)</option>
+            </select>
+          </label>
+          <label class="workflow-runtime-input" for="routing-template-compliance">
+            <span>Template Compliance</span>
+            <select id="routing-template-compliance">
+              <option value="auto_detect">Auto-detect Template Compliance</option>
+              <option value="manual_select">Select Template Profile</option>
+              <option value="off">Template Compliance Off</option>
+            </select>
+          </label>
+          <label class="workflow-runtime-input" for="routing-template-profile" id="routing-template-profile-wrap">
+            <span>Template Profile</span>
+            <select id="routing-template-profile"></select>
+          </label>
+        </div>
+        <div class="routing-template-status" id="routing-template-status">Template Compliance: Auto-detect</div>
+        <div class="routing-level2-flow" id="routing-level2-flow"></div>
+      </section>
+
       <section class="routing-audit-layout" id="routing-audit-layout">
         <div class="workflow-interaction-mount" id="routing-audit-interactions"></div>
 

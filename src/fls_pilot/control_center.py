@@ -48,6 +48,7 @@ from .analysis import (
     provisional_score_metadata,
     risk_from_severities,
     routing_analysis_report_from_legacy_payload,
+    routing_checks,
     routing_health_score,
 )
 from .analysis.live import LiveMeterPolicy
@@ -153,10 +154,7 @@ def _normalize_user_decision(row: Any) -> dict[str, Any] | None:
 
 def _user_decision_request_id(row: dict[str, Any]) -> str:
     return str(
-        row.get("interaction_request_id")
-        or row.get("interaction_id")
-        or row.get("id")
-        or ""
+        row.get("interaction_request_id") or row.get("interaction_id") or row.get("id") or ""
     ).strip()
 
 
@@ -358,9 +356,8 @@ def _ui_payload(
     workflow_registry: WorkflowRegistry = DEFAULT_WORKFLOW_REGISTRY,
 ) -> dict[str, Any]:
     return {
-        "workflow_catalog": [
-            dict(item) for item in workflow_registry.control_center_catalog()
-        ],
+        "workflow_catalog": [dict(item) for item in workflow_registry.control_center_catalog()],
+        "template_profile_catalog": routing_checks.template_profile_catalog(),
         "next_action": _ui_next_action(
             status_report=status_report,
             readiness=readiness,
@@ -500,7 +497,11 @@ def _control_transport(state: ControlCenterState, body: dict[str, Any]) -> dict[
                 "transport": {"state": "unavailable"},
             }
         if action == "get_status":
-            return {"ok": True, "action": action, "transport": _transport_snapshot_from_bridge(bridge)}
+            return {
+                "ok": True,
+                "action": action,
+                "transport": _transport_snapshot_from_bridge(bridge),
+            }
         if action not in CONTROL_CENTER_TRANSPORT_ACTIONS:
             return {"ok": False, "error": f"Unsupported transport action: {action}"}
         try:
@@ -662,21 +663,15 @@ def _run_audio_analysis_action(
         link_requested = bool(payload.get("link_evidence"))
         if artifact_id and link_requested:
             targets = payload.get("workflow_targets") or []
-            if not isinstance(targets, list) or not all(
-                isinstance(item, str) for item in targets
-            ):
+            if not isinstance(targets, list) or not all(isinstance(item, str) for item in targets):
                 raise ValueError("workflow_targets must be a list of workflow ids")
             response["report"] = client.run_workflow(
                 "audio_evidence",
                 inputs={
                     "artifact_id": artifact_id,
-                    "evidence_kind": str(
-                        payload.get("evidence_kind") or "rendered_master"
-                    ),
+                    "evidence_kind": str(payload.get("evidence_kind") or "rendered_master"),
                     "stem_role": (
-                        str(payload["stem_role"]).strip()
-                        if payload.get("stem_role")
-                        else None
+                        str(payload["stem_role"]).strip() if payload.get("stem_role") else None
                     ),
                     "workflow_links": [item.strip() for item in targets if item.strip()],
                     "confirmed_by_user": bool(payload.get("confirmed_by_user")),
@@ -1156,9 +1151,7 @@ def _run_mix_review(
             report = _mix_review_unavailable_report(f"{type(exc).__name__}: {exc}")
             if user_decisions:
                 report["user_decisions"] = [dict(row) for row in user_decisions]
-            analysis = _generic_analysis_report_from_legacy(
-                report, "mix_review", "Mix Review"
-            )
+            analysis = _generic_analysis_report_from_legacy(report, "mix_review", "Mix Review")
             return analysis_report_for_control_center(analysis, report)
     bridge = bridge_override
     owns_bridge = bridge is None
@@ -1396,9 +1389,7 @@ def _low_end_validation_request(low_end_tracks: list[dict[str, Any]]) -> dict[st
         options.append(
             {
                 "id": (
-                    mixer_entity_id(track)
-                    if track is not None
-                    else f"low_end:candidate:{offset}"
+                    mixer_entity_id(track) if track is not None else f"low_end:candidate:{offset}"
                 ),
                 "label": name,
                 "track": track,
@@ -1520,7 +1511,9 @@ def _apply_group_user_decisions(
         if row_id in intentional_ids:
             updated["user_intent"] = "intentional"
             row["severity"] = "info"
-            row["detail"] = f"{row.get('detail', '').rstrip()} Confirmed intentional by user.".strip()
+            row["detail"] = (
+                f"{row.get('detail', '').rstrip()} Confirmed intentional by user.".strip()
+            )
         row["metadata"] = updated
 
 
@@ -1594,7 +1587,7 @@ def _track_from_entity_id(
     prefix = "mixer:"
     if not entity_id.startswith(prefix):
         return None
-    track = _as_int(entity_id[len(prefix):])
+    track = _as_int(entity_id[len(prefix) :])
     if track is None:
         return None
     for row in tracks:
@@ -1709,13 +1702,10 @@ def _template_profile_validation_request(
         id=TEMPLATE_PROFILE_VALIDATION_REQUEST_ID,
         type="single_select",
         title="Confirm template profile",
-        prompt=(
-            "Multiple template profiles match similarly. Which template is correct?"
-        ),
+        prompt=("Multiple template profiles match similarly. Which template is correct?"),
         options=tuple(options),
         metadata={
-            "reason": template_context.get("ambiguity_reason")
-            or "profile_scores_too_close",
+            "reason": template_context.get("ambiguity_reason") or "profile_scores_too_close",
             "evidence_type": EVIDENCE_TYPE_TEMPLATE_PROFILE_DETECTION,
         },
     ).to_dict()
@@ -1799,9 +1789,7 @@ def _build_low_end_analysis_report(report: dict[str, Any]) -> AnalysisReport:
         user_decisions=user_decisions,
     )
     interaction_requests = tuple(
-        row
-        for row in (_low_end_validation_request(low_end_tracks),)
-        if row is not None
+        row for row in (_low_end_validation_request(low_end_tracks),) if row is not None
     )
     pending_validation = _validation_request_ids(
         findings=findings,
@@ -1816,10 +1804,7 @@ def _build_low_end_analysis_report(report: dict[str, Any]) -> AnalysisReport:
                 "Low-end detection is based on names plus mixer pan, stereo separation, "
                 "and peak metadata; it is not true phase-correlation analysis."
             ),
-            *[
-                f"Declarative low-end rules were skipped: {error}"
-                for error in rule_errors
-            ],
+            *[f"Declarative low-end rules were skipped: {error}" for error in rule_errors],
         ]
     )
     assumptions = _unique_strings(
@@ -1851,11 +1836,7 @@ def _build_low_end_analysis_report(report: dict[str, Any]) -> AnalysisReport:
             for row in low_end_findings
             if str(row.get("severity", "")).lower() in ("medium", "warning")
         ),
-        low=sum(
-            1
-            for row in low_end_findings
-            if str(row.get("severity", "")).lower() == "low"
-        ),
+        low=sum(1 for row in low_end_findings if str(row.get("severity", "")).lower() == "low"),
         stereo_risks=stereo_risks,
         levels_valid=levels_valid,
     )
@@ -1992,9 +1973,7 @@ def _low_end_rule_findings(
         stereo_sep = _as_float(track.get("stereo_sep"))
         observation = {
             "track": {
-                "low_end_role": str(
-                    track.get("low_end_role") or _low_end_role(track.get("name"))
-                ),
+                "low_end_role": str(track.get("low_end_role") or _low_end_role(track.get("name"))),
                 "stereo_risk": (
                     pan is not None
                     and abs(pan) >= 0.2
@@ -2017,10 +1996,7 @@ def _low_end_rule_findings(
                     EntityRef(
                         "mixer_track",
                         mixer_entity_id(track_index),
-                        str(
-                            track.get("name")
-                            or _display_track_name(track_index, None)
-                        ),
+                        str(track.get("name") or _display_track_name(track_index, None)),
                     ),
                 )
             findings.append(
@@ -2044,9 +2020,7 @@ def _low_end_rule_findings(
                             "name_based_role": observation["track"]["low_end_role"],
                         },
                     ),
-                    assumptions=(
-                        "The low-end role is inferred from the mixer track name.",
-                    ),
+                    assumptions=("The low-end role is inferred from the mixer track name.",),
                     limitations=(
                         "Mixer metadata cannot prove low-band phase or mono compatibility.",
                     ),
@@ -2618,9 +2592,7 @@ def _run_project_organizer(
                 inputs=inputs or {},
             )
         except Exception as exc:
-            report = _project_organizer_unavailable_report(
-                f"{type(exc).__name__}: {exc}"
-            )
+            report = _project_organizer_unavailable_report(f"{type(exc).__name__}: {exc}")
             if user_decisions:
                 report["user_decisions"] = [dict(row) for row in user_decisions]
             analysis = _generic_analysis_report_from_legacy(
@@ -2792,14 +2764,10 @@ def _generic_analysis_report_from_legacy(
         for index, row in enumerate(legacy_findings, start=1)
     )
     interaction_requests = tuple(
-        dict(row)
-        for row in report.get("interaction_requests") or ()
-        if isinstance(row, dict)
+        dict(row) for row in report.get("interaction_requests") or () if isinstance(row, dict)
     )
     user_decisions = tuple(
-        dict(row)
-        for row in report.get("user_decisions") or ()
-        if isinstance(row, dict)
+        dict(row) for row in report.get("user_decisions") or () if isinstance(row, dict)
     )
     findings = _mark_validated_findings(
         findings,
@@ -3874,6 +3842,7 @@ def _run_routing_audit(
     inputs: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Run the read-only Routing Audit workflow for the Control Center UI."""
+    options = routing_checks.routing_audit_options_from_inputs(inputs)
     user_decisions = _extract_user_decisions(inputs or {})
     if bridge_override is None and hasattr(state, "runtime_client"):
         try:
@@ -3909,16 +3878,38 @@ def _run_routing_audit(
                 "the connection."
             )
 
-        static_snapshot = state.broker.get_static_project_snapshot(bridge)
-        channels = list(static_snapshot.channels)
+        static_snapshot = state.broker.get_static_project_snapshot(
+            bridge,
+            StaticSnapshotPolicy(include_patterns=False, include_playlist=False),
+        )
+        channel_controls = _read_channel_control_rows(bridge)
+        channels = routing_checks.merge_channel_control_rows(
+            list(static_snapshot.channels),
+            channel_controls,
+        )
+        mixer_tracks = list(static_snapshot.mixer_tracks)
         routing = list(static_snapshot.routing)
         template_context = templates.resolve_with_user_decisions(
             static_snapshot.template_context,
             user_decisions,
-            mixer_tracks=static_snapshot.mixer_tracks,
+            mixer_tracks=mixer_tracks,
             routing_rows=routing,
             channel_rows=channels,
         )
+        signal_flow = None
+        if options.level == 2:
+            signal_flow = routing_checks.capture_signal_flow_evidence(
+                bridge,
+                tracks=[
+                    track
+                    for row in (*mixer_tracks, *routing)
+                    if (track := _as_int(row.get("i", row.get("index")))) is not None
+                ],
+                playback_used=options.playback_decision
+                in {"start_playback_automatically", "manual_playback", "manual_playback_running"},
+                marker_name=options.marker_name,
+                loop_duration_seconds=options.loop_duration_seconds,
+            )
         unused_probe = _probe_unused_mixer_tracks(
             bridge,
             tracks=routing,
@@ -3928,6 +3919,7 @@ def _run_routing_audit(
         analysis_report, legacy_report = _build_routing_audit_report(
             channels=channels,
             routing=routing,
+            mixer_tracks=mixer_tracks,
             template_context=template_context,
             unused_mixer_tracks=unused_probe["tracks"],
             unused_mixer_track_truncated=unused_probe["truncated"],
@@ -3935,6 +3927,8 @@ def _run_routing_audit(
             project_fingerprint=static_snapshot.project_fingerprint,
             source_observation_ids=static_snapshot.source_observation_ids,
             user_decisions=user_decisions,
+            options=options,
+            signal_flow=signal_flow,
         )
         analysis_report = state.report_store.add_report(analysis_report)
         return legacy_report
@@ -4004,6 +3998,7 @@ def _build_routing_audit_report(
     *,
     channels: list[dict[str, Any]],
     routing: list[dict[str, Any]],
+    mixer_tracks: list[dict[str, Any]] | None = None,
     template_context: dict[str, Any] | None = None,
     unused_mixer_tracks: list[dict[str, Any]] | None = None,
     unused_mixer_track_truncated: bool = False,
@@ -4011,7 +4006,10 @@ def _build_routing_audit_report(
     project_fingerprint: str | None = None,
     source_observation_ids: tuple[str, ...] = (),
     user_decisions: tuple[dict[str, Any], ...] = (),
+    options: routing_checks.RoutingAuditOptions | None = None,
+    signal_flow: dict[str, Any] | None = None,
 ) -> tuple[AnalysisReport, dict[str, Any]]:
+    options = options or routing_checks.RoutingAuditOptions()
     unrouted_automation_clips = 0
     filtered_channels = []
     for c in channels:
@@ -4023,12 +4021,20 @@ def _build_routing_audit_report(
             filtered_channels.append(c)
     channels = filtered_channels
 
-    template_context = template_context or templates.classify_topology(routing, routing, channels)
+    mixer_tracks = list(mixer_tracks or ())
+    template_context = template_context or templates.classify_topology(
+        mixer_tracks or routing,
+        routing,
+        channels,
+    )
     track_by_index = {
         idx: dict(row)
-        for row in routing
+        for row in mixer_tracks
         if (idx := _as_int(row.get("i", row.get("index")))) is not None
     }
+    for row in routing:
+        if (idx := _as_int(row.get("i", row.get("index")))) is not None:
+            track_by_index[idx] = {**track_by_index.get(idx, {}), **dict(row)}
     routes_by_src: dict[int, list[dict[str, Any]]] = {
         idx: _normalise_routes(row.get("routes_to") or []) for idx, row in track_by_index.items()
     }
@@ -4117,6 +4123,28 @@ def _build_routing_audit_report(
         unused_count=len(unused_mixer_tracks),
     )
 
+    discrepancy_findings = routing_checks.channel_mixer_discrepancy_findings(
+        channels=channels,
+        mixer_tracks=list(track_by_index.values()),
+    )
+    template_compliance = routing_checks.template_compliance_result(
+        channels=channels,
+        routing=routing,
+        mixer_tracks=list(track_by_index.values()),
+        template_context=template_context,
+        options=options,
+        signal_flow=signal_flow,
+    )
+    level_2_findings = (
+        routing_checks.level_2_signal_findings(
+            channels=channels,
+            routing=routing,
+            mixer_tracks=list(track_by_index.values()),
+            signal_flow=signal_flow,
+        )
+        if options.level == 2
+        else []
+    )
     findings = _routing_findings(
         direct_to_master=direct_to_master,
         unrouted_channels=unrouted_channels,
@@ -4125,6 +4153,14 @@ def _build_routing_audit_report(
         template_context=template_context,
         unused_probe_failed=unused_mixer_track_probe_failed,
     )
+    additional_findings = [
+        *discrepancy_findings,
+        *template_compliance["findings"],
+        *level_2_findings,
+    ]
+    if additional_findings:
+        findings = [row for row in findings if row.get("id") != "routing_clear"]
+        findings.extend(additional_findings)
     _apply_group_user_decisions(
         findings,
         request_id=ROUTING_VALIDATION_REQUEST_ID,
@@ -4140,7 +4176,7 @@ def _build_routing_audit_report(
                 row,
                 workflow="routing_audit",
                 index=index,
-                evidence_mode="static_snapshot",
+                evidence_mode="hybrid" if options.level == 2 else "static_snapshot",
                 confidence_score=80,
             )
             for index, row in enumerate(findings, start=1)
@@ -4169,6 +4205,24 @@ def _build_routing_audit_report(
         "workflow": "routing_audit",
         "title": "Routing Audit",
         "generated_at": _now_iso(),
+        "analysis_mode": "hybrid" if options.level == 2 else "static_snapshot",
+        "evidence_mode": options.static_evidence_mode,
+        "routing_check_level": options.level,
+        "display_name": options.display_name,
+        "template_compliance_enabled": template_compliance["enabled"],
+        "template_compliance_mode": options.template_compliance,
+        "template_profile_source": template_compliance["summary"].get("profile_source"),
+        "detected_template_profile": (templates.compact_context(template_context) or {}).get(
+            "template_slug"
+        ),
+        "selected_template_profile": options.selected_template_profile,
+        "template_detection_confidence": template_compliance["summary"].get("confidence"),
+        "playback_required": options.playback_required,
+        "playback_used": bool(signal_flow and signal_flow.get("playback_used")),
+        "loop_duration_seconds_if_known": options.loop_duration_seconds,
+        "marker_name_if_used": options.marker_name,
+        "template_compliance_summary": template_compliance["summary"],
+        "limitations": list((signal_flow or {}).get("limitations") or []),
         "summary": {
             "health_score": health_score,
             "health_label": _routing_health_label(health_score),
@@ -4181,6 +4235,12 @@ def _build_routing_audit_report(
             "dead_end_tracks": len(dead_end_tracks),
             "unused_mixer_tracks": len(unused_mixer_tracks),
             "unused_mixer_track_truncated": unused_mixer_track_truncated,
+            "channel_mixer_discrepancies": sum(
+                int(row.get("count") or 0) for row in discrepancy_findings
+            ),
+            "template_compliance_findings": sum(
+                int(row.get("count") or 0) for row in template_compliance["findings"]
+            ),
         },
         "findings": findings,
         "graph": graph,
@@ -4207,6 +4267,18 @@ def _build_routing_audit_report(
             "kb_policy_refs": kb_policy.rule_refs(ROUTING_POLICY_RULE_IDS),
             "project_fingerprint": project_fingerprint,
             "source_observation_ids": list(source_observation_ids),
+            "template_status": routing_checks.template_status_payload(
+                template_context=template_context,
+                options=options,
+                compliance_summary=template_compliance["summary"],
+            ),
+            "template_profile_catalog": routing_checks.template_profile_catalog(),
+            "signal_flow": signal_flow
+            or {
+                "available": False,
+                "playback_used": False,
+                "track_peaks": {},
+            },
         },
         "interaction_requests": list(interaction_requests),
         "user_decisions": [dict(row) for row in user_decisions],
@@ -4232,6 +4304,14 @@ def _payload_rows(payload: Any, key: str) -> list[dict[str, Any]]:
     if not isinstance(rows, list):
         return []
     return [dict(row) for row in rows if isinstance(row, dict)]
+
+
+def _read_channel_control_rows(bridge: Any) -> list[dict[str, Any]]:
+    try:
+        payload = fetch_all_pages(bridge, protocol.CMD_CHANNEL_LIST, "channels")
+    except Exception:
+        return []
+    return _payload_rows(payload, "channels")
 
 
 def _probe_unused_mixer_tracks(
@@ -4439,9 +4519,7 @@ def _routing_findings(
                 "detail": "Generator channels route through inserts that feed Master directly.",
                 "count": len(direct_to_master),
                 "items": direct_to_master[:8],
-                "metadata": _routing_heuristic_metadata(
-                    reason="master_routed_or_ungrouped"
-                ),
+                "metadata": _routing_heuristic_metadata(reason="master_routed_or_ungrouped"),
             }
         )
     if unrouted_channels:
@@ -4546,9 +4624,7 @@ def _routing_validation_requests(findings: list[dict[str, Any]]) -> tuple[dict[s
             id=ROUTING_VALIDATION_REQUEST_ID,
             type="multi_select",
             title="Confirm routing cleanup candidates",
-            prompt=(
-                "Which routing findings are intentional before cleanup planning is final?"
-            ),
+            prompt=("Which routing findings are intentional before cleanup planning is final?"),
             options=tuple(options),
             allow_remove=True,
             metadata={
@@ -4838,7 +4914,7 @@ def _handler_factory(state: ControlCenterState):
                     return
                 self._json(_admin_list_workflows(state))
             elif self.path.startswith("/api/admin/workflows/") and not self.path.endswith("/run"):
-                workflow_id = self.path[len("/api/admin/workflows/"):]
+                workflow_id = self.path[len("/api/admin/workflows/") :]
                 if not workflow_id or "/" in workflow_id:
                     self._json({"ok": False, "error": "not found"}, status=HTTPStatus.NOT_FOUND)
                     return
@@ -4852,7 +4928,7 @@ def _handler_factory(state: ControlCenterState):
             elif self.path.startswith("/api/admin/workflow-runs/") and not self.path.endswith(
                 "/cancel"
             ):
-                run_id = self.path[len("/api/admin/workflow-runs/"):]
+                run_id = self.path[len("/api/admin/workflow-runs/") :]
                 if not run_id or "/" in run_id:
                     self._json({"ok": False, "error": "not found"}, status=HTTPStatus.NOT_FOUND)
                     return
@@ -4894,17 +4970,11 @@ def _handler_factory(state: ControlCenterState):
             elif self.path == "/api/workflows/mix-review":
                 self._json(_run_mix_review(state, inputs=_workflow_inputs_from_body(body)))
             elif self.path == "/api/workflows/low-end-analysis":
-                self._json(
-                    _run_low_end_analysis(state, inputs=_workflow_inputs_from_body(body))
-                )
+                self._json(_run_low_end_analysis(state, inputs=_workflow_inputs_from_body(body)))
             elif self.path == "/api/workflows/project-organizer":
-                self._json(
-                    _run_project_organizer(state, inputs=_workflow_inputs_from_body(body))
-                )
+                self._json(_run_project_organizer(state, inputs=_workflow_inputs_from_body(body)))
             elif self.path == "/api/workflows/routing-audit":
-                self._json(
-                    _run_routing_audit(state, inputs=_workflow_inputs_from_body(body))
-                )
+                self._json(_run_routing_audit(state, inputs=_workflow_inputs_from_body(body)))
             elif self.path == "/api/workflows/preflight":
                 self._json(
                     _run_runtime_product_workflow(
@@ -4944,7 +5014,7 @@ def _handler_factory(state: ControlCenterState):
                     return
                 self._json(_admin_create_workflow(state, body))
             elif self.path.endswith("/run") and self.path.startswith("/api/admin/workflows/"):
-                workflow_id = self.path[len("/api/admin/workflows/"):-len("/run")]
+                workflow_id = self.path[len("/api/admin/workflows/") : -len("/run")]
                 if not workflow_id:
                     self._json({"ok": False, "error": "not found"}, status=HTTPStatus.NOT_FOUND)
                     return
@@ -4954,7 +5024,7 @@ def _handler_factory(state: ControlCenterState):
             elif self.path.endswith("/cancel") and self.path.startswith(
                 "/api/admin/workflow-runs/"
             ):
-                run_id = self.path[len("/api/admin/workflow-runs/"):-len("/cancel")]
+                run_id = self.path[len("/api/admin/workflow-runs/") : -len("/cancel")]
                 if not run_id:
                     self._json({"ok": False, "error": "not found"}, status=HTTPStatus.NOT_FOUND)
                     return
@@ -4962,7 +5032,7 @@ def _handler_factory(state: ControlCenterState):
                     return
                 self._json(_admin_cancel_workflow_run(state, run_id))
             elif self.path.endswith("/cancel") and self.path.startswith("/api/admin/jobs/"):
-                job_id = self.path[len("/api/admin/jobs/"):-len("/cancel")]
+                job_id = self.path[len("/api/admin/jobs/") : -len("/cancel")]
                 if not job_id:
                     self._json({"ok": False, "error": "not found"}, status=HTTPStatus.NOT_FOUND)
                     return
@@ -4975,7 +5045,7 @@ def _handler_factory(state: ControlCenterState):
         def do_PUT(self) -> None:  # noqa: N802
             body = self._read_json()
             if self.path.startswith("/api/admin/workflows/"):
-                workflow_id = self.path[len("/api/admin/workflows/"):]
+                workflow_id = self.path[len("/api/admin/workflows/") :]
                 if not workflow_id or "/" in workflow_id:
                     self._json({"ok": False, "error": "not found"}, status=HTTPStatus.NOT_FOUND)
                     return
@@ -4987,7 +5057,7 @@ def _handler_factory(state: ControlCenterState):
 
         def do_DELETE(self) -> None:  # noqa: N802
             if self.path.startswith("/api/admin/workflows/"):
-                workflow_id = self.path[len("/api/admin/workflows/"):]
+                workflow_id = self.path[len("/api/admin/workflows/") :]
                 if not workflow_id or "/" in workflow_id:
                     self._json({"ok": False, "error": "not found"}, status=HTTPStatus.NOT_FOUND)
                     return

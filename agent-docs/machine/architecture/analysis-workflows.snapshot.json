@@ -4,8 +4,8 @@
   "title": "Analysis workflows, reports, scoring, evidence, health aggregation and Control Center workflow panels",
   "source_snapshot": "agent-docs/machine/architecture-analysis.snapshot.json",
   "source_snapshot_sha256": "ff0d38588b91510a3073e81d885de38f9116cddfbcd95686cbf11c28a6db8d7f",
-  "generated_at": "2026-06-19",
-  "note": "Generated scoped slice of the full static architecture analysis. Load this file only when the coding task matches its scope.",
+  "generated_at": "2026-07-01",
+  "note": "Scoped slice refreshed for Routing Audit Level 1/Level 2 workflow declarations; full static architecture analysis was not regenerated.",
   "load_when": [
     "workflow registry, report schema, scoring, evidence, freshness, prerequisites, or health aggregation changes",
     "Control Center project-review workflow panel ownership or endpoint changes",
@@ -21,7 +21,53 @@
         "enabled": true,
         "analysis_report_required": false,
         "health_inclusion_policy": "runtime_prerequisite_only",
-        "requirements": null,
+        "requirements": {
+          "workflow_id": "routing_audit",
+          "required": [
+            {
+              "id": "fl_session_alive",
+              "observation_kind": "fl_session_alive",
+              "required": true,
+              "evidence_mode": "static_snapshot",
+              "invalidates_on": [],
+              "ttl_seconds": 2
+            },
+            {
+              "id": "static_project_snapshot",
+              "observation_kind": "static_project_snapshot",
+              "required": true,
+              "evidence_mode": "static_snapshot",
+              "invalidates_on": [],
+              "ttl_seconds": 60
+            },
+            {
+              "id": "channel_routing_snapshot",
+              "observation_kind": "channel_routing_snapshot",
+              "required": true,
+              "evidence_mode": "static_snapshot",
+              "invalidates_on": [],
+              "ttl_seconds": 60
+            },
+            {
+              "id": "routing_snapshot",
+              "observation_kind": "routing_snapshot",
+              "required": true,
+              "evidence_mode": "static_snapshot",
+              "invalidates_on": [],
+              "ttl_seconds": 60
+            }
+          ],
+          "optional": [
+            {
+              "id": "live_meter_window",
+              "observation_kind": "live_meter_window",
+              "required": false,
+              "evidence_mode": "live_runtime",
+              "invalidates_on": [],
+              "ttl_seconds": 2
+            }
+          ]
+        },
         "parent_workflow_id": null,
         "panel_id": null,
         "group": "Project Review",

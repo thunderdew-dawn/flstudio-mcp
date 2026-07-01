@@ -63,6 +63,32 @@
         }
       }
     },
+    "genre_or_use_case": {
+      "type": ["string", "null"]
+    },
+    "track_role_aliases": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": {"type": "string"}
+      }
+    },
+    "expected_paths": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/expected_path"}
+    },
+    "allowed_exceptions": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/template_exception"}
+    },
+    "placeholder_rules": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/placeholder_rule"}
+    },
+    "severity_overrides": {
+      "type": "object",
+      "additionalProperties": {"type": "string"}
+    },
     "mixer_tracks": {
       "type": "array",
       "items": {
@@ -315,6 +341,37 @@
         "target_name": {"type": ["string", "null"]},
         "type": {"type": ["string", "null"]}
       }
+    },
+    "expected_path": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["source_role", "expected_path"],
+      "properties": {
+        "source_role": {"type": "string", "minLength": 1},
+        "expected_path": {
+          "type": "array",
+          "items": {"type": "string"},
+          "minItems": 1
+        },
+        "allowed_direct_roles": {
+          "type": "array",
+          "items": {"type": "string"}
+        },
+        "direct_to_master_allowed": {
+          "type": ["boolean", "string"]
+        },
+        "severity_if_bypassed": {"type": "string"},
+        "severity_if_missing": {"type": "string"},
+        "notes": {"type": "string"}
+      }
+    },
+    "template_exception": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "placeholder_rule": {
+      "type": "object",
+      "additionalProperties": true
     }
   }
 }

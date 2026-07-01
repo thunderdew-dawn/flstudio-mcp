@@ -2436,6 +2436,51 @@ details[open] .raw-report-summary::before { content: "▼ Raw"; }
   box-shadow: 0 0 22px rgba(39, 215, 255, 0.16);
 }
 
+.routing-controls-panel {
+  margin-bottom: var(--space-5);
+}
+
+.routing-control-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(180px, 1fr));
+  gap: var(--space-4);
+}
+
+.routing-template-status {
+  margin-top: var(--space-3);
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.routing-level2-flow {
+  margin-top: var(--space-4);
+}
+
+.routing-level2-card {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid rgba(82, 216, 255, 0.2);
+  background: rgba(82, 216, 255, 0.06);
+  border-radius: 8px;
+}
+
+.routing-level2-card p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.routing-level2-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.routing-level2-actions .ghost-button {
+  min-height: 38px;
+}
+
 .routing-audit-feedback {
   min-height: 36px;
   margin: 0 0 14px;
@@ -4442,6 +4487,10 @@ dd { margin: 6px 0 0; color: var(--green); font-size: 17px; font-weight: 760; fo
   }
 
   .routing-audit-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .routing-control-grid {
     grid-template-columns: 1fr;
   }
 

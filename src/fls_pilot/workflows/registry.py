@@ -30,6 +30,7 @@ HEALTH_INCLUSION_POLICIES = {
     "excluded",
 }
 
+
 @dataclass(frozen=True)
 class WorkflowDeclaration:
     id: str
@@ -57,9 +58,7 @@ class WorkflowDeclaration:
         if self.status not in WORKFLOW_STATUSES:
             raise ValueError(f"invalid workflow status: {self.status!r}")
         if self.health_inclusion_policy not in HEALTH_INCLUSION_POLICIES:
-            raise ValueError(
-                f"invalid health inclusion policy: {self.health_inclusion_policy!r}"
-            )
+            raise ValueError(f"invalid health inclusion policy: {self.health_inclusion_policy!r}")
         if self.parent_workflow_id is not None:
             object.__setattr__(
                 self,
@@ -71,9 +70,7 @@ class WorkflowDeclaration:
                 f"requirement workflow id {self.requirements.workflow_id!r} "
                 f"does not match declaration {self.id!r}"
             )
-        object.__setattr__(
-            self, "supported_next_actions", tuple(self.supported_next_actions)
-        )
+        object.__setattr__(self, "supported_next_actions", tuple(self.supported_next_actions))
         object.__setattr__(self, "manual_only_actions", tuple(self.manual_only_actions))
         object.__setattr__(self, "forbidden_actions", tuple(self.forbidden_actions))
 
@@ -151,11 +148,7 @@ class WorkflowRegistry:
         return tuple(row for row in self._rows if row.enabled)
 
     def control_center_catalog(self) -> list[dict[str, Any]]:
-        return [
-            row.to_control_center_dict()
-            for row in self._rows
-            if row.panel_id is not None
-        ]
+        return [row.to_control_center_dict() for row in self._rows if row.panel_id is not None]
 
 
 def build_effective_workflow_registry(
@@ -180,8 +173,7 @@ def build_effective_workflow_registry(
                     selected_profiles.append(dict(profiles_by_id[profile_id]))
                 except KeyError as exc:
                     raise ValueError(
-                        f"unknown profile id {profile_id!r} in pack "
-                        f"{manifest.pack_id!r}"
+                        f"unknown profile id {profile_id!r} in pack {manifest.pack_id!r}"
                     ) from exc
             extensions_by_workflow.setdefault(workflow.id, []).append(
                 {
@@ -212,13 +204,9 @@ def _pack_profiles_by_id(manifest: Any) -> dict[str, dict[str, Any]]:
     for index, profile in enumerate(manifest.profiles):
         profile_id = str(profile.get("id") or "").strip()
         if not profile_id:
-            raise ValueError(
-                f"profiles[{index}].id is required in pack {manifest.pack_id!r}"
-            )
+            raise ValueError(f"profiles[{index}].id is required in pack {manifest.pack_id!r}")
         if profile_id in profiles:
-            raise ValueError(
-                f"duplicate profile id {profile_id!r} in pack {manifest.pack_id!r}"
-            )
+            raise ValueError(f"duplicate profile id {profile_id!r} in pack {manifest.pack_id!r}")
         profiles[profile_id] = dict(profile)
     return profiles
 
@@ -309,6 +297,21 @@ DEFAULT_WORKFLOW_REGISTRY = WorkflowRegistry(
             "active",
             "included_when_current_report_available",
             True,
+            requirements=WorkflowRequirementSet(
+                "routing_audit",
+                (
+                    requirement("fl_session_alive", ttl_seconds=2),
+                    requirement("static_project_snapshot", ttl_seconds=60),
+                    requirement("channel_routing_snapshot", ttl_seconds=60),
+                    requirement("routing_snapshot", ttl_seconds=60),
+                    requirement(
+                        "live_meter_window",
+                        required=False,
+                        ttl_seconds=2,
+                        evidence_mode="live_runtime",
+                    ),
+                ),
+            ),
             panel_id="producer_routing",
             endpoint="/api/workflows/routing-audit",
             action_label="Run Routing Audit",
@@ -421,9 +424,7 @@ DEFAULT_WORKFLOW_REGISTRY = WorkflowRegistry(
             parent_workflow_id="project_organizer",
             panel_id="producer_jam_2_project",
             group="Roadmap",
-            safety_note=(
-                "Planned for v3.1+. No Control Center action is available in v3.0."
-            ),
+            safety_note=("Planned for v3.1+. No Control Center action is available in v3.0."),
             supported_next_actions=("run_project_organizer", "review_safe_proposals"),
             manual_only_actions=("confirm_sections", "confirm_musical_roles"),
             forbidden_actions=(
@@ -448,9 +449,7 @@ DEFAULT_WORKFLOW_REGISTRY = WorkflowRegistry(
             ),
             panel_id="producer_sidechaining",
             group="Roadmap",
-            safety_note=(
-                "Planned after v3.0. Plugin detector settings remain a manual check."
-            ),
+            safety_note=("Planned after v3.0. Plugin detector settings remain a manual check."),
             supported_next_actions=("inspect_loaded_plugin",),
             manual_only_actions=("verify_plugin_sidechain_input",),
             forbidden_actions=("plugin_loading", "unknown_parameter_writes"),
@@ -476,8 +475,7 @@ DEFAULT_WORKFLOW_REGISTRY = WorkflowRegistry(
             panel_id="producer_plugin_assistant",
             group="Roadmap",
             safety_note=(
-                "Planned after v3.0. Plugin loading and unknown parameter writes "
-                "remain manual."
+                "Planned after v3.0. Plugin loading and unknown parameter writes remain manual."
             ),
             supported_next_actions=("list_loaded_plugins", "inspect_named_parameters"),
             manual_only_actions=("choose_mixer_track", "load_plugin"),
@@ -496,9 +494,7 @@ DEFAULT_WORKFLOW_REGISTRY = WorkflowRegistry(
             ),
             panel_id="producer_preset_assistant",
             group="Roadmap",
-            safety_note=(
-                "Planned after v3.0. Preset loading remains manual."
-            ),
+            safety_note=("Planned after v3.0. Preset loading remains manual."),
             supported_next_actions=("list_preset_names", "suggest_by_name"),
             manual_only_actions=("load_preset", "audition_preset"),
             forbidden_actions=("automatic_preset_loading",),

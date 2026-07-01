@@ -78,6 +78,36 @@ def test_legacy_workflow_runner_rejects_unknown_inputs(tmp_path) -> None:
         raise AssertionError("run_workflow accepted unsupported legacy inputs")
 
 
+def test_routing_workflow_runner_accepts_audit_options(tmp_path, monkeypatch) -> None:
+    runtime = RuntimeCore(job_store_path=tmp_path / "jobs.sqlite3")
+    bridge = FakeBridge()
+    calls = []
+
+    def fake_runner(state, *, bridge_override=None, inputs=None):  # noqa: ANN001
+        calls.append({"bridge": bridge_override, "inputs": inputs})
+        return {"ok": True, "workflow": "routing_audit"}
+
+    monkeypatch.setattr("fls_pilot.control_center._run_routing_audit", fake_runner)
+
+    result = run_workflow(
+        runtime,
+        "routing_audit",
+        bridge=bridge,
+        inputs={
+            "routing_check_mode": "level_2_signal_flow",
+            "template_compliance": "manual_select",
+            "selected_template_profile": "psytrance",
+            "playback_decision": "manual_playback_running",
+            "marker_name": "Drop",
+            "loop_duration_seconds": 16,
+        },
+    )
+
+    assert result == {"ok": True, "workflow": "routing_audit"}
+    assert calls[0]["inputs"]["routing_check_mode"] == "level_2_signal_flow"
+    assert calls[0]["inputs"]["selected_template_profile"] == "psytrance"
+
+
 def test_all_l1_workflows_share_current_project_scope(tmp_path, monkeypatch) -> None:
     runtime = RuntimeCore(job_store_path=tmp_path / "jobs.sqlite3")
     bridge = FakeBridge()

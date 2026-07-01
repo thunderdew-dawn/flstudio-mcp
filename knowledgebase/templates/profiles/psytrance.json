@@ -1,0 +1,525 @@
+{
+  "schema_version": 1,
+  "profile_kind": "fl_studio_template_profile",
+  "template_name": "Psytrance Routing Template",
+  "template_slug": "psytrance",
+  "genre_or_use_case": "psytrance",
+  "source": {
+    "type": "manual_profile",
+    "date": "2026-07-01",
+    "confidence": "user_reported",
+    "fl_version": null,
+    "controller_build": null,
+    "source_dump_path": null,
+    "generated_by": "Codex"
+  },
+  "track_role_aliases": {
+    "master": ["master"],
+    "premaster": ["premaster", "pre master", "mix bus", "mixbus", "final bus"],
+    "kick_bus": ["kick bus", "kick mix"],
+    "bass_bus": ["bass bus", "lowend bus", "low-end bus", "sub bus"],
+    "lowend_bus": ["lowend bus", "kick and bass", "kick bass"],
+    "drum_bus": ["drum bus", "perc bus", "hats bus"],
+    "synth_bus": ["synth bus", "lead bus", "acid bus", "atmos bus"],
+    "fx_bus": ["fx bus", "return bus", "reverb bus", "delay bus"],
+    "reference": ["reference", "ref track"],
+    "sidechain_control": ["sidechain", "ghost kick", "trigger"]
+  },
+  "expected_paths": [
+    {
+      "source_role": "kick",
+      "expected_path": ["kick_bus_or_drum_bus", "premaster", "master"],
+      "severity_if_bypassed": "high",
+      "notes": "Kick routing is critical in psytrance because it anchors the low-end and sidechain relationship."
+    },
+    {
+      "source_role": "bass",
+      "expected_path": ["bass_bus_or_lowend_bus", "premaster", "master"],
+      "severity_if_bypassed": "high",
+      "notes": "Bass should normally be controlled through a bass or low-end bus."
+    },
+    {
+      "source_role": "kick_and_bass_group",
+      "expected_path": ["lowend_bus", "premaster", "master"],
+      "severity_if_missing": "low",
+      "notes": "Some templates group kick and bass separately first, then through a low-end bus."
+    },
+    {
+      "source_role": "percussion_or_hats",
+      "expected_path": ["drum_or_perc_bus", "premaster", "master"],
+      "severity_if_bypassed": "medium"
+    },
+    {
+      "source_role": "leads_arps_acids",
+      "expected_path": ["synth_or_lead_bus", "premaster", "master"],
+      "severity_if_bypassed": "medium"
+    },
+    {
+      "source_role": "pads_atmospheres",
+      "expected_path": ["synth_or_atmos_bus", "premaster", "master"],
+      "severity_if_bypassed": "low"
+    },
+    {
+      "source_role": "fx_returns",
+      "expected_path": ["fx_bus_or_premaster", "master"],
+      "severity_if_bypassed": "low"
+    },
+    {
+      "source_role": "reference_track",
+      "expected_path": ["reference_bus_or_monitor_only"],
+      "must_not_feed_master_export": true,
+      "severity_if_active_to_master": "critical"
+    },
+    {
+      "source_role": "sidechain_trigger",
+      "expected_path": ["sidechain_control_only"],
+      "must_not_be_audible_on_master": true,
+      "severity_if_audible_on_master": "critical"
+    }
+  ],
+  "allowed_exceptions": [
+    {
+      "id": "fx_direct_to_premaster",
+      "description": "FX returns may feed premaster directly when the profile owner documents that layout."
+    }
+  ],
+  "placeholder_rules": [
+    {
+      "role": "reserved_placeholder",
+      "reason": "Reserved psytrance source lanes are not cleanup candidates."
+    }
+  ],
+  "severity_overrides": {
+    "routing.template.source_direct_to_master:kick": "high",
+    "routing.template.source_direct_to_master:bass": "high",
+    "routing.template.reference_routed_to_master": "critical",
+    "routing.template.sidechain_control_routed_to_master": "critical"
+  },
+  "channel_routes": [
+    {
+      "channel_index": 0,
+      "channel_name": "Kick",
+      "target_mixer_track": 2,
+      "target_name": "Kick",
+      "type": "genplug"
+    },
+    {
+      "channel_index": 1,
+      "channel_name": "Rolling Bass",
+      "target_mixer_track": 3,
+      "target_name": "Bass",
+      "type": "genplug"
+    },
+    {
+      "channel_index": 2,
+      "channel_name": "Closed Hats",
+      "target_mixer_track": 4,
+      "target_name": "Hats",
+      "type": "genplug"
+    },
+    {
+      "channel_index": 3,
+      "channel_name": "Acid Lead",
+      "target_mixer_track": 5,
+      "target_name": "Acid Lead",
+      "type": "genplug"
+    },
+    {
+      "channel_index": 4,
+      "channel_name": "Atmos Pad",
+      "target_mixer_track": 6,
+      "target_name": "Atmos Pad",
+      "type": "genplug"
+    },
+    {
+      "channel_index": 5,
+      "channel_name": "FX Return",
+      "target_mixer_track": 7,
+      "target_name": "FX Return",
+      "type": "audioclip"
+    },
+    {
+      "channel_index": 6,
+      "channel_name": "Reference Track",
+      "target_mixer_track": 25,
+      "target_name": "Reference Monitor",
+      "type": "audioclip"
+    },
+    {
+      "channel_index": 7,
+      "channel_name": "Ghost Kick",
+      "target_mixer_track": 26,
+      "target_name": "Sidechain Trigger",
+      "type": "genplug"
+    }
+  ],
+  "known_control_routes": [
+    {
+      "source": 26,
+      "targets": [21],
+      "level": 0.0,
+      "meaning": "sidechain_control"
+    }
+  ],
+  "mixer_tracks": [
+    {
+      "index": 0,
+      "name": "Master",
+      "role": "master",
+      "is_reserved": false,
+      "is_intentionally_silent": false,
+      "routes_to": [],
+      "receives_from": [1],
+      "pan": 0.0,
+      "stereo_separation": 0.0,
+      "volume": {"normalized": 0.8, "db": 0.0},
+      "plugins": [],
+      "tool_policy": {
+        "suppress_missing_hpf": false,
+        "suppress_unused_track": false,
+        "suppress_ungrouped": false,
+        "suppress_low_end_width": false,
+        "suppress_offcenter_bass": false,
+        "suppress_layering_warning_without_audio": false
+      }
+    },
+    {
+      "index": 1,
+      "name": "Premaster",
+      "role": "premaster",
+      "is_reserved": false,
+      "is_intentionally_silent": false,
+      "routes_to": [{"target": 0, "target_name": "Master", "level": 0.8, "meaning": null}],
+      "receives_from": [20, 21, 22, 23, 24],
+      "pan": 0.0,
+      "stereo_separation": 0.0,
+      "volume": {"normalized": 0.8, "db": 0.0},
+      "plugins": [],
+      "tool_policy": {
+        "suppress_missing_hpf": true,
+        "suppress_unused_track": false,
+        "suppress_ungrouped": true,
+        "suppress_low_end_width": true,
+        "suppress_offcenter_bass": true,
+        "suppress_layering_warning_without_audio": true
+      }
+    },
+    {
+      "index": 2,
+      "name": "Kick",
+      "role": "source",
+      "is_reserved": false,
+      "is_intentionally_silent": false,
+      "routes_to": [{"target": 20, "target_name": "Kick Bus", "level": 0.8, "meaning": null}],
+      "receives_from": [],
+      "pan": 0.0,
+      "stereo_separation": 0.0,
+      "volume": {"normalized": 0.8, "db": 0.0},
+      "plugins": [],
+      "tool_policy": {
+        "suppress_missing_hpf": false,
+        "suppress_unused_track": false,
+        "suppress_ungrouped": false,
+        "suppress_low_end_width": true,
+        "suppress_offcenter_bass": true,
+        "suppress_layering_warning_without_audio": false
+      }
+    },
+    {
+      "index": 3,
+      "name": "Bass",
+      "role": "source",
+      "is_reserved": false,
+      "is_intentionally_silent": false,
+      "routes_to": [{"target": 21, "target_name": "Bass Bus", "level": 0.8, "meaning": null}],
+      "receives_from": [],
+      "pan": 0.0,
+      "stereo_separation": 0.0,
+      "volume": {"normalized": 0.8, "db": 0.0},
+      "plugins": [],
+      "tool_policy": {
+        "suppress_missing_hpf": false,
+        "suppress_unused_track": false,
+        "suppress_ungrouped": false,
+        "suppress_low_end_width": true,
+        "suppress_offcenter_bass": true,
+        "suppress_layering_warning_without_audio": false
+      }
+    },
+    {
+      "index": 4,
+      "name": "Hats",
+      "role": "source",
+      "is_reserved": false,
+      "is_intentionally_silent": false,
+      "routes_to": [{"target": 22, "target_name": "Drum Bus", "level": 0.8, "meaning": null}],
+      "receives_from": [],
+      "pan": 0.0,
+      "stereo_separation": 0.0,
+      "volume": {"normalized": 0.8, "db": 0.0},
+      "plugins": [],
+      "tool_policy": {
+        "suppress_missing_hpf": false,
+        "suppress_unused_track": false,
+        "suppress_ungrouped": false,
+        "suppress_low_end_width": false,
+        "suppress_offcenter_bass": false,
+        "suppress_layering_warning_without_audio": false
+      }
+    },
+    {
+      "index": 5,
+      "name": "Acid Lead",
+      "role": "source",
+      "is_reserved": false,
+      "is_intentionally_silent": false,
+      "routes_to": [{"target": 23, "target_name": "Synth Bus", "level": 0.8, "meaning": null}],
+      "receives_from": [],
+      "pan": 0.0,
+      "stereo_separation": 0.0,
+      "volume": {"normalized": 0.8, "db": 0.0},
+      "plugins": [],
+      "tool_policy": {
+        "suppress_missing_hpf": false,
+        "suppress_unused_track": false,
+        "suppress_ungrouped": false,
+        "suppress_low_end_width": false,
+        "suppress_offcenter_bass": false,
+        "suppress_layering_warning_without_audio": false
+      }
+    },
+    {
+      "index": 6,
+      "name": "Atmos Pad",
+      "role": "source",
+      "is_reserved": false,
+      "is_intentionally_silent": false,
+      "routes_to": [{"target": 23, "target_name": "Synth Bus", "level": 0.8, "meaning": null}],
+      "receives_from": [],
+      "pan": 0.0,
+      "stereo_separation": 0.0,
+      "volume": {"normalized": 0.8, "db": 0.0},
+      "plugins": [],
+      "tool_policy": {
+        "suppress_missing_hpf": false,
+        "suppress_unused_track": false,
+        "suppress_ungrouped": false,
+        "suppress_low_end_width": false,
+        "suppress_offcenter_bass": false,
+        "suppress_layering_warning_without_audio": false
+      }
+    },
+    {
+      "index": 7,
+      "name": "FX Return",
+      "role": "source",
+      "is_reserved": false,
+      "is_intentionally_silent": false,
+      "routes_to": [{"target": 24, "target_name": "FX Bus", "level": 0.8, "meaning": null}],
+      "receives_from": [],
+      "pan": 0.0,
+      "stereo_separation": 0.0,
+      "volume": {"normalized": 0.8, "db": 0.0},
+      "plugins": [],
+      "tool_policy": {
+        "suppress_missing_hpf": true,
+        "suppress_unused_track": false,
+        "suppress_ungrouped": false,
+        "suppress_low_end_width": false,
+        "suppress_offcenter_bass": false,
+        "suppress_layering_warning_without_audio": true
+      }
+    },
+    {
+      "index": 20,
+      "name": "Kick Bus",
+      "role": "stem_bus",
+      "is_reserved": false,
+      "is_intentionally_silent": false,
+      "routes_to": [{"target": 1, "target_name": "Premaster", "level": 0.8, "meaning": null}],
+      "receives_from": [2],
+      "pan": 0.0,
+      "stereo_separation": 0.0,
+      "volume": {"normalized": 0.8, "db": 0.0},
+      "plugins": [],
+      "tool_policy": {
+        "suppress_missing_hpf": true,
+        "suppress_unused_track": false,
+        "suppress_ungrouped": true,
+        "suppress_low_end_width": true,
+        "suppress_offcenter_bass": true,
+        "suppress_layering_warning_without_audio": true
+      }
+    },
+    {
+      "index": 21,
+      "name": "Bass Bus",
+      "role": "stem_bus",
+      "is_reserved": false,
+      "is_intentionally_silent": false,
+      "routes_to": [{"target": 1, "target_name": "Premaster", "level": 0.8, "meaning": null}],
+      "receives_from": [3, 26],
+      "pan": 0.0,
+      "stereo_separation": 0.0,
+      "volume": {"normalized": 0.8, "db": 0.0},
+      "plugins": [],
+      "tool_policy": {
+        "suppress_missing_hpf": true,
+        "suppress_unused_track": false,
+        "suppress_ungrouped": true,
+        "suppress_low_end_width": true,
+        "suppress_offcenter_bass": true,
+        "suppress_layering_warning_without_audio": true
+      }
+    },
+    {
+      "index": 22,
+      "name": "Drum Bus",
+      "role": "stem_bus",
+      "is_reserved": false,
+      "is_intentionally_silent": false,
+      "routes_to": [{"target": 1, "target_name": "Premaster", "level": 0.8, "meaning": null}],
+      "receives_from": [4],
+      "pan": 0.0,
+      "stereo_separation": 0.0,
+      "volume": {"normalized": 0.8, "db": 0.0},
+      "plugins": [],
+      "tool_policy": {
+        "suppress_missing_hpf": true,
+        "suppress_unused_track": false,
+        "suppress_ungrouped": true,
+        "suppress_low_end_width": false,
+        "suppress_offcenter_bass": false,
+        "suppress_layering_warning_without_audio": true
+      }
+    },
+    {
+      "index": 23,
+      "name": "Synth Bus",
+      "role": "stem_bus",
+      "is_reserved": false,
+      "is_intentionally_silent": false,
+      "routes_to": [{"target": 1, "target_name": "Premaster", "level": 0.8, "meaning": null}],
+      "receives_from": [5, 6],
+      "pan": 0.0,
+      "stereo_separation": 0.0,
+      "volume": {"normalized": 0.8, "db": 0.0},
+      "plugins": [],
+      "tool_policy": {
+        "suppress_missing_hpf": true,
+        "suppress_unused_track": false,
+        "suppress_ungrouped": true,
+        "suppress_low_end_width": false,
+        "suppress_offcenter_bass": false,
+        "suppress_layering_warning_without_audio": true
+      }
+    },
+    {
+      "index": 24,
+      "name": "FX Bus",
+      "role": "stem_bus",
+      "is_reserved": false,
+      "is_intentionally_silent": false,
+      "routes_to": [{"target": 1, "target_name": "Premaster", "level": 0.8, "meaning": null}],
+      "receives_from": [7],
+      "pan": 0.0,
+      "stereo_separation": 0.0,
+      "volume": {"normalized": 0.8, "db": 0.0},
+      "plugins": [],
+      "tool_policy": {
+        "suppress_missing_hpf": true,
+        "suppress_unused_track": false,
+        "suppress_ungrouped": true,
+        "suppress_low_end_width": false,
+        "suppress_offcenter_bass": false,
+        "suppress_layering_warning_without_audio": true
+      }
+    },
+    {
+      "index": 25,
+      "name": "Reference Monitor",
+      "role": "utility",
+      "is_reserved": false,
+      "is_intentionally_silent": true,
+      "routes_to": [],
+      "receives_from": [],
+      "pan": 0.0,
+      "stereo_separation": 0.0,
+      "volume": {"normalized": 0.8, "db": 0.0},
+      "plugins": [],
+      "tool_policy": {
+        "suppress_missing_hpf": true,
+        "suppress_unused_track": false,
+        "suppress_ungrouped": true,
+        "suppress_low_end_width": true,
+        "suppress_offcenter_bass": true,
+        "suppress_layering_warning_without_audio": true
+      }
+    },
+    {
+      "index": 26,
+      "name": "Sidechain Trigger",
+      "role": "sidechain_control",
+      "is_reserved": false,
+      "is_intentionally_silent": true,
+      "routes_to": [{"target": 21, "target_name": "Bass Bus", "level": 0.0, "meaning": "sidechain_control"}],
+      "receives_from": [],
+      "pan": 0.0,
+      "stereo_separation": 0.0,
+      "volume": {"normalized": 0.8, "db": 0.0},
+      "plugins": [],
+      "tool_policy": {
+        "suppress_missing_hpf": true,
+        "suppress_unused_track": false,
+        "suppress_ungrouped": true,
+        "suppress_low_end_width": true,
+        "suppress_offcenter_bass": true,
+        "suppress_layering_warning_without_audio": true
+      }
+    }
+  ],
+  "reserved_ranges": [
+    {
+      "from": 40,
+      "to": 64,
+      "role": "reserved_placeholder",
+      "default_routes_to": [23],
+      "route_level": 0.8,
+      "reason": "Reserved psytrance synth, FX, and transition lanes."
+    }
+  ],
+  "template_detection": {
+    "required_track_names": [
+      {"track": 1, "name": "Premaster"},
+      {"track": 20, "name": "Kick Bus"},
+      {"track": 21, "name": "Bass Bus"},
+      {"track": 22, "name": "Drum Bus"},
+      {"track": 23, "name": "Synth Bus"},
+      {"track": 24, "name": "FX Bus"},
+      {"track": 26, "name": "Sidechain Trigger"}
+    ],
+    "required_routes": [
+      {"source": 2, "targets": [20]},
+      {"source": 3, "targets": [21]},
+      {"source": 4, "targets": [22]},
+      {"source": 5, "targets": [23]},
+      {"source": 6, "targets": [23]},
+      {"source": 20, "targets": [1]},
+      {"source": 21, "targets": [1]},
+      {"source": 22, "targets": [1]},
+      {"source": 23, "targets": [1]},
+      {"source": 24, "targets": [1]},
+      {"source": 1, "targets": [0]},
+      {"source": 26, "targets": [21]}
+    ],
+    "reserved_placeholder_min_count": 5,
+    "confidence_notes": [
+      "Manual profile prepared for template-compliance routing checks.",
+      "Live FL dump is still recommended before treating this as implementation-verified."
+    ]
+  },
+  "open_questions": [
+    "Exact track indices may differ across producer templates.",
+    "Reference monitor and sidechain trigger routing should be verified in live project templates."
+  ]
+}

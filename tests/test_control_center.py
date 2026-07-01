@@ -168,22 +168,16 @@ def test_status_groups_fl_studio_application_separately(monkeypatch):
 
     assert status["groups"]["fl_app"][0]["component"] == "FL Studio Application"
     assert not any(
-        f["component"] == "FL Studio Application"
-        for f in status["groups"]["controller"]
+        f["component"] == "FL Studio Application" for f in status["groups"]["controller"]
     )
-    assert not any(
-        f["component"] == "FL Studio Application"
-        for f in status["groups"]["other"]
-    )
+    assert not any(f["component"] == "FL Studio Application" for f in status["groups"]["other"])
 
 
 def test_setup_guidance_prompts_to_open_fl_studio():
     """Open FL Studio card must appear and precede the controller card."""
     groups = {
         "environment": [],
-        "fl_app": [
-            _finding("FL Studio Application", "blocker", "failed").to_dict()
-        ],
+        "fl_app": [_finding("FL Studio Application", "blocker", "failed").to_dict()],
         "midi": [],
         "controller": [
             _finding("FL Studio Controller Script", "blocker", "probe_needed").to_dict()
@@ -1390,11 +1384,121 @@ def test_build_routing_audit_report_summarizes_graph_and_findings():
     assert report["findings"][0]["rule_id"].startswith("routing.")
     assert "analysis_report" not in report["details"]
     canonical_ids = {
-        entity["canonical_id"]
-        for finding in report["findings"]
-        for entity in finding["entities"]
+        entity["canonical_id"] for finding in report["findings"] for entity in finding["entities"]
     }
     assert {"channel:1", "mixer:1", "channel:3", "mixer:2", "mixer:9"} <= canonical_ids
+
+
+def test_build_routing_audit_report_adds_discrepancy_template_and_level2_findings():
+    channels = [
+        {
+            "channel": 1,
+            "name": "Kick",
+            "type": {"label": "genplug"},
+            "target_mixer_track": 2,
+            "target_name": "Kick",
+            "vol_norm": 0.02,
+            "pan": -1.0,
+            "mute": True,
+            "solo": False,
+        },
+        {
+            "channel": 2,
+            "name": "Bass",
+            "type": {"label": "genplug"},
+            "target_mixer_track": 11,
+            "target_name": "Bass",
+            "vol_norm": 0.9,
+            "pan": 0.0,
+            "mute": False,
+            "solo": False,
+        },
+    ]
+    mixer_tracks = [
+        {
+            "i": 0,
+            "name": "Master",
+            "vol_norm": 0.8,
+            "pan": 0.0,
+            "mute": False,
+            "solo": False,
+        },
+        {
+            "i": 1,
+            "name": "Premaster",
+            "vol_norm": 0.8,
+            "pan": 0.0,
+            "mute": False,
+            "solo": False,
+        },
+        {
+            "i": 2,
+            "name": "Kick",
+            "vol_norm": 0.9,
+            "pan": 1.0,
+            "mute": False,
+            "solo": True,
+        },
+        {
+            "i": 10,
+            "name": "Kick Bus",
+            "vol_norm": 0.9,
+            "pan": 0.0,
+            "mute": False,
+            "solo": False,
+        },
+        {
+            "i": 11,
+            "name": "Bass",
+            "vol_norm": 0.8,
+            "pan": 0.0,
+            "mute": False,
+            "solo": False,
+        },
+    ]
+    routing = [
+        {"i": 0, "name": "Master", "routes_to": []},
+        {"i": 1, "name": "Premaster", "routes_to": [{"dst": 0, "dst_name": "Master"}]},
+        {"i": 2, "name": "Kick", "routes_to": [{"dst": 0, "dst_name": "Master"}]},
+        {"i": 10, "name": "Kick Bus", "routes_to": [{"dst": 1, "dst_name": "Premaster"}]},
+        {"i": 11, "name": "Bass", "routes_to": [{"dst": 0, "dst_name": "Master"}]},
+    ]
+
+    _analysis_report, report = control_center._build_routing_audit_report(
+        channels=channels,
+        routing=routing,
+        mixer_tracks=mixer_tracks,
+        options=control_center.routing_checks.RoutingAuditOptions(
+            routing_check_mode=control_center.routing_checks.ROUTING_MODE_LEVEL_2,
+            template_compliance=control_center.routing_checks.TEMPLATE_COMPLIANCE_MANUAL,
+            selected_template_profile="psytrance",
+            playback_decision="manual_playback_running",
+            loop_duration_seconds=16,
+        ),
+        signal_flow={
+            "available": True,
+            "playback_used": True,
+            "active_threshold": 0.00001,
+            "track_peaks": {"0": 0.2, "1": 0.0, "2": 0.15, "10": 0.0, "11": 0.0},
+            "limitations": [],
+        },
+    )
+
+    ids = {finding["id"] for finding in report["findings"]}
+    assert "channel_mixer_volume_conflict" in ids
+    assert "channel_mixer_pan_conflict" in ids
+    assert "channel_mixer_mute_conflict" in ids
+    assert "channel_mixer_solo_conflict" in ids
+    assert "template.source_direct_to_master" in ids
+    assert "template.source_bypass_signal_confirmed" in ids
+    assert "template.expected_bus_silent_signal_confirmed" in ids
+    assert "channel_active_mixer_silent" in ids
+    assert "direct_to_master_signal_confirmed" in ids
+    assert report["routing_check_level"] == 2
+    assert report["evidence_mode"] == "static_snapshot_plus_meter_snapshot"
+    assert report["playback_used"] is True
+    assert report["template_compliance_summary"]["profile_id"] == "psytrance"
+    assert report["details"]["template_status"]["profile_source"] == "manual_select"
 
 
 def test_main_rejects_non_loopback_host():
