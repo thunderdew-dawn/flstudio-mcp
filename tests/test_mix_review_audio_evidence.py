@@ -39,13 +39,13 @@ def test_mix_review_degrades_explicitly_without_audio(tmp_path) -> None:
         report = run_workflow(runtime, "mix_review", bridge=FakeBridge())
         assert report["metadata"]["evidence_level"] == 1
         assert report["metadata"]["evidence_level_label"] == "static_project_snapshot"
-        assert report["metadata"]["audio_evidence_status"] == "missing"
+        assert report["metadata"]["audio_evidence_status"] == "not_requested"
         assert report["metadata"]["automatic_fl_render"] is False
-        assert report["metadata"]["evidence_level_4"]["status"] == "planned"
-        assert report["coverage"]["status"] == "partial"
-        assert report["prerequisites"][-1]["id"] == "rendered_audio_features"
-        assert report["prerequisites"][-1]["status"] == "missing"
-        assert report["next_actions"][0]["action"] == "submit"
+        assert report["metadata"]["rendered_audio_evidence"]["status"] == "not_requested"
+        assert report["metadata"]["requires_manual_audio_export"] is False
+        assert report["coverage"]["status"] == "fresh"
+        assert "rendered_audio_features" not in report["coverage"]["missing"]
+        assert not any(row["id"] == "rendered_audio_features" for row in report["prerequisites"])
     finally:
         runtime.close()
 
@@ -65,14 +65,20 @@ def test_mix_review_uses_linked_rendered_master(tmp_path) -> None:
         workflow_targets=("mix_review",),
     )
     try:
-        report = run_workflow(runtime, "mix_review", bridge=bridge)
-        assert report["analysis_mode"] == "hybrid"
-        assert report["metadata"]["evidence_level"] == 2
-        assert report["metadata"]["evidence_level_label"] == "rendered_master_audio"
+        report = run_workflow(runtime, "mix_review", bridge=bridge, inputs={"level": 3})
+        assert report["analysis_mode"] == "static_snapshot"
+        assert report["metadata"]["mix_review_level"] == 3
+        assert report["metadata"]["evidence_level"] == 3
+        assert report["metadata"]["evidence_level_label"] == "rendered_master_evidence"
         assert report["metadata"]["audio_evidence_status"] == "available"
-        assert report["prerequisites"][-1]["status"] == "ok"
-        assert "rendered_audio_features" not in report["coverage"]["missing"]
+        assert report["metadata"]["rendered_audio_evidence"]["status"] == "available"
+        assert report["metadata"]["rendered_audio_evidence"]["mix_review_audio_findings"] is False
         assert any(
+            row["id"] == "rendered_audio_features" and row["status"] == "ok"
+            for row in report["prerequisites"]
+        )
+        assert "rendered_audio_features" not in report["coverage"]["missing"]
+        assert not any(
             finding["rule_id"] == "mix.rendered_master_features"
             for finding in report["findings"]
         )

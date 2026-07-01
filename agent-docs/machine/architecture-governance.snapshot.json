@@ -2,7 +2,7 @@
   "snapshot_version": 1,
   "as_of": "2026-07-01",
   "status": "governed",
-  "governance_note": "Updated for Routing Audit Level 1/Level 2 modes, template-compliance selection, MCP fl_review_routing mode/profile arguments, and Control Center Level 2 playback confirmation/fallback behavior. Persistent-write safety posture is unchanged; Level 2 uses transient playback controls in the UI and read-only meter snapshots.",
+  "governance_note": "Updated for Mix Review Level 1-4 evidence workflow, MCP fl_review_mix level/profile/capture arguments, Control Center Level 2 peak-watch controls, and Level 3/4 rendered evidence placeholders. Persistent-write safety posture is unchanged; Level 2 uses transient playback controls in the UI and read-only meter snapshots, while Level 3/4 require external analyzer evidence before audio conclusions.",
   "project": {
     "name": "fls-pilot",
     "package_version": "3.0.0b3",

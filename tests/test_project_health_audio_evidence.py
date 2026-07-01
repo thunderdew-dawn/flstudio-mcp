@@ -52,7 +52,7 @@ def test_project_health_aggregates_audio_observations_without_recomputing(tmp_pa
         mix = next(
             row for row in health["sections"] if row["workflow"] == "mix_review"
         )
-        assert any(
+        assert not any(
             finding["rule_id"] == "mix.rendered_master_features"
             for finding in mix["findings"]
         )

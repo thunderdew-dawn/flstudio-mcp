@@ -54,6 +54,13 @@ from .analysis import (
 from .analysis.live import LiveMeterPolicy
 from .connection import DEFAULT_TCP_HOST, DEFAULT_TCP_PORT, TCPBridge, fetch_all_pages
 from .music import mix_doctor as mix_review
+from .music.mix_review_levels import (
+    RENDERED_MASTER_EXPECTED_CHECKS,
+    RENDERED_STEM_EXPECTED_CHECKS,
+    STEM_ROLES,
+    MixReviewLevel,
+    normalize_mix_review_options,
+)
 from .rules import RuleCondition, RuleDefinition, evaluate_rules
 from .runtime.audio_worker import AUDIO_FEATURE_JOB_KIND, build_audio_job_request
 from .runtime.client import RuntimeClient
@@ -530,6 +537,71 @@ def _control_transport(state: ControlCenterState, body: dict[str, Any]) -> dict[
     finally:
         with contextlib.suppress(Exception):
             bridge.close()
+
+
+def _control_mix_watch(state: ControlCenterState, body: dict[str, Any]) -> dict[str, Any]:
+    """Run one read-only Mix Review peak-watch action for the local GUI."""
+
+    action = str(body.get("action") or "status").strip().lower()
+    params = dict(body.get("params") or {}) if isinstance(body.get("params"), dict) else {}
+    if action == "status":
+        return {"ok": True, "watch": mix_review.get_watcher().status()}
+    if action not in {"start", "stop"}:
+        return {"ok": False, "error": "action must be start, status, or stop"}
+
+    daemon_host, daemon_port = _selected_daemon_endpoint(state)
+    bridge = TCPBridge(daemon_host, daemon_port)
+    keep_bridge_open = False
+    try:
+        wait = getattr(bridge, "wait_for_heartbeat", None)
+        if callable(wait):
+            wait(timeout=1.0)
+        if not bool(getattr(bridge, "is_alive", lambda: False)()):
+            return {
+                "ok": False,
+                "state": "unavailable",
+                "error": "No fresh FL Studio controller heartbeat.",
+                "watch": mix_review.get_watcher().status(),
+            }
+        if action == "start":
+            interval_ms = max(50, min(int(params.get("interval_ms") or 150), 1000))
+            loop_seconds = max(8, min(int(params.get("loop_seconds") or 16), 60))
+            tracks = fetch_all_pages(bridge, protocol.CMD_MIXER_LIST_TRACKS, "tracks").get(
+                "tracks", []
+            )
+            indices = [row.get("i", row.get("index")) for row in tracks]
+            result = mix_review.get_watcher().start(
+                bridge,
+                indices,
+                interval_ms=interval_ms,
+                max_seconds=loop_seconds + 5,
+                close_on_finish=True,
+            )
+            keep_bridge_open = bool(result.get("ok"))
+            return {
+                "ok": bool(result.get("ok")),
+                "result": result,
+                "watch": mix_review.get_watcher().status(),
+                "loop_seconds": loop_seconds,
+            }
+        peaks, reads, elapsed = mix_review.get_watcher().stop()
+        return {
+            "ok": True,
+            "watch": mix_review.get_watcher().status(),
+            "peaks_captured": sum(1 for value in peaks.values() if value and value > 0),
+            "reads": reads,
+            "elapsed_s": round(elapsed, 1),
+        }
+    except Exception as exc:
+        return {
+            "ok": False,
+            "error": f"{type(exc).__name__}: {exc}",
+            "watch": mix_review.get_watcher().status(),
+        }
+    finally:
+        if not keep_bridge_open:
+            with contextlib.suppress(Exception):
+                bridge.close()
 
 
 def _ui_service_action(
@@ -1111,29 +1183,48 @@ LOW_END_METADATA_RULES = (
 def _collect_mix_snapshot(
     state: ControlCenterState,
     bridge: TCPBridge,
+    *,
+    options: Any | None = None,
 ) -> dict[str, Any]:
+    mix_options = normalize_mix_review_options(options) if options is not None else None
     static_snapshot = state.broker.get_static_project_snapshot(
         bridge,
         StaticSnapshotPolicy(),
     )
     watcher = mix_review.get_watcher()
-    live_window = state.broker.get_live_meter_window(
-        bridge,
-        policy=LiveMeterPolicy(require_playing=False, min_capture_seconds=30.0),
-        watcher_provider=watcher,
-        static_snapshot=static_snapshot,
-    )
+    live_window = None
+    if mix_options is None:
+        live_window = state.broker.get_live_meter_window(
+            bridge,
+            policy=LiveMeterPolicy(require_playing=False, min_capture_seconds=30.0),
+            watcher_provider=watcher,
+            static_snapshot=static_snapshot,
+        )
+    elif mix_options.level == MixReviewLevel.LIVE_WATCH:
+        live_window = state.broker.get_live_meter_window(
+            bridge,
+            policy=LiveMeterPolicy(
+                require_playing=False,
+                min_capture_seconds=float(mix_options.capture.loop_seconds),
+            ),
+            watcher_provider=watcher,
+            static_snapshot=static_snapshot,
+        )
     watch_peaks = (
         {int(track): peak for track, peak in live_window.track_meter_summaries.items()}
-        if live_window.freshness == "fresh"
+        if live_window and live_window.freshness == "fresh"
         else None
     )
-    return mix_review.gather_snapshot(
+    snapshot = mix_review.gather_snapshot(
         bridge,
         peaks_override=watch_peaks or None,
         live_window=live_window,
         static_snapshot=static_snapshot,
+        allow_live_meter=mix_options is None,
     )
+    if mix_options is not None:
+        snapshot["mix_review_options"] = mix_options.to_dict()
+    return snapshot
 
 
 def _run_mix_review(
@@ -1143,12 +1234,16 @@ def _run_mix_review(
     inputs: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Run the read-only Mix Review workflow for the Control Center UI."""
+    options = normalize_mix_review_options(inputs or {})
     user_decisions = _extract_user_decisions(inputs or {})
     if bridge_override is None and hasattr(state, "runtime_client"):
         try:
             return _runtime_client(state).run_workflow("mix_review", inputs=inputs or {})
         except Exception as exc:
-            report = _mix_review_unavailable_report(f"{type(exc).__name__}: {exc}")
+            report = _mix_review_unavailable_report(
+                f"{type(exc).__name__}: {exc}",
+                options=options,
+            )
             if user_decisions:
                 report["user_decisions"] = [dict(row) for row in user_decisions]
             analysis = _generic_analysis_report_from_legacy(report, "mix_review", "Mix Review")
@@ -1170,13 +1265,14 @@ def _run_mix_review(
                 "the connection."
             )
 
-        snapshot = _collect_mix_snapshot(state, bridge)
+        snapshot = _collect_mix_snapshot(state, bridge, options=options)
         snapshot["template_context"] = _resolve_template_context_for_snapshot(
             snapshot,
             user_decisions=user_decisions,
         )
         report_payload = _build_mix_review_report(
             snapshot,
+            options=options,
             user_decisions=user_decisions,
         )
         analysis_report = _generic_analysis_report_from_legacy(
@@ -1187,7 +1283,10 @@ def _run_mix_review(
         analysis_report = state.report_store.add_report(analysis_report)
         return analysis_report_for_control_center(analysis_report, report_payload)
     except Exception as exc:
-        report = _mix_review_unavailable_report(f"{type(exc).__name__}: {exc}")
+        report = _mix_review_unavailable_report(
+            f"{type(exc).__name__}: {exc}",
+            options=options,
+        )
         if user_decisions:
             report["user_decisions"] = [dict(row) for row in user_decisions]
         analysis_report = _generic_analysis_report_from_legacy(
@@ -2069,7 +2168,132 @@ def _low_end_finding_track_index(
     return track_index_by_name.get(str(track or "").strip().lower())
 
 
-def _mix_review_unavailable_report(message: str) -> dict[str, Any]:
+def _mix_review_level_payload(
+    options: Any,
+    *,
+    peak_source: str | None,
+    live_window: dict[str, Any] | None,
+    linked_master: dict[str, Any] | None = None,
+    linked_stems: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    mix_options = normalize_mix_review_options(options)
+    linked_stems = list(linked_stems or [])
+    requested = mix_options.requested_evidence_summary()
+    watch_status = _mix_watch_status_from_window(peak_source, live_window)
+    master_status = (
+        "available"
+        if linked_master
+        else str(requested["rendered_master"].get("status") or "missing")
+    )
+    stem_status = "available" if linked_stems else requested["rendered_stem_status"]
+    evidence_summary = {
+        "static_snapshot": "available",
+        "live_meter": "available" if peak_source not in {None, "", "none"} else "missing",
+        "watch_window": watch_status,
+        "rendered_master": master_status,
+        "rendered_stems": stem_status,
+    }
+    notes = []
+    limits = []
+    next_actions = []
+    if mix_options.level == MixReviewLevel.STATIC:
+        limits.append(
+            "This is a static project/mixer review. Audio-dependent checks require "
+            "Level 2, Level 3 or Level 4 evidence."
+        )
+    if mix_options.level == MixReviewLevel.LIVE_WATCH and watch_status != "available":
+        next_actions.append(
+            {
+                "type": "level_2_watch",
+                "action": "start_watch",
+                "label": (
+                    "Start Level 2 Watch at the loudest section for 8-60 seconds, "
+                    "then run Mix Review again."
+                ),
+            }
+        )
+        notes.append(
+            "No fresh watch evidence found. Start Level 2 Watch at the loudest "
+            "section, then run Mix Review again."
+        )
+    if mix_options.level >= MixReviewLevel.RENDERED_MASTER:
+        notes.append(
+            "Rendered master evidence is prepared, but audio feature analysis is "
+            "pending the external analyzer integration."
+        )
+        if master_status != "available":
+            next_actions.append(
+                {
+                    "type": "audio_evidence",
+                    "action": "submit_rendered_master",
+                    "label": "Prepare or link a manually bounced rendered master.",
+                    "workflow_target": "mix_review",
+                }
+            )
+    if mix_options.level >= MixReviewLevel.RENDERED_STEMS:
+        notes.append(
+            "Stem/bus evidence is prepared, but stem feature analysis is pending "
+            "the external analyzer integration."
+        )
+        if stem_status != "available":
+            next_actions.append(
+                {
+                    "type": "audio_evidence",
+                    "action": "submit_rendered_stems",
+                    "label": "Prepare or link stem/bus files by role.",
+                    "workflow_target": "mix_review",
+                }
+            )
+    return {
+        "mix_review": {
+            "level": int(mix_options.level),
+            "level_label": mix_options.level_label,
+            "genre_profile": mix_options.genre_profile,
+            "capture": mix_options.capture.to_dict(),
+            "evidence_summary": evidence_summary,
+            "audio_evidence_requests": requested,
+            "linked_rendered_master": linked_master,
+            "linked_rendered_stems": linked_stems,
+            "expected_checks": mix_options.expected_checks(),
+            "level_3_expected_checks": list(RENDERED_MASTER_EXPECTED_CHECKS),
+            "level_4_expected_checks": list(RENDERED_STEM_EXPECTED_CHECKS),
+            "stem_roles": list(STEM_ROLES),
+            "external_audio_analyzer": {
+                "required_for_level_3_4": mix_options.level >= MixReviewLevel.RENDERED_MASTER,
+                "available": False,
+                "status": "not_merged_yet",
+            },
+        },
+        "notes": notes,
+        "limits": limits,
+        "next_actions": next_actions,
+    }
+
+
+def _mix_watch_status_from_window(
+    peak_source: str | None,
+    live_window: dict[str, Any] | None,
+) -> str:
+    if peak_source == "watch":
+        return "available"
+    if isinstance(live_window, dict):
+        freshness = str(live_window.get("freshness") or "").strip().lower()
+        if freshness in {"fresh", "stale", "partial", "unavailable"}:
+            return "available" if freshness == "fresh" else freshness
+    return "missing"
+
+
+def _mix_review_unavailable_report(
+    message: str,
+    *,
+    options: Any | None = None,
+) -> dict[str, Any]:
+    mix_options = normalize_mix_review_options(options)
+    level_metadata = _mix_review_level_payload(
+        mix_options,
+        peak_source="none",
+        live_window=None,
+    )
     return {
         "ok": False,
         "state": "unavailable",
@@ -2099,6 +2323,8 @@ def _mix_review_unavailable_report(message: str) -> dict[str, Any]:
             "eq_coverage_pct": 0,
             "compressor_coverage_pct": 0,
             "low_end_findings": 0,
+            "mix_review_level": int(mix_options.level),
+            "level_label": mix_options.level_label,
         },
         "findings": [
             {
@@ -2122,8 +2348,14 @@ def _mix_review_unavailable_report(message: str) -> dict[str, Any]:
         },
         "details": {
             "tracks": [],
-            "notes": ["Mix Review is read-only and does not modify FL Studio project state."],
-            "limits": ["Level findings require playback or a recent Mix Review watch capture."],
+            "notes": [
+                "Mix Review is read-only and does not modify FL Studio project state.",
+                *level_metadata["notes"],
+            ],
+            "limits": [
+                "Level findings require playback or a recent Mix Review watch capture.",
+                *level_metadata["limits"],
+            ],
             "gather_errors": [],
             "low_end": {
                 "summary": {},
@@ -2133,6 +2365,14 @@ def _mix_review_unavailable_report(message: str) -> dict[str, Any]:
             },
             "kb_policy_refs": kb_policy.rule_refs(MIX_POLICY_RULE_IDS),
         },
+        "mix_review": level_metadata["mix_review"],
+        "next_actions": level_metadata["next_actions"],
+        "metadata": {
+            "mix_review_level": int(mix_options.level),
+            "level_label": mix_options.level_label,
+            "evidence_summary": level_metadata["mix_review"]["evidence_summary"],
+            "external_audio_analyzer": level_metadata["mix_review"]["external_audio_analyzer"],
+        },
         "safety": {"read_only": True, "project_changes": False},
     }
 
@@ -2140,9 +2380,11 @@ def _mix_review_unavailable_report(message: str) -> dict[str, Any]:
 def _build_mix_review_report(
     snapshot: dict[str, Any],
     *,
+    options: Any | None = None,
     user_decisions: tuple[dict[str, Any], ...] = (),
 ) -> dict[str, Any]:
-    diagnosis = mix_review.diagnose(snapshot)
+    mix_options = normalize_mix_review_options(options or snapshot.get("mix_review_options"))
+    diagnosis = mix_review.diagnose(snapshot, mix_review_level=mix_options.level)
     fix_plan = mix_review.plan_fixes(snapshot)
     gain_plan = mix_review.gain_stage_plan(snapshot)
     band_balance = mix_review.mix_band_balance(snapshot)
@@ -2188,6 +2430,15 @@ def _build_mix_review_report(
     low = sum(1 for row in findings if row["severity"] == "low")
     levels_valid = bool(snapshot.get("levels_valid"))
     master_peak = _as_float(master.get("peak_db")) if master else None
+    peak_source = (snapshot.get("peak_window") or {}).get("source")
+    live_window = (
+        snapshot.get("live_window") if isinstance(snapshot.get("live_window"), dict) else None
+    )
+    level_payload = _mix_review_level_payload(
+        mix_options,
+        peak_source=peak_source,
+        live_window=live_window,
+    )
     health_score = mix_health_score(
         high=high,
         medium=medium,
@@ -2213,12 +2464,13 @@ def _build_mix_review_report(
     master_headroom = -master_peak if master_peak is not None else None
 
     notes = [
+        *level_payload["notes"],
         *list(diagnosis.get("notes") or []),
         *list(fix_plan.get("notes") or []),
         *list(gain_plan.get("notes") or []),
         *list(low_end.get("notes") or []),
     ]
-    limits = []
+    limits = [*level_payload["limits"]]
     if not levels_valid:
         limits.append("Level findings require playback or a recent full-song watch capture.")
     limits.append("Tone balance is a rough name-and-peak estimate, not an output spectrum.")
@@ -2253,6 +2505,8 @@ def _build_mix_review_report(
             "eq_coverage_pct": _coverage_pct(eq_count, len(audible)),
             "compressor_coverage_pct": _coverage_pct(comp_count, len(audible)),
             "low_end_findings": len(low_end.get("findings") or []),
+            "mix_review_level": int(mix_options.level),
+            "level_label": mix_options.level_label,
         },
         "findings": findings,
         "proposals": proposals,
@@ -2282,15 +2536,37 @@ def _build_mix_review_report(
             },
             "kb_policy_refs": kb_policy.rule_refs(MIX_POLICY_RULE_IDS),
         },
+        "mix_review": level_payload["mix_review"],
+        "next_actions": level_payload["next_actions"],
         "interaction_requests": list(interaction_requests),
         "user_decisions": [dict(row) for row in user_decisions],
-        "metadata": provisional_score_metadata(pending_validation),
+        "metadata": {
+            **provisional_score_metadata(pending_validation),
+            "mix_review_level": int(mix_options.level),
+            "level_label": mix_options.level_label,
+            "genre_profile": mix_options.genre_profile,
+            "capture": mix_options.capture.to_dict(),
+            "evidence_summary": level_payload["mix_review"]["evidence_summary"],
+            "external_audio_analyzer": level_payload["mix_review"]["external_audio_analyzer"],
+            "expected_checks": level_payload["mix_review"]["expected_checks"],
+        },
         "safety": {"read_only": True, "project_changes": False},
     }
 
 
 def _mix_finding_summary(finding: dict[str, Any], *, index: int) -> dict[str, Any]:
     rule = str(finding.get("rule") or "finding")
+    metadata = {
+        key: finding[key]
+        for key in (
+            "evidence_type",
+            "proof_status",
+            "confidence",
+            "requires_audio_evidence_for_confirmation",
+            "mix_review_level",
+        )
+        if key in finding
+    }
     return {
         "id": f"{rule}_{index}",
         "severity": str(finding.get("severity") or "info"),
@@ -2301,6 +2577,13 @@ def _mix_finding_summary(finding: dict[str, Any], *, index: int) -> dict[str, An
         "evidence": finding.get("evidence"),
         "proposed_fix": finding.get("proposed_fix") or {},
         "kb_rule_ids": list(finding.get("kb_rule_ids") or []),
+        "evidence_type": metadata.get("evidence_type", "static_snapshot"),
+        "proof_status": metadata.get("proof_status", "provisional"),
+        "confidence": metadata.get("confidence", "unknown"),
+        "requires_audio_evidence_for_confirmation": bool(
+            metadata.get("requires_audio_evidence_for_confirmation")
+        ),
+        "metadata": metadata,
     }
 
 
@@ -2699,15 +2982,19 @@ def _generic_analysis_report_from_legacy(
         prereqs.append(Prerequisite("fl_session_alive", "missing"))
 
     if workflow == "mix_review":
+        metadata = dict(report.get("metadata") or {})
+        mix_level = _as_int(metadata.get("mix_review_level", summary.get("mix_review_level"))) or 1
+        evidence_summary = (
+            metadata.get("evidence_summary")
+            if isinstance(metadata.get("evidence_summary"), dict)
+            else {}
+        )
         has_level_evidence = evidence_mode in {
             "short_live_snapshot",
             "recent_live_meter_window",
             "sufficient_watch_window",
         }
-        if has_level_evidence:
-            available += 1
-        else:
-            missing.append("live_meter_window")
+        required = 1
         playback_status = (
             "ok"
             if evidence_mode == "short_live_snapshot"
@@ -2715,12 +3002,24 @@ def _generic_analysis_report_from_legacy(
             if evidence_mode in {"recent_live_meter_window", "sufficient_watch_window"}
             else "missing"
         )
+        if mix_level >= 2:
+            required += 1
+            if has_level_evidence:
+                available += 1
+            else:
+                missing.append("live_meter_window")
+        else:
+            playback_status = "skipped"
         prereqs.extend(
             (
                 Prerequisite("requires_playback", playback_status),
                 Prerequisite(
                     "requires_meter_window",
-                    "ok" if has_level_evidence else "missing",
+                    "ok"
+                    if has_level_evidence
+                    else "missing"
+                    if mix_level >= 2
+                    else "skipped",
                 ),
                 Prerequisite(
                     "requires_recent_watch",
@@ -2728,11 +3027,48 @@ def _generic_analysis_report_from_legacy(
                         "ok"
                         if evidence_mode in {"recent_live_meter_window", "sufficient_watch_window"}
                         else "missing"
+                        if mix_level >= 2
+                        else "skipped"
                     ),
                 ),
             )
         )
-        required = 2
+        if mix_level >= 3:
+            required += 1
+            rendered_master_status = str(evidence_summary.get("rendered_master") or "missing")
+            if rendered_master_status == "available":
+                available += 1
+            else:
+                missing.append("rendered_audio_features")
+            prereqs.append(
+                Prerequisite(
+                    "rendered_audio_features",
+                    "ok" if rendered_master_status == "available" else "missing",
+                    (
+                        "Rendered master analysis is pending the external analyzer integration."
+                        if rendered_master_status != "available"
+                        else None
+                    ),
+                )
+            )
+        if mix_level >= 4:
+            required += 1
+            rendered_stems_status = str(evidence_summary.get("rendered_stems") or "missing")
+            if rendered_stems_status == "available":
+                available += 1
+            else:
+                missing.append("rendered_stem_features")
+            prereqs.append(
+                Prerequisite(
+                    "rendered_stem_features",
+                    "ok" if rendered_stems_status == "available" else "missing",
+                    (
+                        "Stem/bus analysis is pending the external analyzer integration."
+                        if rendered_stems_status != "available"
+                        else None
+                    ),
+                )
+            )
     else:
         required = 1
 
@@ -2802,6 +3138,9 @@ def _generic_analysis_report_from_legacy(
         findings=findings,
         limitations=tuple(limitations),
         source_observations=tuple(details.get("source_observation_ids") or ()),
+        next_actions=tuple(
+            dict(row) for row in report.get("next_actions") or () if isinstance(row, dict)
+        ),
         interaction_requests=interaction_requests,
         user_decisions=user_decisions,
         safety=report.get("safety") or {"read_only": True},
@@ -4965,6 +5304,8 @@ def _handler_factory(state: ControlCenterState):
                 self._json(_confirm_step(state, step))
             elif self.path == "/api/audio-analysis":
                 self._json(_run_audio_analysis_action(state, body))
+            elif self.path == "/api/mix-watch":
+                self._json(_control_mix_watch(state, body))
             elif self.path == "/api/transport":
                 self._json(_control_transport(state, body))
             elif self.path == "/api/workflows/mix-review":

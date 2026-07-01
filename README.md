@@ -2,7 +2,7 @@
 
 ![version](https://img.shields.io/badge/version-v3.0.0--beta.3-blue)
 ![release](https://img.shields.io/badge/release-prerelease-orange)
-![branch](https://img.shields.io/badge/branch-v3%2Falpha-blue)
+![branch](https://img.shields.io/badge/branch-release%2Fv3--beta--3--prep-blue)
 ![status](https://img.shields.io/badge/status-public%20beta-yellow)
 [![CI](https://github.com/thunderdew-dawn/fls-pilot/actions/workflows/ci.yml/badge.svg)](https://github.com/thunderdew-dawn/fls-pilot/actions/workflows/ci.yml)
 ![license](https://img.shields.io/badge/license-MIT-green)
@@ -28,6 +28,9 @@ Built around a safety-first model: scan before changing, explain findings in pla
   and live meter context through MCP.
 - Guides production workflows such as Mix Review, Routing Audit, Project
   Organizer, Project Health, Plugin Chain Planning, and Composition.
+- Runs Mix Review with explicit evidence levels: Level 1 static project
+  metadata by default, Level 2 live peak watch, and Level 3/4 rendered
+  master/stem evidence placeholders for external analyzer integration.
 - Uses Knowledgebase-backed ranges and API limits instead of guessed DAW or
   plugin values.
 - Applies supported project edits only through snapshot, readback where
@@ -39,6 +42,13 @@ Built around a safety-first model: scan before changing, explain findings in pla
 ### Mix Review & Gain Staging
 
 [![Mix Review & Gain Staging](docs/assets/ai-apply-gain-staging-example.gif)](docs/assets/ai-apply-gain-staging-example.gif)
+
+Mix Review defaults to Level 1 static review and does not start playback. Level
+2 can watch 8-60 seconds of user-chosen playback for peak/headroom/clipping
+evidence. Level 3 and Level 4 expose rendered-master and stem/bus evidence
+requests, expected checks, and linked evidence status, but this beta does not
+claim LUFS, true-peak, masking, phase, or spectrum conclusions until the
+external audio analyzer path supplies those facts.
 
 ### Routing Audit
 

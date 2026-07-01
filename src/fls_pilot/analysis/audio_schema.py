@@ -8,6 +8,22 @@ from typing import Any
 
 AUDIO_FEATURES_CONTRACT_VERSION = "fls-pilot.audio-features.v1"
 AUDIO_ARTIFACT_CONTRACT_VERSION = "fls-pilot.audio-artifact.v1"
+AUDIO_FEATURES_PLACEHOLDER_STATUS = "pending_external_analyzer"
+AUDIO_FEATURE_PLACEHOLDER_KEYS = (
+    "peak_dbfs",
+    "true_peak_dbfs",
+    "integrated_lufs",
+    "short_term_lufs_max",
+    "rms_dbfs",
+    "crest_factor_db",
+    "clipping_count",
+    "stereo_correlation",
+    "mono_loss_db",
+    "band_energy",
+    "low_band_side_ratio",
+    "harshness_score",
+    "drop_break_energy_ratio",
+)
 
 
 @dataclass(frozen=True)
@@ -78,3 +94,20 @@ def validate_audio_features(value: Mapping[str, Any]) -> dict[str, Any]:
             f"expected {AUDIO_FEATURES_CONTRACT_VERSION!r}"
         )
     return payload
+
+
+def audio_features_placeholder(
+    *,
+    source_kind: str,
+    stem_role: str | None = None,
+    status: str = AUDIO_FEATURES_PLACEHOLDER_STATUS,
+) -> dict[str, Any]:
+    """Return an audio-features v1 placeholder with no computed DSP values."""
+    return {
+        "contract_version": AUDIO_FEATURES_CONTRACT_VERSION,
+        "artifact_type": "audio_features.v1",
+        "source_kind": str(source_kind or "rendered_master"),
+        "stem_role": str(stem_role) if stem_role else None,
+        "status": str(status or AUDIO_FEATURES_PLACEHOLDER_STATUS),
+        "features": {key: None for key in AUDIO_FEATURE_PLACEHOLDER_KEYS},
+    }

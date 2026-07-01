@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "profile_kind": "mix_review_profile",
+  "profile_id": "psytrance",
+  "title": "Psytrance Mix Review",
+  "profile_mode": "heuristic_guidance",
+  "confidence": "conservative_guidance",
+  "focus_areas": [
+    "kick_bass_relationship",
+    "low_end_mono_compatibility",
+    "sidechain_and_reference_routing",
+    "drop_break_energy_contrast",
+    "sub_side_energy"
+  ],
+  "evidence_policy": {
+    "static_profile_claims_audio_facts": false,
+    "requires_watch_for_peak_findings": true,
+    "requires_rendered_master_for_loudness": true,
+    "requires_stems_for_masking_phase": true
+  },
+  "level_1_guidance": [
+    "Check that kick, bass, drums, synths, FX, reference, and sidechain-control tracks are clearly named or routed.",
+    "Treat HPF, compression, and EQ-overlap findings as low-confidence heuristics unless stronger evidence exists.",
+    "Reference tracks and sidechain triggers should not feed the export path."
+  ],
+  "level_2_guidance": [
+    "Capture the main drop or loudest chorus for 8 to 60 seconds.",
+    "Use live/watch peaks for headroom, clipping risk, and hot-track fraction only."
+  ],
+  "level_3_expected_checks": [
+    "Integrated LUFS",
+    "Short-Term Loudness Max",
+    "True Peak",
+    "Clipping Count",
+    "Crest Factor",
+    "Stereo Correlation",
+    "Mono Loss",
+    "Sub/Low-Band Side Energy",
+    "Harshness Band",
+    "Drop-vs-Break Energy"
+  ],
+  "level_4_expected_checks": [
+    "Kick/Bass Masking",
+    "Kick Transient vs Bass Sustain",
+    "Low-End Phase",
+    "Stem Headroom",
+    "Bus Balance",
+    "Sub-Side Energy per Stem",
+    "FX/Reverb Low-End Leakage",
+    "Mono Compatibility per Low-End Stem"
+  ],
+  "notes": [
+    "This profile is guidance only. It must not create confirmed genre findings without matching evidence.",
+    "Actual rendered-master and stem analysis is pending external analyzer integration for Mix Review Level 3/4."
+  ],
+  "limitations": [
+    "Static profile guidance is heuristic; no static psytrance finding is treated as audio-confirmed.",
+    "Kick/bass masking, phase, loudness, and stereo conclusions require Level 3/4 evidence."
+  ]
+}

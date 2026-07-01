@@ -5,7 +5,24 @@ const state = {
   mixReview: {
     loading: false,
     report: null,
-    error: null
+    error: null,
+    options: {
+      level: 1,
+      genreProfile: "",
+      loopSeconds: 16,
+      playbackMode: "user_starts",
+      markerName: "",
+      masterPath: "",
+      stems: [
+        { role: "kick", path: "", status: "missing" },
+        { role: "bass", path: "", status: "missing" }
+      ]
+    },
+    watch: {
+      loading: false,
+      status: null,
+      error: null
+    }
   },
   lowEndAnalysis: {
     loading: false,
@@ -103,6 +120,52 @@ const ROUTING_LEVEL2_MARKER_NAMES = [
   "test loop",
   "routing test",
   "analysis loop"
+];
+
+const MIX_REVIEW_LEVEL_LABELS = {
+  1: "Level 1 - Static",
+  2: "Level 2 - Live Peak Watch",
+  3: "Level 3 - Rendered Master",
+  4: "Level 4 - Stem/Bus Evidence"
+};
+
+const MIX_LEVEL3_EXPECTED_CHECKS = [
+  "Integrated LUFS",
+  "Short-Term Loudness Max",
+  "True Peak",
+  "Clipping Count",
+  "Crest Factor",
+  "Stereo Correlation",
+  "Mono Loss",
+  "Band Energy",
+  "Harshness Band",
+  "Drop-vs-Break Energy"
+];
+
+const MIX_LEVEL4_EXPECTED_CHECKS = [
+  "Kick/Bass Masking",
+  "Kick Transient vs Bass Sustain",
+  "Low-End Phase",
+  "Stem Headroom",
+  "Bus Balance",
+  "Sub-Side Energy per Stem",
+  "FX/Reverb Low-End Leakage",
+  "Mono Compatibility per Low-End Stem"
+];
+
+const MIX_STEM_ROLES = [
+  "kick",
+  "bass",
+  "sub",
+  "drums_bus",
+  "percussion_bus",
+  "synth_bus",
+  "lead_bus",
+  "fx_bus",
+  "vocal_bus",
+  "premaster",
+  "master",
+  "other"
 ];
 
 // ─── Setup Doctor Layers ──────────────────────────────────────────────────────
@@ -2439,13 +2502,15 @@ function renderLivePlaybackMounts() {
 
 // ─── Mix Review ──────────────────────────────────────────────────────────────
 async function runMixReview() {
+  syncMixReviewOptionsFromDom();
   state.mixReview.loading = true;
   state.mixReview.error = null;
   renderMixReview();
   try {
+    const requestBody = workflowRunBody("mix_review", { inputs: mixReviewInputs() });
     const result = await api("/api/workflows/mix-review", {
       method: "POST",
-      body: JSON.stringify(workflowRunBody("mix_review"))
+      body: JSON.stringify(requestBody)
     });
     state.mixReview.report = result;
     syncWorkflowUserDecisions("mix_review", result);
@@ -2456,6 +2521,320 @@ async function runMixReview() {
     state.mixReview.error = `Mix Review failed: ${error.message}`;
   } finally {
     state.mixReview.loading = false;
+    renderMixReview();
+  }
+}
+
+function syncMixReviewOptionsFromDom() {
+  const options = state.mixReview.options;
+  const selected = document.querySelector?.("input[name='mix-review-level']:checked");
+  options.level = clampMixReviewLevel(Number(selected?.value || options.level || 1));
+  options.genreProfile = document.getElementById("mix-review-genre-profile")?.value || "";
+  options.loopSeconds = clampCaptureSeconds(
+    document.getElementById("mix-level2-loop-seconds")?.value || options.loopSeconds
+  );
+  options.playbackMode = document.getElementById("mix-level2-playback-mode")?.value || "user_starts";
+  const markerSelect = document.getElementById("mix-level2-marker");
+  options.markerName = markerSelect?.value || "";
+  options.masterPath = document.getElementById("mix-level3-master-path")?.value?.trim() || options.masterPath || "";
+  options.stems = mixStemRowsFromDom();
+  return options;
+}
+
+function mixReviewInputs() {
+  const options = state.mixReview.options;
+  const evidence = [];
+  if (options.level >= 3 || options.masterPath) {
+    evidence.push({
+      source_kind: "rendered_master",
+      path: options.masterPath || null,
+      status: options.masterPath ? "pending_external_analyzer" : "missing"
+    });
+  }
+  if (options.level >= 4) {
+    for (const stem of options.stems || []) {
+      evidence.push({
+        source_kind: "rendered_stem",
+        stem_role: stem.role || "other",
+        path: stem.path || null,
+        status: stem.path ? (stem.status || "pending_external_analyzer") : "missing"
+      });
+    }
+  }
+  return {
+    level: options.level,
+    genre_profile: options.genreProfile || null,
+    capture: {
+      loop_seconds: options.loopSeconds,
+      playback_mode: options.playbackMode || "user_starts",
+      marker_id: null,
+      marker_name: options.markerName || null,
+      requested_loudest_section: true
+    },
+    audio_evidence: evidence
+  };
+}
+
+function clampMixReviewLevel(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 1;
+  return Math.max(1, Math.min(4, Math.round(numeric)));
+}
+
+function clampCaptureSeconds(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 16;
+  return Math.max(8, Math.min(60, Math.round(numeric)));
+}
+
+function renderMixReviewOptions(report) {
+  const options = state.mixReview.options;
+  const level = clampMixReviewLevel(options.level);
+  (document.querySelectorAll?.("input[name='mix-review-level']") || []).forEach(input => {
+    input.checked = Number(input.value) === level;
+    const card = input.closest?.(".mix-review-level-card");
+    if (card) card.classList.toggle("is-selected", input.checked);
+  });
+  const levelBadge = document.getElementById("mix-review-level-badge");
+  if (levelBadge) {
+    levelBadge.textContent = `Level ${level}`;
+    levelBadge.className = `badge ${level >= 3 ? "badge-warn" : level === 2 ? "badge-ok" : "badge-neutral"}`;
+  }
+  const profile = document.getElementById("mix-review-genre-profile");
+  if (profile) profile.value = options.genreProfile || "";
+  const loop = document.getElementById("mix-level2-loop-seconds");
+  if (loop) loop.value = String(options.loopSeconds || 16);
+  const playback = document.getElementById("mix-level2-playback-mode");
+  if (playback) playback.value = options.playbackMode || "user_starts";
+  renderMixMarkerOptions();
+  renderMixLevelSections(level);
+  renderMixWatchStatus(report);
+  renderMixExpectedChecks("mix-level3-checks", MIX_LEVEL3_EXPECTED_CHECKS);
+  renderMixExpectedChecks("mix-level4-checks", MIX_LEVEL4_EXPECTED_CHECKS);
+  renderMixStemRoleTable();
+}
+
+function renderMixLevelSections(level) {
+  const level2 = document.getElementById("mix-level2-flow");
+  const level3 = document.getElementById("mix-level3-evidence");
+  const level4 = document.getElementById("mix-level4-evidence");
+  if (level2) level2.style.display = level === 2 ? "grid" : "none";
+  if (level3) level3.style.display = level >= 3 ? "grid" : "none";
+  if (level4) level4.style.display = level >= 4 ? "grid" : "none";
+}
+
+function renderMixMarkerOptions() {
+  const select = document.getElementById("mix-level2-marker");
+  if (!select) return;
+  const selected = state.mixReview.options.markerName || "";
+  select.innerHTML = "";
+  appendOption(select, "", "Loudest section / drop");
+  const markers = transportMarkers();
+  for (const marker of markers) {
+    const name = String(marker.name || marker.label || marker.title || "").trim();
+    if (!name) continue;
+    appendOption(select, name, name);
+  }
+  select.value = selected;
+}
+
+function appendOption(select, value, label) {
+  const option = document.createElement("option");
+  option.value = value;
+  option.textContent = label;
+  select.appendChild(option);
+}
+
+function transportMarkers() {
+  const markerPayload = getStatusReport()?.transport?.markers;
+  if (Array.isArray(markerPayload)) return markerPayload;
+  if (Array.isArray(markerPayload?.markers)) return markerPayload.markers;
+  return [];
+}
+
+function renderMixWatchStatus(report) {
+  const node = document.getElementById("mix-level2-watch-status");
+  if (!node) return;
+  const watch = state.mixReview.watch;
+  const summaryStatus = report?.mix_review?.evidence_summary?.watch_window;
+  if (watch.error) {
+    node.textContent = watch.error;
+    node.className = "mix-watch-status is-error";
+    return;
+  }
+  const status = watch.status || {};
+  if (status.running) {
+    node.textContent = `Watching ${status.tracks || 0} tracks for ${status.elapsed_s || 0}s.`;
+    node.className = "mix-watch-status is-live";
+    return;
+  }
+  if (summaryStatus === "available") {
+    node.textContent = "Fresh watch evidence is available.";
+    node.className = "mix-watch-status is-live";
+    return;
+  }
+  if (summaryStatus === "stale") {
+    node.textContent = "Watch evidence is stale.";
+    node.className = "mix-watch-status is-warn";
+    return;
+  }
+  node.textContent = "No fresh watch evidence yet.";
+  node.className = "mix-watch-status";
+}
+
+function renderMixExpectedChecks(id, checks) {
+  const node = document.getElementById(id);
+  if (!node) return;
+  node.innerHTML = "";
+  const title = document.createElement("strong");
+  title.textContent = "Expected checks";
+  node.appendChild(title);
+  const list = document.createElement("div");
+  list.className = "mix-check-chip-list";
+  for (const check of checks) {
+    const chip = document.createElement("span");
+    chip.textContent = check;
+    list.appendChild(chip);
+  }
+  node.appendChild(list);
+}
+
+function renderMixStemRoleTable() {
+  const table = document.getElementById("mix-stem-role-table");
+  if (!table) return;
+  table.innerHTML = "";
+  const rows = state.mixReview.options.stems || [];
+  rows.forEach((stem, index) => {
+    const row = document.createElement("div");
+    row.className = "mix-stem-row";
+    const role = document.createElement("select");
+    role.dataset.stemIndex = String(index);
+    role.dataset.stemField = "role";
+    for (const roleName of MIX_STEM_ROLES) appendOption(role, roleName, roleName.replaceAll("_", " "));
+    role.value = stem.role || "other";
+    const path = document.createElement("input");
+    path.type = "text";
+    path.placeholder = "/path/to/stem.wav";
+    path.value = stem.path || "";
+    path.dataset.stemIndex = String(index);
+    path.dataset.stemField = "path";
+    const status = document.createElement("span");
+    status.className = `badge ${stem.path ? "badge-warn" : "badge-neutral"}`;
+    status.textContent = stem.path ? "Pending analyzer" : "Missing";
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "ghost-button compact";
+    remove.textContent = "Remove";
+    remove.addEventListener("click", () => {
+      state.mixReview.options.stems = rows.filter((_, rowIndex) => rowIndex !== index);
+      renderMixStemRoleTable();
+    });
+    row.append(role, path, status, remove);
+    table.appendChild(row);
+  });
+}
+
+function mixStemRowsFromDom() {
+  const table = document.getElementById("mix-stem-role-table");
+  if (!table) return state.mixReview.options.stems || [];
+  const rows = [...table.querySelectorAll(".mix-stem-row")];
+  return rows.map(row => ({
+    role: row.querySelector("[data-stem-field='role']")?.value || "other",
+    path: row.querySelector("[data-stem-field='path']")?.value?.trim() || "",
+    status: row.querySelector("[data-stem-field='path']")?.value?.trim()
+      ? "pending_external_analyzer"
+      : "missing"
+  }));
+}
+
+async function mixWatchRequest(action, params = {}) {
+  const response = await api("/api/mix-watch", {
+    method: "POST",
+    body: JSON.stringify({ action, params })
+  });
+  if (response?.ok === false) throw new Error(response.error || "Mix watch failed.");
+  return response;
+}
+
+async function startMixLevel2Watch() {
+  syncMixReviewOptionsFromDom();
+  const options = state.mixReview.options;
+  state.mixReview.watch.loading = true;
+  state.mixReview.watch.error = null;
+  renderMixReview();
+  try {
+    const response = await mixWatchRequest("start", {
+      loop_seconds: options.loopSeconds,
+      interval_ms: 150
+    });
+    state.mixReview.watch.status = response.watch || null;
+    if (options.playbackMode === "gui_starts") {
+      await transportAction("play");
+    }
+    if (!window.__FLS_PILOT_TEST__ && typeof setTimeout === "function") {
+      setTimeout(() => stopMixLevel2Watch({ runReview: true }), options.loopSeconds * 1000);
+    }
+  } catch (error) {
+    state.mixReview.watch.error = error.message;
+  } finally {
+    state.mixReview.watch.loading = false;
+    renderMixReview();
+  }
+}
+
+async function stopMixLevel2Watch({ runReview = false } = {}) {
+  state.mixReview.watch.loading = true;
+  renderMixReview();
+  try {
+    const response = await mixWatchRequest("stop");
+    state.mixReview.watch.status = response.watch || null;
+    state.mixReview.watch.error = null;
+    if (runReview) await runMixReview();
+  } catch (error) {
+    state.mixReview.watch.error = error.message;
+  } finally {
+    state.mixReview.watch.loading = false;
+    renderMixReview();
+  }
+}
+
+async function prepareMixRenderedMasterEvidence() {
+  syncMixReviewOptionsFromDom();
+  const path = state.mixReview.options.masterPath;
+  if (!path) {
+    state.mixReview.error = "Rendered master path is required.";
+    renderMixReview();
+    return;
+  }
+  try {
+    const response = await audioAnalysisRequest("submit", { path });
+    state.audioAnalysis.activeJob = response.job;
+    state.mixReview.error = null;
+    await loadAudioAnalysisJobs();
+  } catch (error) {
+    state.mixReview.error = error.message;
+  } finally {
+    renderMixReview();
+  }
+}
+
+async function prepareMixStemEvidence() {
+  syncMixReviewOptionsFromDom();
+  const stems = (state.mixReview.options.stems || []).filter(stem => stem.path);
+  if (!stems.length) {
+    state.mixReview.error = "At least one stem path is required.";
+    renderMixReview();
+    return;
+  }
+  try {
+    for (const stem of stems) {
+      await audioAnalysisRequest("submit", { path: stem.path });
+    }
+    state.mixReview.error = null;
+    await loadAudioAnalysisJobs();
+  } catch (error) {
+    state.mixReview.error = error.message;
+  } finally {
     renderMixReview();
   }
 }
@@ -2471,6 +2850,7 @@ function renderMixReview() {
   setRunButton("run-mix-review", isLoading, "Run Mix Review");
 
   renderMixFeedback(report, error, isLoading);
+  renderMixReviewOptions(report);
   renderWorkflowInteractionMount("mix-review-interactions", "mix_review", report);
   renderMixSummary(report, isLoading);
   renderMixLevels(report);
@@ -2611,7 +2991,15 @@ function renderMixFindings(report) {
     title.textContent = safeString(finding.title);
     const detail = document.createElement("span");
     detail.textContent = mixFindingDetail(finding);
-    body.append(title, detail);
+    const badges = document.createElement("div");
+    badges.className = "mix-finding-badges";
+    for (const badgeData of mixFindingBadges(finding)) {
+      const badge = document.createElement("span");
+      badge.className = `badge ${badgeData.className}`;
+      badge.textContent = badgeData.label;
+      badges.appendChild(badge);
+    }
+    body.append(title, detail, badges);
 
     const severity = document.createElement("span");
     severity.className = "mix-finding-severity";
@@ -2620,6 +3008,28 @@ function renderMixFindings(report) {
     row.append(icon, body, severity);
     list.appendChild(row);
   }
+}
+
+function mixFindingBadges(finding) {
+  const evidence = String(finding.evidence_type || finding.metadata?.evidence_type || "").toLowerCase();
+  const proof = String(finding.proof_status || finding.metadata?.proof_status || "").toLowerCase();
+  const confidence = String(finding.confidence || finding.metadata?.confidence || "").toLowerCase();
+  const out = [];
+  const evidenceLabels = {
+    static_snapshot: "Static",
+    live_meter: "Live",
+    watch_window: "Watch",
+    rendered_master: "Rendered Pending",
+    rendered_stem: "Stem Pending",
+    manual_check: "Manual Check"
+  };
+  if (evidenceLabels[evidence]) out.push({ label: evidenceLabels[evidence], className: "badge-neutral" });
+  if (proof === "heuristic") out.push({ label: "Heuristic", className: "badge-warn" });
+  if (proof === "provisional") out.push({ label: "Provisional", className: "badge-warn" });
+  if (proof === "evidence_backed") out.push({ label: "Evidence-backed", className: "badge-ok" });
+  if (proof === "pending_external_analyzer") out.push({ label: "External Analyzer Required", className: "badge-warn" });
+  if (confidence) out.push({ label: `Confidence ${confidence}`, className: "badge-neutral" });
+  return out;
 }
 
 function renderMixProposals(report) {
@@ -5765,6 +6175,56 @@ function wireEvents() {
   const mixRefreshButton = document.getElementById("mix-refresh-status");
   if (mixRefreshButton) mixRefreshButton.addEventListener("click", refresh);
 
+  document.querySelectorAll("input[name='mix-review-level']").forEach(input => {
+    input.addEventListener("change", () => {
+      syncMixReviewOptionsFromDom();
+      renderMixReview();
+    });
+  });
+
+  const mixProfile = document.getElementById("mix-review-genre-profile");
+  if (mixProfile) mixProfile.addEventListener("change", () => {
+    syncMixReviewOptionsFromDom();
+    renderMixReview();
+  });
+
+  const mixLoopSeconds = document.getElementById("mix-level2-loop-seconds");
+  if (mixLoopSeconds) mixLoopSeconds.addEventListener("change", () => {
+    syncMixReviewOptionsFromDom();
+    renderMixReview();
+  });
+
+  const mixPlaybackMode = document.getElementById("mix-level2-playback-mode");
+  if (mixPlaybackMode) mixPlaybackMode.addEventListener("change", () => {
+    syncMixReviewOptionsFromDom();
+    renderMixReview();
+  });
+
+  const mixMarker = document.getElementById("mix-level2-marker");
+  if (mixMarker) mixMarker.addEventListener("change", () => {
+    syncMixReviewOptionsFromDom();
+    renderMixReview();
+  });
+
+  const startMixWatch = document.getElementById("mix-level2-start-watch");
+  if (startMixWatch) startMixWatch.addEventListener("click", startMixLevel2Watch);
+
+  const stopMixWatch = document.getElementById("mix-level2-stop-watch");
+  if (stopMixWatch) stopMixWatch.addEventListener("click", () => stopMixLevel2Watch({ runReview: true }));
+
+  const prepareMaster = document.getElementById("mix-level3-submit-master");
+  if (prepareMaster) prepareMaster.addEventListener("click", prepareMixRenderedMasterEvidence);
+
+  const addStemRow = document.getElementById("mix-add-stem-row");
+  if (addStemRow) addStemRow.addEventListener("click", () => {
+    syncMixReviewOptionsFromDom();
+    state.mixReview.options.stems.push({ role: "other", path: "", status: "missing" });
+    renderMixStemRoleTable();
+  });
+
+  const submitStemEvidence = document.getElementById("mix-submit-stem-evidence");
+  if (submitStemEvidence) submitStemEvidence.addEventListener("click", prepareMixStemEvidence);
+
   const runLowEndButton = document.getElementById("run-low-end-analysis");
   if (runLowEndButton) runLowEndButton.addEventListener("click", runLowEndAnalysis);
 
@@ -5875,6 +6335,11 @@ window.flsPilotControlCenter = {
   refreshAudioAnalysisJob,
   cancelAudioAnalysisJob,
   linkAudioAnalysisResult,
+  startMixLevel2Watch,
+  stopMixLevel2Watch,
+  prepareMixRenderedMasterEvidence,
+  prepareMixStemEvidence,
+  mixReviewInputs,
   runRuntimeProductWorkflow,
   renderMixReview,
   renderLowEndAnalysis,

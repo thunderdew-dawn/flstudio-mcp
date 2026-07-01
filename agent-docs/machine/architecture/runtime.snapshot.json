@@ -4,8 +4,8 @@
   "title": "Runtime host, daemon RPC, report store, workflow execution and transport assumptions",
   "source_snapshot": "agent-docs/machine/architecture-analysis.snapshot.json",
   "source_snapshot_sha256": "ff0d38588b91510a3073e81d885de38f9116cddfbcd95686cbf11c28a6db8d7f",
-  "generated_at": "2026-06-19",
-  "note": "Generated scoped slice of the full static architecture analysis. Load this file only when the coding task matches its scope.",
+  "generated_at": "2026-07-01",
+  "note": "Scoped slice refreshed for Mix Review Level 1-4 runtime workflow behavior; full static architecture analysis was not regenerated.",
   "load_when": [
     "daemon, RuntimeCore, runtime RPC, report store, or workflow execution changes",
     "bridge/session runtime ownership, freshness, invalidation, or observation state changes",
@@ -146,6 +146,16 @@
                 "evidence_mode": "live_runtime",
                 "invalidates_on": [],
                 "ttl_seconds": 2
+              },
+              {
+                "id": "rendered_stem_features",
+                "observation_kind": "rendered_stem_features",
+                "required": false,
+                "evidence_mode": "rendered_audio",
+                "invalidates_on": [
+                  "project_identity_change",
+                  "audio_source_hash_changed"
+                ]
               }
             ]
           },
@@ -154,11 +164,36 @@
           "group": "Project Review",
           "endpoint": "/api/workflows/mix-review",
           "action_label": "Run Mix Review",
-          "safety_note": "Read-only mixer review. Static execution remains available; audio-backed conclusions require a linked rendered master.",
-          "supported_next_actions": [],
-          "manual_only_actions": [],
-          "forbidden_actions": [],
-          "metadata": {}
+          "safety_note": "Read-only mixer review. Level 1 is static; Level 2 uses optional transient playback/watch evidence; Level 3/4 audio evidence is prepared for external analyzer integration.",
+          "supported_next_actions": [
+            "run_static_review",
+            "start_level_2_watch",
+            "link_rendered_master_evidence",
+            "link_stem_bus_evidence"
+          ],
+          "manual_only_actions": [
+            "choose_loudest_section",
+            "manual_audio_render",
+            "manual_stem_export"
+          ],
+          "forbidden_actions": [
+            "automatic_render",
+            "plugin_loading",
+            "playlist_clip_editing"
+          ],
+          "metadata": {
+            "mix_review_levels": [
+              "level_1_static",
+              "level_2_live_peak_watch",
+              "level_3_rendered_master_placeholder",
+              "level_4_stem_bus_placeholder"
+            ],
+            "external_audio_analyzer_status": "not_merged_yet",
+            "genre_profiles": [
+              "default",
+              "psytrance"
+            ]
+          }
         },
         {
           "id": "routing_audit",

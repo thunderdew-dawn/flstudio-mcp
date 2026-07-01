@@ -9,7 +9,9 @@ from .audio_features import (
 from .audio_schema import (
     AUDIO_ARTIFACT_CONTRACT_VERSION,
     AUDIO_FEATURES_CONTRACT_VERSION,
+    AUDIO_FEATURES_PLACEHOLDER_STATUS,
     AudioArtifactManifest,
+    audio_features_placeholder,
     validate_audio_features,
 )
 from .broker import AnalysisBroker, StaticProjectSnapshot, StaticSnapshotPolicy
@@ -91,6 +93,7 @@ __all__ = [
     "ACCEPTED_ANALYSIS_REPORT_VERSIONS",
     "AUDIO_ARTIFACT_CONTRACT_VERSION",
     "AUDIO_FEATURES_CONTRACT_VERSION",
+    "AUDIO_FEATURES_PLACEHOLDER_STATUS",
     "COMMON_OBSERVATIONS",
     "AnalysisBroker",
     "AudioArtifactManifest",
@@ -127,6 +130,7 @@ __all__ = [
     "WorkflowRequirement",
     "WorkflowRequirementSet",
     "analysis_report_for_control_center",
+    "audio_features_placeholder",
     "serialize_analysis_report",
     "channel_entity_id",
     "clamp_score",

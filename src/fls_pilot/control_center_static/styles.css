@@ -1292,6 +1292,153 @@ details[open] .raw-report-summary::before { content: "▼ Raw"; }
   border-color: rgba(255, 95, 114, 0.34);
 }
 
+.mix-review-options-panel {
+  margin-bottom: 16px;
+}
+
+.mix-review-level-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  padding: 16px 20px 10px;
+}
+
+.mix-review-level-card {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 8px 10px;
+  align-items: start;
+  min-height: 110px;
+  padding: 12px;
+  border: 1px solid rgba(130, 180, 245, 0.16);
+  border-radius: 8px;
+  background: rgba(12, 27, 50, 0.72);
+  cursor: pointer;
+}
+
+.mix-review-level-card.is-selected {
+  border-color: rgba(39, 215, 255, 0.62);
+  background: rgba(39, 215, 255, 0.12);
+}
+
+.mix-review-level-card input {
+  margin: 2px 0 0;
+}
+
+.mix-review-level-card strong,
+.mix-review-level-card span {
+  grid-column: 2;
+}
+
+.mix-review-level-card strong {
+  color: #e8f4ff;
+  font-size: 13px;
+}
+
+.mix-review-level-card span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.mix-review-profile-row,
+.mix-level2-flow,
+.mix-rendered-evidence {
+  padding: 0 20px 16px;
+}
+
+.mix-review-profile-row label,
+.mix-evidence-controls label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.mix-review-profile-row select,
+.mix-evidence-controls input,
+.mix-evidence-controls select,
+.mix-stem-row input,
+.mix-stem-row select {
+  min-height: 38px;
+  width: 100%;
+  color: var(--text);
+  background: rgba(7, 16, 31, 0.82);
+  border: 1px solid rgba(130, 180, 245, 0.2);
+  border-radius: 8px;
+  padding: 0 10px;
+}
+
+.mix-evidence-controls {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  align-items: end;
+}
+
+.mix-evidence-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-top: 12px;
+}
+
+.mix-watch-status {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.mix-watch-status.is-live {
+  color: #70fba0;
+}
+
+.mix-watch-status.is-warn {
+  color: #ffcf79;
+}
+
+.mix-watch-status.is-error {
+  color: #ffb0ba;
+}
+
+.mix-expected-checks {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.mix-check-chip-list,
+.mix-finding-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.mix-check-chip-list span {
+  padding: 4px 8px;
+  color: #dbe9ff;
+  background: rgba(130, 180, 245, 0.1);
+  border: 1px solid rgba(130, 180, 245, 0.16);
+  border-radius: 8px;
+  font-size: 11px;
+}
+
+.mix-stem-role-table {
+  display: grid;
+  gap: 8px;
+}
+
+.mix-stem-row {
+  display: grid;
+  grid-template-columns: 180px minmax(180px, 1fr) 140px auto;
+  gap: 10px;
+  align-items: center;
+}
+
 .mix-review-layout {
   display: grid;
   grid-template-columns: minmax(520px, 1.42fr) minmax(320px, 0.92fr);

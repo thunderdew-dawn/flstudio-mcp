@@ -106,6 +106,30 @@ def test_control_transport_allows_only_transient_marker_navigation(monkeypatch):
     assert denied["ok"] is False
 
 
+def test_control_mix_watch_status_is_bridge_free(monkeypatch):
+    def fail_bridge(*args, **kwargs):  # noqa: ANN002, ANN003, ANN202
+        raise AssertionError("status must not open a bridge")
+
+    monkeypatch.setattr(control_center, "TCPBridge", fail_bridge)
+
+    payload = control_center._control_mix_watch(_state(), {"action": "status"})
+
+    assert payload["ok"] is True
+    assert "watch" in payload
+
+
+def test_control_mix_watch_rejects_unknown_action_before_bridge(monkeypatch):
+    def fail_bridge(*args, **kwargs):  # noqa: ANN002, ANN003, ANN202
+        raise AssertionError("invalid actions must not open a bridge")
+
+    monkeypatch.setattr(control_center, "TCPBridge", fail_bridge)
+
+    payload = control_center._control_mix_watch(_state(), {"action": "render"})
+
+    assert payload["ok"] is False
+    assert "action must be" in payload["error"]
+
+
 def test_workflow_inputs_from_body_normalizes_user_decisions() -> None:
     inputs = control_center._workflow_inputs_from_body(
         {
@@ -1180,7 +1204,7 @@ def test_mix_review_user_decision_validates_heuristic_findings():
     assert finding["metadata"]["user_intent"] == "intentional"
 
 
-def test_build_mix_review_report_surfaces_playback_limitations_when_stopped():
+def test_build_mix_review_report_skips_playback_requirement_for_default_level_1():
     snapshot = {
         "playing": False,
         "levels_valid": False,
@@ -1211,10 +1235,23 @@ def test_build_mix_review_report_surfaces_playback_limitations_when_stopped():
     assert report["ok"] is True
     prerequisites = report.get("prerequisites", [])
     assert any(
-        req["id"] == "requires_playback"
-        and req["status"] in ("missing", "unavailable", "partial", "failed")
+        req["id"] == "requires_playback" and req["status"] == "skipped"
         for req in prerequisites
     )
+    assert "live_meter_window" not in report["coverage"]["missing"]
+
+    level_2_report = control_center._build_mix_review_report(snapshot, options={"level": 2})
+    level_2_analysis = control_center._generic_analysis_report_from_legacy(
+        level_2_report, "mix_review", "Mix Review"
+    )
+    level_2_payload = control_center.analysis_report_for_control_center(
+        level_2_analysis, level_2_report
+    )
+    assert any(
+        req["id"] == "requires_playback" and req["status"] == "missing"
+        for req in level_2_payload.get("prerequisites", [])
+    )
+    assert "live_meter_window" in level_2_payload["coverage"]["missing"]
 
 
 def test_direct_live_snapshot_remains_valid_without_watch_evidence():

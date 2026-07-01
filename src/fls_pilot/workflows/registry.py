@@ -280,15 +280,47 @@ DEFAULT_WORKFLOW_REGISTRY = WorkflowRegistry(
                         ttl_seconds=2,
                         evidence_mode="live_runtime",
                     ),
+                    requirement(
+                        "rendered_stem_features",
+                        required=False,
+                        evidence_mode="rendered_audio",
+                        invalidates_on=(
+                            "project_identity_change",
+                            "audio_source_hash_changed",
+                        ),
+                    ),
                 ),
             ),
             panel_id="producer_mix_review",
             endpoint="/api/workflows/mix-review",
             action_label="Run Mix Review",
             safety_note=(
-                "Read-only mixer review. Static execution remains available; "
-                "audio-backed conclusions require a linked rendered master."
+                "Read-only mixer review. Level 1 is static; Level 2 uses optional "
+                "transient playback/watch evidence; Level 3/4 audio evidence is "
+                "prepared for external analyzer integration."
             ),
+            supported_next_actions=(
+                "run_static_review",
+                "start_level_2_watch",
+                "link_rendered_master_evidence",
+                "link_stem_bus_evidence",
+            ),
+            manual_only_actions=(
+                "choose_loudest_section",
+                "manual_audio_render",
+                "manual_stem_export",
+            ),
+            forbidden_actions=("automatic_render", "plugin_loading", "playlist_clip_editing"),
+            metadata={
+                "mix_review_levels": [
+                    "level_1_static",
+                    "level_2_live_peak_watch",
+                    "level_3_rendered_master_placeholder",
+                    "level_4_stem_bus_placeholder",
+                ],
+                "external_audio_analyzer_status": "not_merged_yet",
+                "genre_profiles": ["default", "psytrance"],
+            },
         ),
         _declaration(
             "routing_audit",
