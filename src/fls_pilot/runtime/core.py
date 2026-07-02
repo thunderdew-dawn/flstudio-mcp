@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import threading
 from collections.abc import Callable
 from pathlib import Path
@@ -194,3 +195,22 @@ class RuntimeCore:
             )
             self.project_contexts.invalidate(event)
             return {"observations": observations, "reports": reports}
+
+
+def resolve_job_worker_concurrency(
+    *,
+    env_var: str = "FLS_PILOT_JOB_WORKERS",
+    default: int = 1,
+) -> int:
+    """Resolve audio job worker concurrency with clamp + validation.
+
+    FL Studio bridge calls should stay serialized through existing runtime
+    synchronization (e.g., bridge and runtime locks), so this setting only
+    controls the job worker pool width.
+    """
+    raw = os.environ.get(env_var, str(default)).strip()
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return max(1, min(4, default))
+    return max(1, min(4, value))

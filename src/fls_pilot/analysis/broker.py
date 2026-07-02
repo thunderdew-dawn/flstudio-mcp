@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import time
 from dataclasses import dataclass, field, replace
 from typing import Any
 
@@ -28,17 +29,39 @@ from .live import (
 )
 from .observations import Observation, ObservationStore
 from .schema import Coverage
+from ..profile import profile
+
+
+DEFAULT_STATIC_TTL_SECONDS = 60.0
+DEFAULT_CONNECTION_TTL_SECONDS = 2.0
+DEFAULT_PAGE_ATTEMPTS = 1
 
 
 @dataclass(frozen=True)
 class StaticSnapshotPolicy:
-    ttl_seconds: float = 60.0
-    connection_ttl_seconds: float = 2.0
+    ttl_seconds: float = DEFAULT_STATIC_TTL_SECONDS
+    connection_ttl_seconds: float = DEFAULT_CONNECTION_TTL_SECONDS
     force_refresh: bool = False
     include_patterns: bool = True
     include_playlist: bool = True
     page_timeout: float | None = None
-    page_attempts: int = 1
+    page_attempts: int = DEFAULT_PAGE_ATTEMPTS
+
+
+# Canonical snapshot profiles.
+SNAPSHOT_POLICY_FULL = StaticSnapshotPolicy()
+SNAPSHOT_POLICY_ROUTING_ONLY = StaticSnapshotPolicy(
+    include_patterns=False,
+    include_playlist=False,
+)
+NO_PATTERN_SNAPSHOT_POLICY = StaticSnapshotPolicy(include_patterns=False)
+NO_PLAYLIST_SNAPSHOT_POLICY = StaticSnapshotPolicy(include_playlist=False)
+SNAPSHOT_POLICY_NO_PATTERN = NO_PATTERN_SNAPSHOT_POLICY
+SNAPSHOT_POLICY_NO_PLAYLIST = NO_PLAYLIST_SNAPSHOT_POLICY
+
+# Backward-compatible public names.
+FULL_STATIC_SNAPSHOT_POLICY = SNAPSHOT_POLICY_FULL
+ROUTING_ONLY_SNAPSHOT_POLICY = SNAPSHOT_POLICY_ROUTING_ONLY
 
 
 @dataclass(frozen=True)
@@ -127,20 +150,43 @@ class AnalysisBroker:
         bridge: Any,
         policy: StaticSnapshotPolicy | None = None,
     ) -> StaticProjectSnapshot:
-        policy = policy or StaticSnapshotPolicy()
+        policy = policy or FULL_STATIC_SNAPSHOT_POLICY
         if not policy.force_refresh:
             cached = self.observation_store.latest("static_project_snapshot")
             if cached is not None and isinstance(cached.payload, dict):
                 snapshot = StaticProjectSnapshot.from_dict(cached.payload)
-                current_state = read_project_state(bridge)
-                current_state_fingerprint = project_fingerprint(current_state)
-                cached_state_fingerprint = snapshot.metadata.get("project_state_fingerprint")
-                if (
-                    _snapshot_satisfies_policy(snapshot, policy)
-                    and cached_state_fingerprint == current_state_fingerprint
+                with profile(
+                    "analysis.broker.snapshot_cache_check",
+                    policy_include_patterns=policy.include_patterns,
+                    policy_include_playlist=policy.include_playlist,
+                    policy_ttl_seconds=policy.ttl_seconds,
                 ):
-                    return replace(snapshot, observation_id=cached.observation_id)
-        return self._collect_static_project_snapshot(bridge, policy)
+                    current_state = read_project_state(bridge)
+                    current_state_fingerprint = project_fingerprint(current_state)
+                    cached_state_fingerprint = snapshot.metadata.get(
+                        "project_state_fingerprint"
+                    )
+                    if (
+                        _snapshot_satisfies_policy(snapshot.metadata, policy)
+                        and cached_state_fingerprint == current_state_fingerprint
+                    ):
+                        return replace(
+                            snapshot,
+                            observation_id=cached.observation_id,
+                            metadata=_snapshot_cache_metadata(
+                                snapshot.metadata,
+                                policy=policy,
+                                cache_hit=True,
+                                cached_at=float(cached.created_at or 0.0),
+                            ),
+                        )
+        with profile(
+            "analysis.broker.snapshot_collect",
+            policy_include_patterns=policy.include_patterns,
+            policy_include_playlist=policy.include_playlist,
+            policy_ttl_seconds=policy.ttl_seconds,
+        ):
+            return self._collect_static_project_snapshot(bridge, policy)
 
     def get_live_meter_window(
         self,
@@ -321,6 +367,12 @@ class AnalysisBroker:
                 "project_state_fingerprint": project_fingerprint(project_state),
             },
         )
+        snapshot_metadata = _snapshot_cache_metadata(
+            snapshot.metadata,
+            policy=policy,
+            cache_hit=False,
+            cached_at=float(snapshot.created_at or 0.0),
+        )
         snapshot_observation = self.observation_store.record(
             kind="static_project_snapshot",
             payload=snapshot.to_dict(),
@@ -331,7 +383,11 @@ class AnalysisBroker:
             invalidates_on=STATIC_INVALIDATION_EVENTS,
             errors=errors,
         )
-        return replace(snapshot, observation_id=snapshot_observation.observation_id)
+        return replace(
+            snapshot,
+            observation_id=snapshot_observation.observation_id,
+            metadata=snapshot_metadata,
+        )
 
     def _record_session_alive(
         self,
@@ -367,6 +423,7 @@ class AnalysisBroker:
             invalidates_on=("fl_disconnect",),
             errors=errors,
         )
+
     def _record_project_state(
         self,
         bridge: Any,
@@ -526,12 +583,49 @@ def _int_or_len(value: Any, rows: tuple[dict[str, Any], ...]) -> int:
 
 
 def _snapshot_satisfies_policy(
-    snapshot: StaticProjectSnapshot,
+    metadata: dict[str, Any],
     policy: StaticSnapshotPolicy,
 ) -> bool:
-    cached_policy = snapshot.metadata.get("policy")
+    cached_policy = metadata.get("policy")
     if not isinstance(cached_policy, dict):
         return False
-    if policy.include_patterns and not bool(cached_policy.get("include_patterns")):
+    if (
+        policy.include_patterns
+        and not bool(cached_policy.get("include_patterns", False))
+    ):
         return False
-    return not (policy.include_playlist and not bool(cached_policy.get("include_playlist")))
+    if policy.include_playlist and not bool(
+        cached_policy.get("include_playlist", False)
+    ):
+        return False
+    return True
+
+
+def _snapshot_cache_metadata(
+    metadata: dict[str, Any],
+    *,
+    policy: StaticSnapshotPolicy,
+    cache_hit: bool,
+    cached_at: float,
+) -> dict[str, Any]:
+    now = time.time()
+    cached_metadata = dict(metadata)
+    cached_metadata.update(
+        {
+            "cache_hit": bool(cache_hit),
+            "cache_age_seconds": max(0.0, now - cached_at),
+            "policy": {
+                "ttl_seconds": policy.ttl_seconds,
+                "include_patterns": policy.include_patterns,
+                "include_playlist": policy.include_playlist,
+                "force_refresh": policy.force_refresh,
+                "page_timeout": policy.page_timeout,
+                "page_attempts": policy.page_attempts,
+            },
+            "policy_check_passed": _snapshot_satisfies_policy(
+                metadata,
+                policy,
+            ),
+        }
+    )
+    return cached_metadata

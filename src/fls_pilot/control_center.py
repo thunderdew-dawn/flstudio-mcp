@@ -7,6 +7,7 @@ import contextlib
 import ipaddress
 import json
 import os
+from copy import deepcopy
 import platform
 import socket
 import subprocess
@@ -253,6 +254,20 @@ class ManagedProcess:
         }
 
 
+def _initial_status_report() -> dict[str, Any]:
+    try:
+        return collect_status_report(offline=True, mode="quick")
+    except Exception as exc:
+        return {
+            "bridge": {
+                "state": "unknown",
+                "error": f"{type(exc).__name__}: {exc}",
+            },
+            "project": {},
+            "status_mode": "quick",
+        }
+
+
 class ControlCenterState:
     def __init__(
         self,
@@ -281,6 +296,9 @@ class ControlCenterState:
         self.checkpoints: dict[str, dict[str, Any]] = {}
         self.processes: dict[str, ManagedProcess] = {}
         self.last_findings: list[doctor.Finding] = []
+        self.last_diagnostic_at: str | None = None
+        self.diagnostics_available: bool = False
+        self.last_status_report: dict[str, Any] = _initial_status_report()
         self.daemon_autostart_attempted = False
         self.daemon_autostart: dict[str, Any] = {
             "state": "pending",
@@ -302,68 +320,130 @@ class ControlCenterState:
             self.processes.clear()
 
 
-def collect_status(state: ControlCenterState, *, refresh: bool = True) -> dict[str, Any]:
+def collect_status(
+    state: ControlCenterState,
+    *,
+    refresh: bool = True,
+    status_mode: str = "full",
+) -> dict[str, Any]:
     """Collect Control Center status without mutating FL Studio project state."""
+    if status_mode not in {"full", "quick", "diagnose"}:
+        status_mode = "full"
+    perform_diagnostics = refresh or status_mode == "diagnose"
+    cached_status_report: dict[str, Any] | None = None
+
     with state.lock:
         daemon_host, daemon_port = _selected_daemon_endpoint(state)
-        if refresh or not state.last_findings:
-            state.last_findings = _run_doctor_checks(state, daemon_host, daemon_port)
-            autostart = _auto_start_daemon_if_ready(state, state.last_findings)
-            if autostart.get("rerun_checks"):
-                daemon_host, daemon_port = _selected_daemon_endpoint(state)
-                state.last_findings = _run_doctor_checks(state, daemon_host, daemon_port)
-        findings = [finding.to_dict() for finding in state.last_findings]
-        groups = _group_findings(state.last_findings)
-        readiness = _readiness(state.last_findings, state.checkpoints)
-        _sync_sse_probe_state(state, refresh=refresh)
-        process_state = _process_status(state)
-        ports = _port_state(state)
+        findings = list(state.last_findings)
+        last_diagnostic_at = state.last_diagnostic_at
+        diagnostics_available = state.diagnostics_available
+        workflow_registry = state.workflow_registry
+        if status_mode == "quick" and not refresh:
+            cached_status_report = state.last_status_report
+            if not isinstance(cached_status_report, dict):
+                cached_status_report = None
+            else:
+                cached_status_report = deepcopy(cached_status_report)
+
+    if perform_diagnostics:
+        findings = _run_doctor_checks(state, daemon_host, daemon_port)
+        autostart = _auto_start_daemon_if_ready(state, findings)
+        if autostart.get("rerun_checks"):
+            daemon_host, daemon_port = _selected_daemon_endpoint(state)
+            findings = _run_doctor_checks(state, daemon_host, daemon_port)
+            _auto_start_daemon_if_ready(state, findings)
+        with state.lock:
+            state.last_findings = findings
+            state.last_diagnostic_at = _now_iso()
+            state.diagnostics_available = bool(findings or state.last_findings is not None)
+            last_diagnostic_at = state.last_diagnostic_at
+            diagnostics_available = state.diagnostics_available
+
+    _sync_sse_probe_state(state, refresh=refresh)
+
+    if status_mode == "quick" and not refresh:
+        if cached_status_report is not None:
+            status_report_data = cached_status_report
+        else:
+            status_report_data = collect_status_report(
+                offline=True,
+                mode="quick",
+            )
+    else:
+        report_mode = "full" if status_mode in {"full", "diagnose"} else "quick"
         status_report_data = collect_status_report(
             offline=False,
             bridge_factory=lambda: TCPBridge(daemon_host, daemon_port),
+            mode=report_mode,
         )
+        with state.lock:
+            state.last_status_report = deepcopy(status_report_data)
+
+    status_report_data["status_mode"] = status_mode
+    status_report_data["diagnostics_available"] = diagnostics_available
+    status_report_data["last_diagnostic_at"] = last_diagnostic_at
+
+    with state.lock:
+        process_state = _process_status(state)
+        ports = _port_state(state)
+        automation = {"daemon_autostart": dict(state.daemon_autostart)}
+        mcp = {"sse_probe": dict(state.sse_probe)}
+        if last_diagnostic_at is None:
+            last_diagnostic_at = state.last_diagnostic_at
+            diagnostics_available = state.diagnostics_available
+        if last_diagnostic_at is None:
+            diagnostics_available = False
+        findings_payload = [finding.to_dict() for finding in findings]
+        checkpoints_payload = dict(state.checkpoints)
+        readiness = _readiness(findings, checkpoints_payload)
+        groups = _group_findings(findings)
         ui = _ui_payload(
             status_report=status_report_data,
             readiness=readiness,
             processes=process_state,
             ports=ports,
-            workflow_registry=state.workflow_registry,
+            workflow_registry=workflow_registry,
         )
-        return {
-            "version": PROJECT_VERSION,
-            "generated_at": _now_iso(),
-            "platform": {
-                "system": platform.system(),
-                "release": platform.release(),
-                "python": sys.version.split()[0],
-                "executable": sys.executable,
-            },
-            "control_center": {
-                "host": state.host,
-                "port": state.port,
-                "url": f"http://{state.host}:{state.port}/",
-                "started_at": state.started_at,
-            },
-            "ports": ports,
-            "readiness": readiness,
-            "groups": groups,
-            "findings": findings,
-            "checkpoints": dict(state.checkpoints),
-            "processes": process_state,
-            "automation": {"daemon_autostart": dict(state.daemon_autostart)},
-            "mcp": {"sse_probe": dict(state.sse_probe)},
-            "setup_guidance": _setup_guidance(
-                groups=groups,
-                readiness=readiness,
-                processes=process_state,
-                ports=ports,
-                daemon_autostart=state.daemon_autostart,
-                sse_probe=state.sse_probe,
-            ),
-            "snippets": client_snippets(state),
-            "status_report": status_report_data,
-            "ui": ui,
-        }
+        setup_guidance = _setup_guidance(
+            groups=groups,
+            readiness=readiness,
+            processes=process_state,
+            ports=ports,
+            daemon_autostart=state.daemon_autostart,
+            sse_probe=state.sse_probe,
+        )
+
+    return {
+        "version": PROJECT_VERSION,
+        "generated_at": _now_iso(),
+        "platform": {
+            "system": platform.system(),
+            "release": platform.release(),
+            "python": sys.version.split()[0],
+            "executable": sys.executable,
+        },
+        "control_center": {
+            "host": state.host,
+            "port": state.port,
+            "url": f"http://{state.host}:{state.port}/",
+            "started_at": state.started_at,
+        },
+        "ports": ports,
+        "readiness": readiness,
+        "groups": groups,
+        "findings": findings_payload,
+        "checkpoints": checkpoints_payload,
+        "processes": process_state,
+        "automation": automation,
+        "mcp": mcp,
+        "setup_guidance": setup_guidance,
+        "status_mode": status_mode,
+        "diagnostics_available": diagnostics_available,
+        "last_diagnostic_at": last_diagnostic_at,
+        "snippets": client_snippets(state),
+        "status_report": status_report_data,
+        "ui": ui,
+    }
 
 
 def _ui_payload(
@@ -5673,7 +5753,9 @@ def _handler_factory(state: ControlCenterState):
             elif self.path.startswith("/assets/") and self.path.endswith(".svg"):
                 self._serve_static(self.path.lstrip("/"), "image/svg+xml")
             elif self.path == "/api/status":
-                self._json(collect_status(state))
+                self._json(collect_status(state, status_mode="full", refresh=True))
+            elif self.path == "/api/status/quick":
+                self._json(collect_status(state, refresh=False, status_mode="quick"))
             elif self.path == "/api/client-snippets":
                 self._json(client_snippets(state))
             elif self.path == "/api/setup/report":
@@ -5729,7 +5811,9 @@ def _handler_factory(state: ControlCenterState):
         def do_POST(self) -> None:  # noqa: N802
             body = self._read_json()
             if self.path == "/api/refresh":
-                self._json(collect_status(state, refresh=True))
+                self._json(collect_status(state, refresh=True, status_mode="full"))
+            elif self.path == "/api/diagnose":
+                self._json(collect_status(state, refresh=True, status_mode="diagnose"))
             elif self.path == "/api/process/daemon/start":
                 self._json(_start_daemon(state))
             elif self.path == "/api/process/daemon/stop":

@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from . import __version__, connection, protocol, safety
+from .profile import profile
 
 READ_COMMANDS = {
     protocol.CMD_GET_PROJECT_STATE,
@@ -29,6 +30,7 @@ def collect_status(
     *,
     offline: bool = False,
     bridge_factory: Callable[[], Any] | None = None,
+    mode: str = "full",
 ) -> dict[str, Any]:
     """Collect a compact read-only snapshot for the local status.
 
@@ -36,8 +38,10 @@ def collect_status(
     safety changelog reads only. It does not register MCP tools or mutate FL
     Studio project state.
     """
+    if mode not in {"full", "quick"}:
+        mode = "full"
     generated_at = _now_iso()
-    snapshot = _base_snapshot(generated_at)
+    snapshot = _base_snapshot(generated_at, status_mode=mode)
     if offline:
         snapshot["bridge"].update(
             {
@@ -76,7 +80,8 @@ def collect_status(
             _finalize_snapshot(snapshot)
             return snapshot
 
-        _collect_live_reads(snapshot, bridge)
+        with profile("status.collect_status.live_reads", mode=mode):
+            _collect_live_reads(snapshot, bridge, quick=(mode == "quick"))
     except Exception as exc:
         snapshot["bridge"].update(
             {
@@ -142,9 +147,15 @@ def main(argv: list[str] | None = None) -> None:
         action="store_true",
         help="Render an offline preview without contacting the FL Studio bridge.",
     )
+    parser.add_argument(
+        "--mode",
+        choices=["full", "quick"],
+        default="full",
+        help="Use 'quick' to skip heavier project resource reads.",
+    )
     args = parser.parse_args(argv)
 
-    snapshot = collect_status(offline=args.offline)
+    snapshot = collect_status(offline=args.offline, mode=args.mode)
 
     if args.format == "json":
         print(json.dumps({"snapshot": snapshot}, indent=2))
@@ -152,7 +163,11 @@ def main(argv: list[str] | None = None) -> None:
         print(format_human(snapshot))
 
 
-def _base_snapshot(generated_at: str) -> dict[str, Any]:
+def _base_snapshot(
+    generated_at: str,
+    *,
+    status_mode: str,
+) -> dict[str, Any]:
     history = _safe_call(lambda: safety.change_history(limit=1), default={"entries": []})
     entries = history.get("entries", []) if isinstance(history, dict) else []
     return {
@@ -163,6 +178,9 @@ def _base_snapshot(generated_at: str) -> dict[str, Any]:
             "target_version": "v3 beta",
         },
         "mode": "read-only",
+        "status_mode": status_mode,
+        "diagnostics_available": False,
+        "last_diagnostic_at": None,
         "generated_at": generated_at,
         "bridge": {
             "state": "unavailable",
@@ -204,7 +222,7 @@ def _base_snapshot(generated_at: str) -> dict[str, Any]:
     }
 
 
-def _collect_live_reads(snapshot: dict[str, Any], bridge) -> None:
+def _collect_live_reads(snapshot: dict[str, Any], bridge, *, quick: bool = False) -> None:
     project = _safe_bridge_call(bridge, protocol.CMD_GET_PROJECT_STATE)
     if project["ok"]:
         data = project["data"]
@@ -259,18 +277,25 @@ def _collect_live_reads(snapshot: dict[str, Any], bridge) -> None:
             "error": metadata["error"],
         }
 
-    snapshot["resources"]["channels"] = _safe_fetch_resource(
-        bridge, protocol.CMD_CHANNEL_LIST, "channels"
-    )
-    snapshot["resources"]["mixer"] = _safe_fetch_resource(
-        bridge, protocol.CMD_MIXER_LIST_TRACKS, "tracks"
-    )
-    snapshot["resources"]["patterns"] = _safe_fetch_resource(
-        bridge, protocol.CMD_PATTERN_LIST, "patterns"
-    )
-    snapshot["resources"]["playlist"] = _safe_fetch_resource(
-        bridge, protocol.CMD_PLAYLIST_LIST_TRACKS, "tracks"
-    )
+    if quick:
+        return
+
+    with profile(
+        "status.collect_status.resources",
+        mode="quick" if quick else "full",
+    ):
+        snapshot["resources"]["channels"] = _safe_fetch_resource(
+            bridge, protocol.CMD_CHANNEL_LIST, "channels"
+        )
+        snapshot["resources"]["mixer"] = _safe_fetch_resource(
+            bridge, protocol.CMD_MIXER_LIST_TRACKS, "tracks"
+        )
+        snapshot["resources"]["patterns"] = _safe_fetch_resource(
+            bridge, protocol.CMD_PATTERN_LIST, "patterns"
+        )
+        snapshot["resources"]["playlist"] = _safe_fetch_resource(
+            bridge, protocol.CMD_PLAYLIST_LIST_TRACKS, "tracks"
+        )
 
 
 def _finalize_snapshot(snapshot: dict[str, Any]) -> None:

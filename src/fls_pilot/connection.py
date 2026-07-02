@@ -19,6 +19,8 @@ import threading
 import time
 from typing import Any
 
+from .profile import profile
+
 try:
     import mido
 except ImportError as _e:  # pragma: no cover -- surfaced at runtime
@@ -378,15 +380,21 @@ class TCPBridge:
     # -- transport -----------------------------------------------------------
 
     def _rpc(self, req: dict, timeout: float) -> dict:
-        with self._lock, socket.create_connection((self.host, self.port), timeout=timeout) as s:
-            s.settimeout(timeout)
-            s.sendall((json.dumps(req) + "\n").encode("utf-8"))
-            buf = b""
-            while b"\n" not in buf:
-                chunk = s.recv(4096)
-                if not chunk:
-                    break
-                buf += chunk
+        with profile(
+            "connection.tcp_bridge._rpc",
+            host=self.host,
+            port=self.port,
+            rpc_operation=req.get("op") or "unknown",
+        ):
+            with self._lock, socket.create_connection((self.host, self.port), timeout=timeout) as s:
+                s.settimeout(timeout)
+                s.sendall((json.dumps(req) + "\n").encode("utf-8"))
+                buf = b""
+                while b"\n" not in buf:
+                    chunk = s.recv(4096)
+                    if not chunk:
+                        break
+                    buf += chunk
         if not buf:
             raise FLBridgeError("daemon closed the connection without replying")
         return json.loads(buf.split(b"\n", 1)[0].decode("utf-8"))
@@ -544,7 +552,14 @@ def call_with_retry(
     last: FLTimeout | None = None
     for i in range(tries):
         try:
-            return _call_bridge(bridge, command, params, timeout=timeout)
+            with profile(
+                "connection.call_with_retry",
+                command=command,
+                attempt=i + 1,
+                attempts=tries,
+                timeout=timeout,
+            ):
+                return _call_bridge(bridge, command, params, timeout=timeout)
         except FLTimeout as exc:
             last = exc
             if i + 1 >= tries:
@@ -604,10 +619,23 @@ def fetch_all_pages(
     start = 0
     for _ in range(max_pages):
         base["start"] = start
-        if attempts > 1:
-            resp = call_with_retry(bridge, command, base, timeout=timeout, attempts=attempts)
-        else:
-            resp = _call_bridge(bridge, command, base, timeout=timeout)
+        with profile(
+            "connection.fetch_all_pages.page",
+            command=command,
+            list_key=list_key,
+            start=start,
+            attempt=_ + 1,
+        ):
+            if attempts > 1:
+                resp = call_with_retry(
+                    bridge,
+                    command,
+                    base,
+                    timeout=timeout,
+                    attempts=attempts,
+                )
+            else:
+                resp = _call_bridge(bridge, command, base, timeout=timeout)
         total = resp.get("total", total)
         items.extend(resp.get(list_key) or [])
         nxt = resp.get("next_start")

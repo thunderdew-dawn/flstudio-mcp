@@ -78,6 +78,13 @@ def test_live_transport_polling_does_not_disable_controls() -> None:
     assert "button.disabled = state.transport.loading;" in js
 
 
+def test_initial_refresh_runs_full_status_before_quick_status() -> None:
+    js = APP_JS.read_text("utf-8")
+
+    assert 'const statusPath = state.status ? "/api/status/quick" : "/api/status";' in js
+    assert "state.status = await api(statusPath);" in js
+
+
 def test_control_center_static_runtime_and_disconnect_behaviour() -> None:
     _run_node_dom_check(
         r"""
@@ -376,14 +383,14 @@ function createHarness() {
         fallback_port: 9788
       });
     }
-    if (path === "/api/refresh") {
+    if (path === "/api/status/quick") {
       return response(baseStatus({ state: "stopped", logs: [] }));
     }
     throw new Error(`unexpected fetch path: ${path}`);
   };
 
   await controls.processAction("/api/process/daemon/start");
-  assert.deepStrictEqual(calls, ["/api/process/daemon/start", "/api/refresh"]);
+  assert.deepStrictEqual(calls, ["/api/process/daemon/start", "/api/status/quick"]);
   assert.strictEqual(controls.state.actionFeedback.daemon.state, "attention");
   assert.match(controls.state.actionFeedback.daemon.text, /non-daemon process/);
   assert.match(controls.state.actionFeedback.daemon.text, /9788/);

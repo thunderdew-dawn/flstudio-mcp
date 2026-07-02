@@ -382,7 +382,8 @@ async function refresh() {
   }
 
   try {
-    state.status = await api("/api/refresh", { method: "POST", body: "{}" });
+    const statusPath = state.status ? "/api/status/quick" : "/api/status";
+    state.status = await api(statusPath);
     render();
   } catch (error) {
     const refreshTime = document.getElementById("refresh-time");
@@ -1354,16 +1355,16 @@ function renderNextAction() {
   if (!button) return;
   button.textContent = action.action_label || action.label || "Run Check";
   button.onclick = () => {
-    if (action.action_path && action.action_path !== "/api/refresh") {
-      processAction(action.action_path);
-      return;
-    }
-    if (action.action_path === "/api/refresh") {
-      refresh();
+    if (action.action_path === "/api/refresh" || action.action_path === "/api/diagnose") {
+      runGuidanceAction(action.action_path);
       return;
     }
     if (action.target_panel) {
       selectPanel(action.target_panel);
+      return;
+    }
+    if (action.action_path) {
+      processAction(action.action_path);
       return;
     }
     refresh();
@@ -6041,7 +6042,10 @@ async function processAction(path) {
 }
 
 async function runGuidanceAction(path) {
-  if (path === "/api/refresh") { await refresh(); return; }
+  if (path === "/api/refresh" || path === "/api/diagnose") {
+    await processAction(path);
+    return;
+  }
   await processAction(path);
 }
 
@@ -6335,6 +6339,7 @@ function wireEvents() {
 // ─── Public API (for testing) ─────────────────────────────────────────────────
 window.flsPilotControlCenter = {
   state,
+  refresh,
   processAction,
   transportAction,
   refreshTransportStatus,
