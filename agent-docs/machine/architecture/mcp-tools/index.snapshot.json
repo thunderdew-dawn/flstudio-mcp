@@ -211,10 +211,10 @@
     },
     "project_organizer": {
       "path": "agent-docs/machine/architecture/mcp-tools/project_organizer.snapshot.json",
-      "tools_total": 5,
+      "tools_total": 7,
       "safety_class_counts": {
-        "read-only": 2,
-        "write-safe-required": 3
+        "read-only": 3,
+        "write-safe-required": 4
       },
       "destructive_hint_true_count": 0
     },

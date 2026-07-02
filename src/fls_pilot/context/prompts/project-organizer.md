@@ -16,12 +16,14 @@ project cleanup plan.
 1. Confirm bridge/session health.
 2. Read current channels, mixer, and playlist metadata through capped resources
    or domain tools.
-3. Run `fl_plan_project_cleanup`.
-4. Present a ranked plan, then propose exactly one safest reversible cleanup
-   step with a risk level.
-5. Ask for explicit confirmation before mutation.
-6. Apply only one approved cleanup step at a time with
-   `fl_apply_project_cleanup_step`, and only when rollback/readback are clear.
+3. Run `fl_plan_project_organization` when template-aware organization is useful,
+   or `fl_plan_project_cleanup` for the legacy one-step cleanup plan.
+4. Present the stored organizer plan id, plan hash, blocked steps, manual
+   checks, and required user decisions.
+5. Ask for explicit confirmation before mutation, including exact step ids.
+6. Apply only approved stored plan steps with `fl_apply_organization_plan`, or
+   one approved legacy cleanup step with `fl_apply_project_cleanup_step`, and
+   only when rollback/readback are clear.
 7. After the write, read back where supported, report before/after plus rollback
    or `change_id`, then stop.
 
@@ -29,7 +31,8 @@ project cleanup plan.
 
 Stop when target selection, color mapping, routing destination, readback, or
 rollback is unclear. Do not delete patterns/clips or edit playlist clip
-placement.
+placement. Do not apply blocked, rejected, ignored, expired, or stale-fingerprint
+organization plan steps.
 
 ## Response Shape
 

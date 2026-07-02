@@ -159,6 +159,11 @@ and fragile send/return layouts. Cleanup remains proposal-first.
 
 Project Organizer finds naming, color, grouping, and routing cleanup
 candidates. It can propose one reversible cleanup step at a time.
+For template-aware organization, `fl_plan_project_organization` creates a
+stored plan with a plan hash, project fingerprint, blocked steps, manual checks,
+and required user decisions. `fl_apply_organization_plan` applies only selected
+approved steps from that stored plan; stale, rejected, ignored, blocked, or
+expired plan steps are refused.
 
 ![Project Organizer scan](../assets/control-center-project-organizer.png)
 

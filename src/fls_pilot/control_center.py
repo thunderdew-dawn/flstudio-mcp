@@ -3762,7 +3762,23 @@ def _build_project_organizer_report(
             "steps": cleanup_steps,
             "mode": "proposal",
             "apply_tool": "fl_apply_project_cleanup_step",
+            "template_plan_tool": "fl_plan_project_organization",
+            "template_apply_tool": "fl_apply_organization_plan",
             "blocked_until_human_validation": bool(pending_validation),
+        },
+        "organization_plan": {
+            "mode": "template_aware_proposal",
+            "plan_tool": "fl_plan_project_organization",
+            "apply_tool": "fl_apply_organization_plan",
+            "step_selection_required": True,
+            "plan_store_required": True,
+            "supported_scopes": ["naming", "color", "channel_routing", "bus_layout"],
+            "blocked_statuses": ["blocked", "rejected", "ignored"],
+            "status": (
+                "requires_template_or_step_approval"
+                if cleanup_steps or templates.compact_context(template_context)
+                else "no_template_plan_generated"
+            ),
         },
         "guided": _organizer_guided_context(findings, cleanup_steps),
         "standards": _organizer_standards(naming_rules, color_rules),
@@ -3782,6 +3798,7 @@ def _build_project_organizer_report(
             "template_context": templates.compact_context(template_context),
             "notes": [
                 "Project Organizer is read-only in Control Center.",
+                "Use fl_plan_project_organization for a stored template-aware plan with step ids.",
                 "Apply only one approved cleanup step or one named rollback unit at a time.",
                 (
                     "Color counts only flag missing readback fields; default FL colors "
@@ -3801,7 +3818,10 @@ def _build_project_organizer_report(
             "read_only": True,
             "project_changes": False,
             "requires_explicit_approval": True,
-            "apply_path": "Use MCP write-safe tools after reviewing an exact proposal.",
+            "apply_path": (
+                "Use MCP write-safe tools after reviewing an exact proposal; "
+                "template-aware batches apply through fl_apply_organization_plan."
+            ),
         },
     }
 

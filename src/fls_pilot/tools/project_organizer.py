@@ -6,6 +6,10 @@ and structural cleanup.
 
 from __future__ import annotations
 
+import hashlib
+import json
+import time
+import uuid
 from typing import Annotated
 
 from fastmcp import FastMCP
@@ -24,14 +28,32 @@ from ..connection import get_bridge
 from ..runtime.interactions import InteractionRequest
 from .channels import _find_free_mixer_track
 from .color import parse_color
-from .routing import _bus_rename_entry
+from .routing import _bus_rename_entry, _route_write_entry
 
 _ORGANIZER_APPLY_TOOLS = {
     "fl_apply_project_cleanup_step",
     "fl_apply_naming_standard",
     "fl_apply_color_standard",
+    "fl_apply_routing_cleanup",
+    "fl_apply_bus_layout",
+    "fl_group_tracks",
 }
 ORGANIZER_VALIDATION_REQUEST_ID = "organizer.confirm_cleanup_heuristics"
+ORGANIZER_PLAN_APPROVAL_REQUEST_ID = "organizer.approve_organization_plan"
+ORGANIZER_STEP_SELECTION_REQUEST_ID = "organizer.approve_step_selection"
+ORGANIZER_TEMPLATE_SELECTION_REQUEST_ID = "organizer.choose_target_template"
+_PLAN_TTL_SECONDS = 30 * 60
+_APPLYABLE_DECISIONS = {"approved_for_apply"}
+_SUPPRESSED_DECISIONS = {"rejected", "ignored"}
+_SAFE_STEP_TOOLS = {
+    "fl_apply_project_cleanup_step",
+    "fl_apply_routing_cleanup",
+    "fl_apply_bus_layout",
+    "fl_group_tracks",
+}
+_SAFE_RISK_LEVELS = {"low", "medium"}
+_SAFE_ACTION_TYPES = {"rename", "color", "route_channel", "group_to_bus", "create_bus_layout"}
+_PLAN_STORE: dict[str, dict] = {}
 
 
 def _looks_default_channel_name(name) -> bool:
@@ -117,6 +139,672 @@ def _organizer_validation_request(diagnostics: list[dict]) -> dict | None:
             "finding_ids": [row["id"] for row in options],
         },
     ).to_dict()
+
+
+def _utc_timestamp() -> float:
+    return time.time()
+
+
+def _stable_json(value) -> str:
+    return json.dumps(value, sort_keys=True, separators=(",", ":"), default=str)
+
+
+def _digest(value) -> str:
+    return hashlib.sha256(_stable_json(value).encode("utf-8")).hexdigest()
+
+
+def _store_plan(plan: dict) -> dict:
+    stored = {
+        "plan_id": plan["plan_id"],
+        "project_fingerprint": plan["project_fingerprint"],
+        "plan_hash": plan["plan_hash"],
+        "created_at": plan["created_at"],
+        "expires_at": plan["expires_at"],
+        "steps": [dict(row) for row in plan.get("steps") or []],
+        "target_template": dict(plan.get("target_template") or {}),
+        "user_decisions": [dict(row) for row in plan.get("user_decisions") or []],
+        "snapshot_id": plan.get("snapshot_id"),
+        "full_plan": json.loads(_stable_json(plan)),
+    }
+    _PLAN_STORE[plan["plan_id"]] = stored
+    return stored
+
+
+def _plan_hash_payload(plan: dict) -> dict:
+    return {
+        "project_fingerprint": plan.get("project_fingerprint"),
+        "snapshot_id": plan.get("snapshot_id"),
+        "source_observation_ids": plan.get("source_observation_ids") or [],
+        "target_template": plan.get("target_template") or {},
+        "template_match_status": plan.get("template_match_status"),
+        "steps": plan.get("steps") or [],
+        "blocked_steps": plan.get("blocked_steps") or [],
+        "manual_checks": plan.get("manual_checks") or [],
+        "user_decisions": plan.get("user_decisions") or [],
+    }
+
+
+def _decision_subject(decision: dict) -> str:
+    for key in ("step_id", "finding_id", "target_id", "id"):
+        value = str(decision.get(key) or "").strip()
+        if value:
+            return value
+    selected = decision.get("selected")
+    if isinstance(selected, list) and len(selected) == 1:
+        return str(selected[0])
+    return ""
+
+
+def _decisions_by_subject(user_decisions: list[dict]) -> dict[str, dict]:
+    out = {}
+    for row in user_decisions:
+        if not isinstance(row, dict):
+            continue
+        subject = _decision_subject(row)
+        if subject:
+            out[subject] = dict(row)
+    return out
+
+
+def _selected_target_template(user_decisions: list[dict]) -> str | None:
+    for row in reversed(user_decisions):
+        request_id = str(
+            row.get("interaction_request_id") or row.get("interaction_id") or row.get("id") or ""
+        ).strip()
+        if request_id not in {
+            ORGANIZER_TEMPLATE_SELECTION_REQUEST_ID,
+            "organizer.confirm_template_profile",
+            "template.confirm_profile",
+        }:
+            continue
+        if bool(row.get("skipped")):
+            continue
+        selected = row.get("selected_template") or row.get("template_slug") or row.get("value")
+        if selected is None and isinstance(row.get("selected"), list) and row["selected"]:
+            selected = row["selected"][0]
+        if selected:
+            return str(selected).strip()
+    return None
+
+
+def _profile_track_by_index(profile: dict) -> dict[int, dict]:
+    tracks = {}
+    for row in profile.get("mixer_tracks") or []:
+        if not isinstance(row, dict):
+            continue
+        idx = row.get("index")
+        if isinstance(idx, bool) or idx is None:
+            continue
+        try:
+            tracks[int(idx)] = dict(row)
+        except (TypeError, ValueError):
+            continue
+    return tracks
+
+
+def _profile_channel_routes(profile: dict) -> dict[int, dict]:
+    routes = {}
+    for row in profile.get("channel_routes") or []:
+        if not isinstance(row, dict):
+            continue
+        idx = row.get("channel_index")
+        if isinstance(idx, bool) or idx is None:
+            continue
+        try:
+            routes[int(idx)] = dict(row)
+        except (TypeError, ValueError):
+            continue
+    return routes
+
+
+def _mixer_track_index(row: dict) -> int:
+    return int(row.get("i", row.get("index", row.get("track", 0))))
+
+
+def _step_decision_state(step_id: str, user_decisions: list[dict]) -> tuple[str, dict | None]:
+    decision = _decisions_by_subject(user_decisions).get(step_id)
+    if not decision:
+        return "unresolved", None
+    value = str(decision.get("decision") or "").strip().lower()
+    if value in {"accepted", "selected"}:
+        return "accepted", decision
+    if value in _SUPPRESSED_DECISIONS:
+        return value, decision
+    if value in _APPLYABLE_DECISIONS:
+        return "approved_for_apply", decision
+    return "unresolved", decision
+
+
+def _organizer_step(
+    *,
+    id: str,
+    action_type: str,
+    tool: str,
+    target: dict,
+    observed_state: dict,
+    proposed_state: dict,
+    reason: str,
+    evidence_type: str,
+    confidence: str,
+    risk_level: str,
+    rollback_unit: str,
+    user_decisions: list[dict],
+    blocked_reason: str | None = None,
+) -> dict:
+    decision_state, decision = _step_decision_state(id, user_decisions)
+    status = "requires_user_approval"
+    if blocked_reason:
+        status = "blocked"
+    elif decision_state in _SUPPRESSED_DECISIONS:
+        status = decision_state
+    elif decision_state == "approved_for_apply":
+        status = "approved"
+        confidence = "confirmed"
+    elif decision_state == "accepted":
+        status = "requires_user_approval"
+    if evidence_type == EVIDENCE_TYPE_NAME_BASED_DETECTION and status != "approved":
+        blocked_reason = blocked_reason or "name_based_step_requires_user_confirmation"
+    safe_to_apply = (
+        status == "approved"
+        and action_type in _SAFE_ACTION_TYPES
+        and tool in _SAFE_STEP_TOOLS
+        and risk_level in _SAFE_RISK_LEVELS
+        and not blocked_reason
+    )
+    if not safe_to_apply and status == "approved":
+        status = "blocked"
+        blocked_reason = blocked_reason or "step_failed_apply_safety_gate"
+    step = {
+        "id": id,
+        "action_type": action_type,
+        "tool": tool,
+        "target": target,
+        "observed_state": observed_state,
+        "proposed_state": proposed_state,
+        "reason": reason,
+        "evidence_type": evidence_type,
+        "confidence": confidence,
+        "risk_level": risk_level,
+        "status": status,
+        "blocked_reason": blocked_reason,
+        "rollback_unit": rollback_unit,
+        "safe_to_apply": safe_to_apply,
+    }
+    if decision:
+        step["user_decision"] = dict(decision)
+    return step
+
+
+def _template_interaction_requests(template_context: dict) -> list[dict]:
+    options = []
+    if template_context.get("ambiguous"):
+        options = [
+            {"id": str(slug), "label": str(name)}
+            for slug, name in zip(
+                template_context.get("candidate_slugs") or [],
+                template_context.get("candidate_templates") or [],
+                strict=False,
+            )
+        ]
+    else:
+        options = [
+            {
+                "id": str(profile.get("template_slug")),
+                "label": str(profile.get("template_name") or profile.get("template_slug")),
+            }
+            for profile in templates.load_profiles()
+            if profile.get("template_slug")
+        ]
+    return [
+        InteractionRequest(
+            id=ORGANIZER_TEMPLATE_SELECTION_REQUEST_ID,
+            type="single_select",
+            title="Choose target organization template",
+            prompt=(
+                "Choose the target template before applying organization changes. "
+                "Ambiguous or missing template evidence keeps all steps blocked."
+            ),
+            options=tuple(options),
+            allow_remove=False,
+            metadata={"reason": "target_template_required"},
+        ).to_dict()
+    ]
+
+
+def _step_approval_request(steps: list[dict]) -> dict | None:
+    options = [
+        {
+            "id": step["id"],
+            "label": step.get("reason") or step["id"],
+            "risk_level": step.get("risk_level"),
+            "tool": step.get("tool"),
+        }
+        for step in steps
+        if step.get("status") == "requires_user_approval"
+    ]
+    if not options:
+        return None
+    return InteractionRequest(
+        id=ORGANIZER_STEP_SELECTION_REQUEST_ID,
+        type="multi_select",
+        title="Approve organization plan steps",
+        prompt="Approve only the exact reversible organization steps to apply.",
+        options=tuple(options),
+        allow_remove=True,
+        metadata={"decision_values": ["approved_for_apply", "rejected", "ignored"]},
+    ).to_dict()
+
+
+def _template_alignment_score(steps: list[dict], blocked_steps: list[dict]) -> int:
+    total = len(steps) + len(blocked_steps)
+    if total == 0:
+        return 100
+    safe_or_clean = sum(1 for step in steps if step.get("safe_to_apply"))
+    return max(0, min(100, round((total - len(blocked_steps) + safe_or_clean) / (total * 2) * 100)))
+
+
+def _step_to_proposed_change(step: dict) -> dict:
+    return wr.proposed_change(
+        id=str(step["id"]),
+        title=str(step.get("reason") or step["id"]),
+        tool=str(step.get("tool") or "fl_apply_organization_plan"),
+        observed_state=dict(step.get("observed_state") or {}),
+        proposed_state=dict(step.get("proposed_state") or {}),
+        safety_class="write-safe-required",
+        risk_level=str(step.get("risk_level") or "medium"),
+        readback_expectation="Affected channel, mixer, or routing metadata is read back where supported.",
+        rollback_expectation="One named rollback unit is created for the approved organization plan apply.",
+        status=str(step.get("status") or "proposed"),
+        requires_explicit_approval=True,
+    )
+
+
+def _reject_organization_apply(
+    *,
+    status: str,
+    diagnostic_id: str,
+    message: str,
+    evidence: dict | None = None,
+) -> dict:
+    return wr.workflow_report(
+        workflow="project_organizer_apply",
+        title="Apply Organization Plan",
+        mode="rejected",
+        status=status,
+        summary={"applied_changes": 0},
+        diagnostics=[
+            wr.diagnostic(
+                id=diagnostic_id,
+                severity="error",
+                message=message,
+                evidence=evidence or {},
+                source="project_organizer",
+            )
+        ],
+        ok=False,
+        safety={
+            "read_only": True,
+            "requires_explicit_approval": True,
+            "approval_received": False,
+        },
+    )
+
+
+def _prepare_step_writes(step: dict, bridge) -> list[dict]:
+    state = dict(step.get("proposed_state") or {})
+    writes: list[dict] = []
+    for row in state.get("renames") or []:
+        if row["type"] == "channel":
+            writes.append(_channel_rename_entry(int(row["index"]), str(row["name"])))
+        elif row["type"] == "mixer":
+            writes.append(_bus_rename_entry(int(row["index"]), str(row["name"])))
+        else:
+            raise ValueError("rename type must be 'channel' or 'mixer'")
+    for row in state.get("colors") or []:
+        if row["type"] == "channel":
+            writes.append(_color_write_entry(int(row["index"]), str(row["hex"])))
+        elif row["type"] == "mixer":
+            writes.append(_mixer_color_entry(int(row["index"]), str(row["hex"])))
+        else:
+            raise ValueError("color type must be 'channel' or 'mixer'")
+    reserved_tracks: set[int] = set()
+    for row in state.get("routing") or []:
+        channel = int(row["channel"])
+        if row.get("mode") == "free" or "track" not in row:
+            start_track = int(row.get("start_track", 1))
+            candidate_start = start_track
+            track = None
+            while True:
+                candidate = _find_free_mixer_track(bridge, start_track=candidate_start)
+                if candidate is None:
+                    break
+                if candidate not in reserved_tracks:
+                    track = candidate
+                    break
+                candidate_start = candidate + 1
+            if track is None:
+                raise ValueError("no free mixer track available")
+        else:
+            track = int(row["track"])
+        reserved_tracks.add(track)
+        writes.append(
+            operations.prepare_operation(
+                "channel",
+                "set_mixer_target",
+                {"channel": channel, "track": track},
+            ).safe_write_group_entry()
+        )
+    for bus in state.get("buses") or []:
+        bus_track = int(bus["bus_track"])
+        source_tracks = [int(source) for source in bus.get("source_tracks", [])]
+        for source in source_tracks:
+            if source in (0, bus_track):
+                continue
+            writes.append(_route_write_entry(source, bus_track, True))
+            writes.append(_route_write_entry(source, 0, False))
+        writes.append(_route_write_entry(bus_track, 0, True))
+        if bus.get("name"):
+            writes.append(_bus_rename_entry(bus_track, str(bus["name"])))
+    return writes
+
+
+def _target_template_context(profile: dict | None, *, selected_by_user: bool) -> dict:
+    if not profile:
+        return {
+            "template_name": None,
+            "template_slug": None,
+            "selected_by_user": selected_by_user,
+        }
+    return {
+        "template_name": profile.get("template_name"),
+        "template_slug": profile.get("template_slug"),
+        "selected_by_user": selected_by_user,
+        "profile_path": profile.get("_profile_path"),
+    }
+
+
+def build_template_alignment_plan(
+    snapshot,
+    target_profile: dict | None,
+    user_decisions: list[dict] | None = None,
+    *,
+    target_selected_by_user: bool = False,
+    scope: list[str] | None = None,
+) -> dict:
+    """Build a read-only, template-aware organizer plan from a static snapshot."""
+    decisions = [dict(row) for row in user_decisions or [] if isinstance(row, dict)]
+    scope_set = {str(item) for item in (scope or ["naming", "channel_routing", "bus_layout"])}
+    template_context = dict(snapshot.template_context or {})
+    created_at = _utc_timestamp()
+    steps: list[dict] = []
+    blocked_steps: list[dict] = []
+    manual_checks = []
+    interaction_requests = []
+    current_template = templates.compact_context(template_context) or {
+        "template_name": None,
+        "template_slug": None,
+        "matched": False,
+        "ambiguous": bool(template_context.get("ambiguous")),
+    }
+
+    if target_profile is None:
+        interaction_requests.extend(_template_interaction_requests(template_context))
+        manual_checks.append(
+            {
+                "id": "target_template_required",
+                "title": "Choose target template",
+                "reason": "No unambiguous target template is available for apply-capable planning.",
+            }
+        )
+        if "naming" in scope_set:
+            for row in snapshot.channels:
+                idx = _channel_index(row)
+                if not _looks_default_channel_name(row.get("name")):
+                    continue
+                suggested = _suggest_channel_name(row)
+                blocked_steps.append(
+                    _organizer_step(
+                        id=f"name_based_rename_channel_{idx}",
+                        action_type="rename",
+                        tool="fl_apply_project_cleanup_step",
+                        target={"type": "channel", "index": idx},
+                        observed_state={"name": row.get("name")},
+                        proposed_state={
+                            "renames": [
+                                {
+                                    "type": "channel",
+                                    "index": idx,
+                                    "from": row.get("name"),
+                                    "name": suggested,
+                                }
+                            ]
+                        },
+                        reason="Default-looking channel name needs producer confirmation.",
+                        evidence_type=EVIDENCE_TYPE_NAME_BASED_DETECTION,
+                        confidence="low",
+                        risk_level="low",
+                        rollback_unit="organization_plan_name_heuristic",
+                        user_decisions=decisions,
+                        blocked_reason="name_based_step_requires_user_confirmation",
+                    )
+                )
+    else:
+        channel_routes = _profile_channel_routes(target_profile)
+        mixer_targets = _profile_track_by_index(target_profile)
+        channels_by_index = {_channel_index(row): dict(row) for row in snapshot.channels}
+        mixer_by_index = {_mixer_track_index(row): dict(row) for row in snapshot.mixer_tracks}
+
+        if "naming" in scope_set:
+            for idx, expected in channel_routes.items():
+                current = channels_by_index.get(idx)
+                if current is None:
+                    continue
+                expected_name = str(expected.get("channel_name") or "").strip()
+                current_name = str(current.get("name") or "").strip()
+                if expected_name and current_name != expected_name:
+                    steps.append(
+                        _organizer_step(
+                            id=f"template_rename_channel_{idx}",
+                            action_type="rename",
+                            tool="fl_apply_project_cleanup_step",
+                            target={"type": "channel", "index": idx},
+                            observed_state={"name": current_name},
+                            proposed_state={
+                                "renames": [
+                                    {
+                                        "type": "channel",
+                                        "index": idx,
+                                        "from": current_name,
+                                        "name": expected_name,
+                                    }
+                                ]
+                            },
+                            reason=f"Align channel {idx} name with target template.",
+                            evidence_type="template_profile",
+                            confidence="high" if target_selected_by_user else "medium",
+                            risk_level="low",
+                            rollback_unit="organization_plan_naming",
+                            user_decisions=decisions,
+                        )
+                    )
+            for idx, expected in mixer_targets.items():
+                role = str(expected.get("role") or "")
+                if role == templates.PROFILE_RESERVED_ROLE:
+                    continue
+                current = mixer_by_index.get(idx)
+                if current is None:
+                    continue
+                expected_name = str(expected.get("name") or "").strip()
+                current_name = str(current.get("name") or "").strip()
+                if expected_name and current_name != expected_name:
+                    steps.append(
+                        _organizer_step(
+                            id=f"template_rename_mixer_{idx}",
+                            action_type="rename",
+                            tool="fl_apply_project_cleanup_step",
+                            target={"type": "mixer", "index": idx, "role": role},
+                            observed_state={"name": current_name},
+                            proposed_state={
+                                "renames": [
+                                    {
+                                        "type": "mixer",
+                                        "index": idx,
+                                        "from": current_name,
+                                        "name": expected_name,
+                                    }
+                                ]
+                            },
+                            reason=f"Align mixer track {idx} name with target template.",
+                            evidence_type="template_profile",
+                            confidence="high" if target_selected_by_user else "medium",
+                            risk_level="low",
+                            rollback_unit="organization_plan_naming",
+                            user_decisions=decisions,
+                        )
+                    )
+
+        if "channel_routing" in scope_set:
+            for idx, expected in channel_routes.items():
+                current = channels_by_index.get(idx)
+                if current is None:
+                    continue
+                target_track = expected.get("target_mixer_track")
+                try:
+                    target_track = int(target_track)
+                except (TypeError, ValueError):
+                    continue
+                if templates.is_reserved_placeholder(template_context, target_track):
+                    blocked_steps.append(
+                        _organizer_step(
+                            id=f"blocked_route_channel_{idx}_reserved_{target_track}",
+                            action_type="route_channel",
+                            tool="fl_apply_project_cleanup_step",
+                            target={"type": "channel", "index": idx},
+                            observed_state={"target_mixer_track": current.get("target_mixer_track")},
+                            proposed_state={"routing": [{"channel": idx, "track": target_track}]},
+                            reason="Template target is a reserved placeholder and is not a cleanup target.",
+                            evidence_type="template_profile",
+                            confidence="high",
+                            risk_level="unsupported",
+                            rollback_unit="organization_plan_routing",
+                            user_decisions=decisions,
+                            blocked_reason="reserved_placeholder_target",
+                        )
+                    )
+                    continue
+                if current.get("target_mixer_track") != target_track:
+                    steps.append(
+                        _organizer_step(
+                            id=f"template_route_channel_{idx}_to_{target_track}",
+                            action_type="route_channel",
+                            tool="fl_apply_project_cleanup_step",
+                            target={"type": "channel", "index": idx},
+                            observed_state={"target_mixer_track": current.get("target_mixer_track")},
+                            proposed_state={"routing": [{"channel": idx, "track": target_track}]},
+                            reason=f"Align channel {idx} mixer target with target template.",
+                            evidence_type="template_profile",
+                            confidence="high" if target_selected_by_user else "medium",
+                            risk_level="low",
+                            rollback_unit="organization_plan_routing",
+                            user_decisions=decisions,
+                        )
+                    )
+
+        if "bus_layout" in scope_set:
+            for idx, expected in mixer_targets.items():
+                role = str(expected.get("role") or "")
+                if role not in {"stem_bus", "premaster"}:
+                    continue
+                source_tracks = [
+                    int(source)
+                    for source in expected.get("receives_from") or []
+                    if source not in (None, 0, idx)
+                ]
+                if not source_tracks:
+                    continue
+                step_id = f"template_bus_layout_{idx}"
+                steps.append(
+                    _organizer_step(
+                        id=step_id,
+                        action_type="create_bus_layout",
+                        tool="fl_apply_bus_layout",
+                        target={"type": "mixer", "index": idx, "role": role},
+                        observed_state={"source_tracks": source_tracks},
+                        proposed_state={
+                            "buses": [
+                                {
+                                    "bus_track": idx,
+                                    "name": expected.get("name"),
+                                    "source_tracks": source_tracks,
+                                }
+                            ]
+                        },
+                        reason=f"Route template source tracks through {expected.get('name')}.",
+                        evidence_type="template_profile",
+                        confidence="high" if target_selected_by_user else "medium",
+                        risk_level="medium",
+                        rollback_unit=f"organization_plan_bus_layout_{idx}",
+                        user_decisions=decisions,
+                    )
+                )
+
+    for row in steps:
+        if row.get("status") == "blocked":
+            blocked_steps.append(row)
+    steps = [row for row in steps if row.get("status") != "blocked"]
+    request = _step_approval_request(steps)
+    if request is not None:
+        interaction_requests.append(request)
+
+    approved_count = sum(1 for row in steps if row.get("status") == "approved")
+    actionable_count = sum(1 for row in steps if row.get("status") == "requires_user_approval")
+    plan_status = "draft"
+    if blocked_steps and not steps:
+        plan_status = "blocked"
+    elif approved_count and approved_count < len([s for s in steps if s.get("status") != "ignored"]):
+        plan_status = "partially_approved"
+    elif approved_count and actionable_count == 0:
+        plan_status = "approved"
+    elif steps or blocked_steps or interaction_requests:
+        plan_status = "requires_user_approval"
+
+    target_template = _target_template_context(target_profile, selected_by_user=target_selected_by_user)
+    match_status = "target_selected" if target_profile else "target_required"
+    if template_context.get("ambiguous") and not target_selected_by_user:
+        match_status = "ambiguous_requires_user_selection"
+    plan = {
+        "plan_id": f"orgplan_{uuid.uuid4().hex[:12]}",
+        "created_at": created_at,
+        "expires_at": created_at + _PLAN_TTL_SECONDS,
+        "project_fingerprint": snapshot.project_fingerprint,
+        "snapshot_id": snapshot.snapshot_id,
+        "source_observation_ids": list(snapshot.source_observation_ids),
+        "current_template_context": current_template,
+        "target_template": target_template,
+        "template_match_status": match_status,
+        "template_match_confidence": (
+            "confirmed"
+            if target_selected_by_user
+            else str((template_context or {}).get("confidence_level") or "unknown")
+        ),
+        "template_selected_by_user": target_selected_by_user,
+        "template_alignment_score": _template_alignment_score(steps, blocked_steps),
+        "plan_status": plan_status,
+        "steps": steps,
+        "blocked_steps": blocked_steps,
+        "manual_checks": manual_checks,
+        "interaction_requests": interaction_requests,
+        "user_decisions": decisions,
+        "safety": {
+            "read_only": True,
+            "requires_explicit_approval": True,
+            "plan_store_required_for_apply": True,
+            "blocked_statuses": ["blocked", "rejected", "ignored"],
+            "allowed_tools": sorted(_SAFE_STEP_TOOLS),
+        },
+    }
+    plan["plan_hash"] = _digest(_plan_hash_payload(plan))
+    return plan
 
 
 def _cleanup_proposal(
@@ -514,6 +1202,156 @@ def register(mcp: FastMCP) -> None:
         payload["source_observations"] = list(snapshot.source_observation_ids)
         return payload
 
+    @mcp.tool(annotations={"title": "Plan Project Organization", **_RO})
+    def fl_plan_project_organization(
+        target_template: Annotated[
+            str | None,
+            Field(description="Optional target template slug, for example 'psytrance'."),
+        ] = None,
+        style: Annotated[
+            str,
+            Field(description="Template style hint. Use 'auto' unless the producer selects a style."),
+        ] = "auto",
+        scope: Annotated[
+            list[str] | None,
+            Field(description="Optional scopes: naming, color, channel_routing, bus_layout."),
+        ] = None,
+        user_decisions: Annotated[
+            list[dict] | None,
+            Field(description="Optional user decisions from organizer interaction requests."),
+        ] = None,
+    ) -> dict:
+        """Create a stored, template-aware project organization plan.
+
+        Safety: Read-Only. The returned plan is stored server-side and can only be
+        applied later through fl_apply_organization_plan with explicit approval.
+        """
+        bridge = get_bridge()
+        snapshot = get_analysis_broker().get_static_project_snapshot(bridge)
+        decisions = [dict(row) for row in user_decisions or [] if isinstance(row, dict)]
+        template_context = templates.resolve_with_user_decisions(
+            snapshot.template_context,
+            decisions,
+            mixer_tracks=snapshot.mixer_tracks,
+            routing_rows=snapshot.routing,
+            channel_rows=snapshot.channels,
+        )
+        selected_slug = (
+            str(target_template or "").strip()
+            or _selected_target_template(decisions)
+            or (str(style).strip() if str(style).strip().lower() != "auto" else "")
+        )
+        target_selected_by_user = bool(selected_slug)
+        if not selected_slug and template_context.get("matched") and not template_context.get("ambiguous"):
+            selected_slug = str(template_context.get("template_slug") or "").strip()
+        target_profile = templates.profile_by_slug(selected_slug) if selected_slug else None
+        if selected_slug and target_profile is None:
+            plan = build_template_alignment_plan(
+                snapshot,
+                None,
+                decisions,
+                target_selected_by_user=target_selected_by_user,
+                scope=scope,
+            )
+            plan["manual_checks"].append(
+                {
+                    "id": "unknown_target_template",
+                    "title": "Unknown target template",
+                    "reason": f"Template profile {selected_slug!r} is not installed.",
+                }
+            )
+            plan["template_match_status"] = "unknown_target_template"
+            plan["plan_hash"] = _digest(_plan_hash_payload(plan))
+        else:
+            plan_snapshot = snapshot
+            if template_context != snapshot.template_context:
+                plan_snapshot = type(snapshot)(
+                    created_at=snapshot.created_at,
+                    project_fingerprint=snapshot.project_fingerprint,
+                    snapshot_id=snapshot.snapshot_id,
+                    project_state=snapshot.project_state,
+                    channels=snapshot.channels,
+                    mixer_tracks=snapshot.mixer_tracks,
+                    routing=snapshot.routing,
+                    patterns=snapshot.patterns,
+                    playlist_tracks=snapshot.playlist_tracks,
+                    template_context=template_context,
+                    counts=snapshot.counts,
+                    coverage=snapshot.coverage,
+                    source_observation_ids=snapshot.source_observation_ids,
+                    errors=snapshot.errors,
+                    metadata=snapshot.metadata,
+                    observation_id=snapshot.observation_id,
+                )
+            plan = build_template_alignment_plan(
+                plan_snapshot,
+                target_profile,
+                decisions,
+                target_selected_by_user=target_selected_by_user,
+                scope=scope,
+            )
+        _store_plan(plan)
+        proposed_changes = [_step_to_proposed_change(step) for step in plan.get("steps") or []]
+        payload = wr.workflow_report(
+            workflow="project_organizer",
+            title="Project Organization Plan",
+            mode="proposal",
+            status="Template-aware organization plan generated",
+            summary={
+                "steps": len(plan.get("steps") or []),
+                "blocked_steps": len(plan.get("blocked_steps") or []),
+                "manual_checks": len(plan.get("manual_checks") or []),
+                "template_alignment_score": plan.get("template_alignment_score"),
+                "plan_status": plan.get("plan_status"),
+            },
+            proposed_changes=proposed_changes,
+            manual_checks=list(plan.get("manual_checks") or []),
+            notes=[
+                "This tool is read-only and stores a short-lived plan for later approval.",
+                "Name-based or ambiguous template assumptions are not apply-capable until confirmed.",
+                "Rejected, ignored, blocked, expired, or stale-fingerprint steps will not apply.",
+            ],
+            kb_policy_refs=kb_policy.rule_refs(
+                [
+                    "preserve_existing_structure_first",
+                    "channel_rack_workflow_requires_routing_inference",
+                    "routing_ui_guidance_vs_mcp_write",
+                ]
+            ),
+            metadata={
+                "organizer_plan": plan,
+                "plan_store": {
+                    "plan_id": plan["plan_id"],
+                    "expires_at": plan["expires_at"],
+                    "stored": True,
+                },
+            },
+            interaction_requests=list(plan.get("interaction_requests") or []),
+            user_decisions=decisions,
+            safety=plan["safety"],
+        )
+        payload.update(
+            {
+                "plan_id": plan["plan_id"],
+                "plan_hash": plan["plan_hash"],
+                "project_fingerprint": plan["project_fingerprint"],
+                "snapshot_id": plan["snapshot_id"],
+                "source_observation_ids": plan["source_observation_ids"],
+                "current_template_context": plan["current_template_context"],
+                "target_template": plan["target_template"],
+                "template_match_status": plan["template_match_status"],
+                "template_alignment_score": plan["template_alignment_score"],
+                "plan_status": plan["plan_status"],
+                "steps": plan["steps"],
+                "blocked_steps": plan["blocked_steps"],
+                "manual_checks": plan["manual_checks"],
+                "interaction_requests": plan["interaction_requests"],
+                "user_decisions": plan["user_decisions"],
+                "safety": plan["safety"],
+            }
+        )
+        return payload
+
     @mcp.tool(annotations={"title": "Apply Project Cleanup Step", **_WR})
     def fl_apply_project_cleanup_step(
         renames: Annotated[
@@ -669,6 +1507,212 @@ def register(mcp: FastMCP) -> None:
             approved=approved,
             bridge=bridge,
             kb_rule_ids=["preserve_existing_structure_first", "instrument_audio_track_workflow"],
+        )
+
+    @mcp.tool(annotations={"title": "Apply Organization Plan", **_WR})
+    def fl_apply_organization_plan(
+        plan_id: Annotated[
+            str,
+            Field(description="Stored organizer plan id returned by fl_plan_project_organization."),
+        ],
+        approved_step_ids: Annotated[
+            list[str],
+            Field(description="Exact organizer step ids approved by the producer."),
+        ],
+        approved: Annotated[
+            bool,
+            Field(description="Must be true after explicit approval of these exact plan steps."),
+        ] = False,
+    ) -> dict:
+        """Apply approved steps from a stored organization plan.
+
+        Safety: Write-Safe-Required with Rollback. The tool refuses ad hoc
+        parameters, expired plans, stale project fingerprints, blocked steps,
+        rejected steps, ignored steps, unknown step ids, and unapproved calls.
+        """
+        stored = _PLAN_STORE.get(str(plan_id))
+        if stored is None:
+            return _reject_organization_apply(
+                status="Stored organization plan not found",
+                diagnostic_id="organization_plan_not_found",
+                message="Run fl_plan_project_organization before applying an organization plan.",
+                evidence={"plan_id": plan_id},
+            )
+        plan = dict(stored.get("full_plan") or {})
+        expected_hash = _digest(_plan_hash_payload(plan))
+        if expected_hash != stored.get("plan_hash") or expected_hash != plan.get("plan_hash"):
+            return _reject_organization_apply(
+                status="Stored organization plan hash mismatch",
+                diagnostic_id="organization_plan_hash_mismatch",
+                message="The stored organization plan hash no longer matches its contents.",
+                evidence={"plan_id": plan_id},
+            )
+        if _utc_timestamp() > float(stored.get("expires_at") or 0):
+            return _reject_organization_apply(
+                status="Stored organization plan expired",
+                diagnostic_id="organization_plan_expired",
+                message="Re-run fl_plan_project_organization before applying an expired plan.",
+                evidence={"plan_id": plan_id, "expires_at": stored.get("expires_at")},
+            )
+        approved_ids = [str(step_id) for step_id in approved_step_ids or []]
+        if not approved_ids:
+            return _reject_organization_apply(
+                status="No organization plan steps selected",
+                diagnostic_id="organization_plan_no_steps_selected",
+                message="Pass the exact approved_step_ids to apply.",
+                evidence={"plan_id": plan_id},
+            )
+        steps_by_id = {str(step.get("id")): dict(step) for step in plan.get("steps") or []}
+        unknown = [step_id for step_id in approved_ids if step_id not in steps_by_id]
+        if unknown:
+            return _reject_organization_apply(
+                status="Unknown organization plan step id",
+                diagnostic_id="organization_plan_unknown_step",
+                message="Every approved_step_id must exist in the stored plan.",
+                evidence={"plan_id": plan_id, "unknown_step_ids": unknown},
+            )
+        selected_steps = [steps_by_id[step_id] for step_id in approved_ids]
+        blocked = [
+            step
+            for step in selected_steps
+            if step.get("status") in {"blocked", "rejected", "ignored"}
+            or not step.get("safe_to_apply")
+            or step.get("tool") not in _SAFE_STEP_TOOLS
+            or step.get("risk_level") not in _SAFE_RISK_LEVELS
+        ]
+        if blocked:
+            return _reject_organization_apply(
+                status="Organization plan contains non-applyable selected steps",
+                diagnostic_id="organization_plan_step_blocked",
+                message="Blocked, rejected, ignored, unsafe, or unapproved steps cannot be applied.",
+                evidence={"blocked_step_ids": [step.get("id") for step in blocked]},
+            )
+        if not all(step.get("status") == "approved" for step in selected_steps):
+            return _reject_organization_apply(
+                status="Organization plan steps require explicit step approval",
+                diagnostic_id="organization_plan_step_not_approved",
+                message=(
+                    "Each selected step must have a user_decision of "
+                    "approved_for_apply in the stored plan."
+                ),
+                evidence={
+                    "step_statuses": {
+                        step.get("id"): step.get("status") for step in selected_steps
+                    }
+                },
+            )
+        proposed_changes = [_step_to_proposed_change(step) for step in selected_steps]
+        if not approved:
+            return wr.approval_required_report(
+                workflow="project_organizer_apply",
+                title="Apply Organization Plan",
+                proposed_changes=proposed_changes,
+                notes=[
+                    "This applies only steps already marked approved_for_apply in the stored plan.",
+                    "No FL Studio project state was changed.",
+                ],
+            )
+
+        bridge = get_bridge()
+        snapshot = get_analysis_broker().get_static_project_snapshot(bridge)
+        if snapshot.project_fingerprint != stored.get("project_fingerprint"):
+            return _reject_organization_apply(
+                status="Organization plan project fingerprint is stale",
+                diagnostic_id="organization_plan_stale_project_fingerprint",
+                message="The current FL Studio project state no longer matches the stored plan.",
+                evidence={
+                    "plan_project_fingerprint": stored.get("project_fingerprint"),
+                    "current_project_fingerprint": snapshot.project_fingerprint,
+                },
+            )
+
+        writes = []
+        try:
+            for step in selected_steps:
+                writes.extend(_prepare_step_writes(step, bridge))
+        except (KeyError, TypeError, ValueError, operations.OperationValidationError) as exc:
+            return _reject_organization_apply(
+                status="Organization plan write preparation failed",
+                diagnostic_id="organization_plan_write_prepare_failed",
+                message=str(exc),
+                evidence={"plan_id": plan_id, "approved_step_ids": approved_ids},
+            )
+        if not writes:
+            return _reject_organization_apply(
+                status="Organization plan selected no valid writes",
+                diagnostic_id="organization_plan_no_writes",
+                message="Selected steps did not produce any safe write entries.",
+                evidence={"plan_id": plan_id, "approved_step_ids": approved_ids},
+            )
+        res = safety.safe_write_group(
+            bridge,
+            tool="apply_organization_plan",
+            scope="project_organizer",
+            writes=writes,
+            rollback_unit=f"organization_plan_{plan_id}",
+        )
+        if res.get("dry_run"):
+            return wr.workflow_report(
+                workflow="project_organizer_apply",
+                title="Apply Organization Plan",
+                mode="dry_run",
+                status="Dry-run only",
+                summary={
+                    "approved_steps": len(selected_steps),
+                    "write_entries": len(writes),
+                    "applied_changes": 0,
+                },
+                proposed_changes=proposed_changes,
+                notes=["Dry-run mode is enabled; no FL Studio project state was changed."],
+                safety={"read_only": True, "requires_explicit_approval": True},
+            )
+        applied = [
+            wr.applied_change(
+                id=str(step["id"]),
+                title=str(step.get("reason") or step["id"]),
+                tool="fl_apply_organization_plan",
+                before=res.get("before"),
+                requested_change=step.get("proposed_state") or {},
+                after=res.get("after"),
+                safety_class="write-safe-required",
+                risk_level=str(step.get("risk_level") or "medium"),
+                change_id=res.get("change_id"),
+                readback_ok=bool(res.get("after") is not None),
+                rollback=res.get("rollback"),
+                rollback_command=res.get("undo"),
+            )
+            for step in selected_steps
+        ]
+        return wr.workflow_report(
+            workflow="project_organizer_apply",
+            title="Apply Organization Plan",
+            mode="applied",
+            status="Organization plan steps applied",
+            summary={
+                "approved_steps": len(selected_steps),
+                "write_entries": len(writes),
+                "applied_changes": len(applied),
+            },
+            applied_changes=applied,
+            notes=["Rollback with fl_rollback_last_change if the result is not intended."],
+            metadata={
+                "plan_id": plan_id,
+                "plan_hash": plan.get("plan_hash"),
+                "project_fingerprint": snapshot.project_fingerprint,
+                "applied_step_ids": approved_ids,
+            },
+            kb_policy_refs=kb_policy.rule_refs(
+                [
+                    "preserve_existing_structure_first",
+                    "channel_rack_workflow_requires_routing_inference",
+                    "routing_ui_guidance_vs_mcp_write",
+                ]
+            ),
+            safety={
+                "read_only": False,
+                "requires_explicit_approval": False,
+                "approval_received": True,
+            },
         )
 
     @mcp.tool(annotations={"title": "Apply Naming Standard", **_WR})

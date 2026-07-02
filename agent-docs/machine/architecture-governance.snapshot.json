@@ -2,7 +2,7 @@
   "snapshot_version": 1,
   "as_of": "2026-07-02",
   "status": "governed",
-  "governance_note": "Updated for Routing Audit evidence levels, finding states, producer intent confirmation, meter-proxy labeling, cleanup-plan gating, and Mix Review evidence-weighted scoring with rendered-master proxy and role-confirmed stem evidence. Persistent-write safety posture is unchanged; Routing Audit and Mix Review remain read-only, planning remains confirmation-gated, and apply remains separate with explicit approval and rollback.",
+  "governance_note": "Updated for Project Organizer template-aware stored plans and plan-based apply gates. Persistent-write safety posture is unchanged: planning remains read-only, organization apply requires a stored plan, explicit approval, fingerprint/hash/expiry validation, safety-layer writes, readback, and rollback.",
   "project": {
     "name": "fls-pilot",
     "package_version": "3.0.0b3",
@@ -238,8 +238,8 @@
       "registration_source": "src/fls_pilot/server.py",
       "tool_modules_source": "src/fls_pilot/tools/",
       "baseline": {
-        "registered_public_tools": 92,
-        "static_audited_tools": 168,
+        "registered_public_tools": 94,
+        "static_audited_tools": 170,
         "check": "python scripts/check_tool_registration_baseline.py"
       },
       "resources": [

@@ -90,17 +90,21 @@ WORKFLOW_REGISTRY: dict[str, dict] = {
         ],
         "tools_to_use": [
             "fl_analyze_project_organization",
+            "fl_plan_project_organization",
             "fl_plan_project_cleanup",
             "fl_detect_cleanup_candidates",
             "fl_group_tracks",
         ],
         "approval_required_for": [
+            "fl_apply_organization_plan",
             "fl_apply_project_cleanup_step",
             "fl_apply_naming_standard",
             "fl_apply_color_standard",
         ],
         "stop_rules": [
+            "Use stored organization plans for template-aware batches.",
             "Apply only one approved cleanup step at a time.",
+            "Do not apply blocked, rejected, ignored, expired, or stale-fingerprint plan steps.",
             "Do not delete patterns or clips.",
             "Do not edit playlist clip placement.",
             "Stop if color mapping, routing, or readback is unclear.",

@@ -536,7 +536,34 @@ DEFAULT_WORKFLOW_REGISTRY = WorkflowRegistry(
             panel_id="producer_organizer",
             endpoint="/api/workflows/project-organizer",
             action_label="Run Organizer",
-            safety_note="Read-only scan. Cleanup requires an approved safe-write tool.",
+            safety_note=(
+                "Read-only scan and template-aware planning. Cleanup requires a stored "
+                "plan, explicit step approval, and an approved safe-write tool."
+            ),
+            supported_next_actions=(
+                "scan_project_organization",
+                "plan_template_organization",
+                "approve_organization_steps",
+                "review_safe_proposals",
+            ),
+            manual_only_actions=(
+                "choose_target_template",
+                "confirm_detected_roles",
+                "approve_step_selection",
+            ),
+            forbidden_actions=(
+                "playlist_clip_editing",
+                "pattern_or_clip_deletion",
+                "plugin_loading",
+                "automatic_render",
+                "automatic_save_as",
+            ),
+            metadata={
+                "plan_tool": "fl_plan_project_organization",
+                "apply_tool": "fl_apply_organization_plan",
+                "plan_store_required": True,
+                "step_selection_required": True,
+            },
         ),
         _declaration(
             "preflight",

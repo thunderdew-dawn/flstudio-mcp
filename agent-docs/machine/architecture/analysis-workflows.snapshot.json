@@ -5,7 +5,7 @@
   "source_snapshot": "agent-docs/machine/architecture-analysis.snapshot.json",
   "source_snapshot_sha256": "ff0d38588b91510a3073e81d885de38f9116cddfbcd95686cbf11c28a6db8d7f",
   "generated_at": "2026-07-02",
-  "note": "Scoped slice refreshed for Routing Audit evidence levels, finding states, cleanup-plan gating metadata, and Mix Review evidence-weighted scoring/rendered-audio evidence metadata; full static architecture analysis was not regenerated.",
+  "note": "Scoped slice refreshed for Project Organizer template-aware plan metadata and plan-based apply guidance; full static architecture analysis was not regenerated.",
   "load_when": [
     "workflow registry, report schema, scoring, evidence, freshness, prerequisites, or health aggregation changes",
     "Control Center project-review workflow panel ownership or endpoint changes",
@@ -429,11 +429,31 @@
         "group": "Project Review",
         "endpoint": "/api/workflows/project-organizer",
         "action_label": "Run Organizer",
-        "safety_note": "Read-only scan. Cleanup requires an approved safe-write tool.",
-        "supported_next_actions": [],
-        "manual_only_actions": [],
-        "forbidden_actions": [],
-        "metadata": {}
+        "safety_note": "Read-only scan and template-aware planning. Cleanup requires a stored plan, explicit step approval, and an approved safe-write tool.",
+        "supported_next_actions": [
+          "scan_project_organization",
+          "plan_template_organization",
+          "approve_organization_steps",
+          "review_safe_proposals"
+        ],
+        "manual_only_actions": [
+          "choose_target_template",
+          "confirm_detected_roles",
+          "approve_step_selection"
+        ],
+        "forbidden_actions": [
+          "playlist_clip_editing",
+          "pattern_or_clip_deletion",
+          "plugin_loading",
+          "automatic_render",
+          "automatic_save_as"
+        ],
+        "metadata": {
+          "plan_tool": "fl_plan_project_organization",
+          "apply_tool": "fl_apply_organization_plan",
+          "plan_store_required": true,
+          "step_selection_required": true
+        }
       },
       {
         "id": "preflight",
