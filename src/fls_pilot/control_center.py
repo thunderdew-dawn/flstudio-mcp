@@ -40,9 +40,11 @@ from .analysis import (
     analysis_report_for_control_center,
     confidence_from_coverage,
     heuristic_validation_metadata,
+    low_end_evidence_metadata,
     low_end_health_score,
     mix_health_score,
     mixer_entity_id,
+    normalize_low_end_genre_profile,
     organizer_score,
     pending_human_validation_ids,
     provisional_score_metadata,
@@ -50,6 +52,7 @@ from .analysis import (
     routing_analysis_report_from_legacy_payload,
     routing_checks,
     routing_health_score,
+    weighted_low_end_risk,
 )
 from .analysis.live import LiveMeterPolicy
 from .connection import DEFAULT_TCP_HOST, DEFAULT_TCP_PORT, TCPBridge, fetch_all_pages
@@ -1578,6 +1581,7 @@ def _mark_validated_findings(
             "provisional": False,
             "validated_by_user": True,
             "validation_source": "user_decision",
+            "finding_state": "accepted",
         }
         out.append(Finding(**{**finding.__dict__, "metadata": metadata}))
     return tuple(out)
@@ -1606,6 +1610,7 @@ def _apply_group_user_decisions(
             "provisional": False,
             "validated_by_user": True,
             "validation_source": "user_decision",
+            "finding_state": "accepted",
         }
         if row_id in intentional_ids:
             updated["user_intent"] = "intentional"
@@ -1895,6 +1900,33 @@ def _build_low_end_analysis_report(report: dict[str, Any]) -> AnalysisReport:
         interaction_requests=interaction_requests,
         user_decisions=user_decisions,
     )
+    low_end_metadata = low_end_evidence_metadata(2 if levels_valid else 1)
+    low_end_metadata.update(
+        {
+            "audio_evidence_status": "missing",
+            "requires_manual_audio_export": True,
+            "genre_profile": normalize_low_end_genre_profile(
+                report.get("genre_profile") or summary.get("genre_profile")
+            ),
+            "role_confirmation_state": (
+                "name_based_unconfirmed" if low_end_tracks else "none"
+            ),
+            "finding_state_values": ["unconfirmed", "accepted", "rejected", "ignored"],
+            "evidence_level_4": {
+                "evidence_level": 4,
+                "evidence_level_label": "role_confirmed_bus_or_stem_evidence",
+                "status": "planned",
+                "requires_manual_stem_export": True,
+                "automatic_fl_render": False,
+            },
+            "evidence_level_5": {
+                "evidence_level": 5,
+                "evidence_level_label": "deeper_batch_or_multi_source_evidence",
+                "status": "planned",
+                "automatic_fl_render": False,
+            },
+        }
+    )
     limits = _unique_strings(
         [
             *list(details.get("limits") or []),
@@ -1968,7 +2000,7 @@ def _build_low_end_analysis_report(report: dict[str, Any]) -> AnalysisReport:
             Prerequisite("static_project_snapshot", "ok" if ok else "unavailable"),
             Prerequisite("live_meter_window", "ok" if levels_valid else "missing"),
         ),
-        risk_score=risk,
+        risk_score=weighted_low_end_risk(findings) if findings else risk,
         health_score=health_score,
         confidence_score=confidence,
         findings=findings,
@@ -1994,6 +2026,7 @@ def _build_low_end_analysis_report(report: dict[str, Any]) -> AnalysisReport:
             "low_end_summary": low_end.get("summary") or {},
             "low_end_track_count": len(low_end_tracks),
             "rule_evaluation_errors": rule_errors,
+            **low_end_metadata,
             **provisional_score_metadata(pending_validation),
         },
     )
@@ -2034,6 +2067,7 @@ def _low_end_analysis_finding(
             heuristic_validation_metadata(
                 evidence_type=EVIDENCE_TYPE_NAME_BASED_DETECTION,
                 interaction_request_id=LOW_END_VALIDATION_REQUEST_ID,
+                finding_state="unconfirmed",
             )
         )
     return Finding(
@@ -2128,6 +2162,7 @@ def _low_end_rule_findings(
                         **heuristic_validation_metadata(
                             evidence_type=EVIDENCE_TYPE_NAME_BASED_DETECTION,
                             interaction_request_id=LOW_END_VALIDATION_REQUEST_ID,
+                            finding_state="unconfirmed",
                         ),
                         "declarative_rule": True,
                     },

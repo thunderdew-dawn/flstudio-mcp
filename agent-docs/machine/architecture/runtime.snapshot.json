@@ -4,8 +4,8 @@
   "title": "Runtime host, daemon RPC, report store, workflow execution and transport assumptions",
   "source_snapshot": "agent-docs/machine/architecture-analysis.snapshot.json",
   "source_snapshot_sha256": "ff0d38588b91510a3073e81d885de38f9116cddfbcd95686cbf11c28a6db8d7f",
-  "generated_at": "2026-07-01",
-  "note": "Scoped slice refreshed for Mix Review Level 1-4 runtime workflow behavior; full static architecture analysis was not regenerated.",
+  "generated_at": "2026-07-02",
+  "note": "Scoped slice refreshed for Low-End Analysis runtime evidence levels 1-5, proxy rendered-master metadata, and manual/forbidden action declarations; full static architecture analysis was not regenerated.",
   "load_when": [
     "daemon, RuntimeCore, runtime RPC, report store, or workflow execution changes",
     "bridge/session runtime ownership, freshness, invalidation, or observation state changes",
@@ -269,11 +269,56 @@
           "group": "Project Review",
           "endpoint": "/api/workflows/low-end-analysis",
           "action_label": "Run Low-End Safety Check",
-          "safety_note": "Read-only low-end review. Metadata raises suspicions; rendered audio is required for audio-backed energy and stereo proxy claims.",
-          "supported_next_actions": [],
-          "manual_only_actions": [],
-          "forbidden_actions": [],
-          "metadata": {}
+          "safety_note": "Read-only low-end review. Metadata raises suspicions; rendered master audio creates proxy claims only; stem-specific conclusions require role-confirmed stem or bus evidence.",
+          "supported_next_actions": [
+            "low_end.confirm_detected_tracks",
+            "low_end.assign_track_roles:*",
+            "low_end.choose_genre_profile",
+            "low_end.confirm_finding:*",
+            "audio.render_master",
+            "audio.render_low_end_stems",
+            "low_end.approve_fix_plan",
+            "low_end.after_fix_render"
+          ],
+          "manual_only_actions": [
+            "audio.render_master",
+            "audio.render_low_end_stems",
+            "low_end.confirm_detected_tracks",
+            "low_end.assign_track_roles:*",
+            "low_end.choose_genre_profile",
+            "low_end.confirm_finding:*",
+            "low_end.approve_fix_plan",
+            "low_end.after_fix_render"
+          ],
+          "forbidden_actions": [
+            "automatic_fl_studio_render",
+            "automatic_project_writes",
+            "plugin_loading",
+            "unsafe_fix_application",
+            "stem_specific_claims_from_master_only_audio",
+            "final_fix_plan_from_unconfirmed_static_metadata"
+          ],
+          "metadata": {
+            "evidence_levels": {
+              "1": "static_metadata",
+              "2": "live_playback_data",
+              "3": "rendered_master_audio",
+              "4": "role_confirmed_bus_or_stem_evidence",
+              "5": "deeper_batch_or_multi_source_evidence"
+            },
+            "genre_profiles": [
+              "default",
+              "psytrance"
+            ],
+            "future_genre_profiles": [
+              "techno",
+              "drum_and_bass",
+              "hip_hop",
+              "cinematic"
+            ],
+            "automatic_fl_render": false,
+            "master_audio_limit": "Rendered master audio may create proxy low-end findings but must not create kick, bass, sub, or stem-specific causal claims."
+          }
         },
         {
           "id": "project_organizer",

@@ -149,9 +149,9 @@ def aggregate_project_health(
             "rendered_audio_features": len(audio_observations),
             "audio_evidence_levels": sorted(
                 {
-                    3
+                    4
                     if (row.get("payload") or {}).get("evidence_kind") == "stem"
-                    else 2
+                    else 3
                     for row in audio_observations
                 }
             ),

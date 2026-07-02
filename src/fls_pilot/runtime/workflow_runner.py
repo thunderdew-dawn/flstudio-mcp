@@ -6,6 +6,13 @@ import threading
 from typing import Any
 
 from ..analysis import EVIDENCE_TYPE_RENDERED_AUDIO
+from ..analysis.low_end import (
+    LOW_END_FUTURE_GENRE_PROFILES,
+    LOW_END_GENRE_PROFILES,
+    low_end_evidence_metadata,
+    normalize_stem_role,
+    weighted_low_end_risk,
+)
 from ..analysis.reports import analysis_report_for_control_center
 from ..analysis.schema import AnalysisReport, Coverage, Finding, Freshness, Prerequisite
 from ..analysis.scoring import confidence_from_coverage, risk_from_severities
@@ -23,10 +30,11 @@ EVIDENCE_LEVEL_LABELS = {
 }
 
 LEGACY_AUDIO_EVIDENCE_LEVEL_LABELS = {
-    1: "static_project_snapshot",
-    2: "rendered_master_audio",
-    3: "rendered_master_and_stems",
-    4: "stem_bus_evidence",
+    1: "static_metadata",
+    2: "live_playback_data",
+    3: "rendered_master_audio",
+    4: "role_confirmed_bus_or_stem_evidence",
+    5: "deeper_batch_or_multi_source_evidence",
 }
 
 
@@ -147,6 +155,7 @@ def _apply_audio_evidence(
         for row in observations
         if (row.payload if isinstance(row.payload, dict) else {}).get("evidence_kind") == "stem"
     )
+    confirmed_stems = tuple(row for row in stems if _confirmed_stem_role(row) is not None)
     requested_level = _requested_mix_review_level(report) if workflow_id == "mix_review" else 1
     effective_master = (
         master
@@ -154,7 +163,7 @@ def _apply_audio_evidence(
         else None
     )
     effective_stems = (
-        stems
+        confirmed_stems
         if workflow_id != "mix_review" or requested_level >= 4
         else ()
     )
@@ -205,7 +214,7 @@ def _apply_audio_evidence(
     next_actions = list(report.next_actions)
     evidence_level = requested_level if workflow_id == "mix_review" else 1
     if workflow_id != "mix_review" and master is not None:
-        evidence_level = 3 if stems else 2
+        evidence_level = 4 if confirmed_stems else 3
     if effective_master is not None:
         master_payload = dict(effective_master.payload)
         summary = dict(master_payload.get("feature_summary") or {})
@@ -222,6 +231,12 @@ def _apply_audio_evidence(
             ],
             "automatic_fl_render": False,
             "mix_review_audio_findings": workflow_id != "mix_review",
+            "claim_limit": (
+                "Master-only audio is proxy evidence and must not create "
+                "kick/bass/stem-specific causal claims."
+                if workflow_id == "low_end_analysis" and not stem_available
+                else None
+            ),
         }
     else:
         if workflow_id != "mix_review" or requested_level >= 3:
@@ -261,6 +276,16 @@ def _apply_audio_evidence(
             workflow_id=workflow_id,
         )
     )
+    if (
+        workflow_id == "low_end_analysis"
+        and audio_available
+        and not stem_available
+    ):
+        if metadata.get("score_status") == "final":
+            metadata["score_status"] = "partial"
+        metadata["score_status_reason"] = "rendered_master_audio_is_proxy_only"
+        metadata["audio_evidence_score_status"] = "partial"
+        metadata["blocked_fix_plan_until_confirmed"] = True
     if workflow_id == "mix_review":
         metadata.update(
             _mix_review_audio_metadata(
@@ -275,6 +300,8 @@ def _apply_audio_evidence(
         tuple(row.severity for row in findings[len(report.findings) :])
     )
     risk_score = min(100, report.risk_score + audio_risk)
+    if workflow_id == "low_end_analysis":
+        risk_score = weighted_low_end_risk(tuple(findings))
     confidence = confidence_from_coverage(
         required=coverage.required,
         available=coverage.available,
@@ -299,8 +326,8 @@ def _apply_audio_evidence(
             "evidence_mode": (
                 report.evidence_mode
                 if workflow_id == "mix_review"
-                else "rendered_master_and_stems"
-                if stems
+                else "role_confirmed_stems"
+                if stem_available
                 else "rendered_master"
                 if audio_available
                 else "static_snapshot_only"
@@ -438,6 +465,45 @@ def _evidence_level_metadata(
 ) -> dict[str, Any]:
     label = _evidence_level_label(level, workflow_id=workflow_id)
     audio_requested = workflow_id != "mix_review" or level >= 3
+    if workflow_id == "low_end_analysis":
+        out = low_end_evidence_metadata(level)
+        out.update(
+            {
+                "audio_evidence_status": (
+                    "available"
+                    if audio_available
+                    else "missing"
+                    if audio_requested
+                    else "not_requested"
+                ),
+                "requires_manual_audio_export": audio_requested and not audio_available,
+                "genre_profile": "default",
+                "genre_profiles": list(LOW_END_GENRE_PROFILES),
+                "future_genre_profiles": list(LOW_END_FUTURE_GENRE_PROFILES),
+                "role_confirmation_state": (
+                    "role_confirmed"
+                    if stem_available
+                    else "master_proxy_only"
+                    if audio_available
+                    else "name_based_unconfirmed"
+                ),
+                "evidence_level_4": {
+                    "evidence_level": 4,
+                    "evidence_level_label": _evidence_level_label(4, workflow_id=workflow_id),
+                    "status": "available" if stem_available else "planned",
+                    "requires_manual_stem_export": True,
+                    "automatic_fl_render": False,
+                },
+                "evidence_level_5": {
+                    "evidence_level": 5,
+                    "evidence_level_label": _evidence_level_label(5, workflow_id=workflow_id),
+                    "status": "planned",
+                    "automatic_fl_render": False,
+                },
+                "level_contract": "low_end_evidence_levels_1_5",
+            }
+        )
+        return out
     return {
         "evidence_level": level,
         "evidence_level_label": label,
@@ -466,6 +532,26 @@ def _evidence_level_label(level: int, *, workflow_id: str = "") -> str:
     return labels.get(level, labels[1])
 
 
+def _confirmed_stem_role(observation: Any) -> str | None:
+    payload = getattr(observation, "payload", None)
+    if not isinstance(payload, dict):
+        return None
+    role = normalize_stem_role(payload.get("stem_role") or payload.get("role"))
+    if role is None:
+        return None
+    confirmation = str(
+        payload.get("role_confirmation")
+        or payload.get("role_confirmation_state")
+        or payload.get("role_source")
+        or ""
+    ).strip().lower()
+    if confirmation in {"confirmed", "explicit", "user_confirmed", "metadata_confirmed"}:
+        return role
+    if payload.get("role_confirmed") is True:
+        return role
+    return None
+
+
 def _latest_audio_observation(observations, evidence_kind: str):  # noqa: ANN001, ANN201
     rows = [
         row
@@ -483,8 +569,37 @@ def _audio_finding(
 ) -> Finding:
     if workflow_id == "low_end_analysis":
         low_ratio = summary.get("low_end_energy_ratio")
+        low_20_120 = summary.get("low_end_20_120_ratio")
+        mono_loss = summary.get("mono_folddown_loss_db")
+        low_side = summary.get("low_band_side_ratio")
         low_stereo = summary.get("low_band_stereo_proxy")
-        severity = "medium" if isinstance(low_stereo, (int, float)) and low_stereo < 0 else "info"
+        severity = "info"
+        profile = LOW_END_GENRE_PROFILES["default"]
+        high_low_end = (
+            isinstance(low_20_120, (int, float))
+            and low_20_120 >= profile["low_end_ratio_high"]
+        )
+        high_mono_loss = (
+            isinstance(mono_loss, (int, float))
+            and mono_loss <= profile["mono_loss_high_db"]
+        )
+        medium_low_end = (
+            isinstance(low_20_120, (int, float))
+            and low_20_120 >= profile["low_end_ratio_medium"]
+        )
+        medium_mono_loss = (
+            isinstance(mono_loss, (int, float))
+            and mono_loss <= profile["mono_loss_medium_db"]
+        )
+        if high_low_end or high_mono_loss:
+            severity = "high"
+        elif (
+            isinstance(low_stereo, (int, float))
+            and low_stereo < 0
+            or medium_low_end
+            or medium_mono_loss
+        ):
+            severity = "medium"
         return Finding(
             id="low_end.rendered_audio_proxy",
             rule_id="low_end.rendered_audio_proxy",
@@ -496,13 +611,37 @@ def _audio_finding(
             evidence=(
                 {
                     "low_end_energy_ratio": low_ratio,
+                    "low_end_20_120_ratio": low_20_120,
+                    "infrasonic_ratio_below_20": summary.get("infrasonic_ratio_below_20"),
+                    "sub_20_40_ratio": summary.get("sub_20_40_ratio"),
+                    "sub_40_80_ratio": summary.get("sub_40_80_ratio"),
+                    "bass_80_120_ratio": summary.get("bass_80_120_ratio"),
+                    "low_mid_120_250_ratio": summary.get("low_mid_120_250_ratio"),
+                    "mud_120_250_ratio": summary.get("mud_120_250_ratio"),
                     "low_band_stereo_proxy": low_stereo,
-                    "proxy_notice": "Not mono-cancellation proof.",
+                    "low_band_side_ratio": low_side,
+                    "sub_side_ratio_db": summary.get("sub_side_ratio_db"),
+                    "bass_side_ratio_db": summary.get("bass_side_ratio_db"),
+                    "mono_folddown_loss_db": mono_loss,
+                    "proxy_notice": (
+                        "Rendered master evidence only; not a kick, bass, sub, "
+                        "or stem-specific cause."
+                    ),
                 },
             ),
-            limitations=("Low-band stereo is a correlation proxy.",),
+            limitations=(
+                "Rendered master audio is proxy evidence and cannot prove stem-specific causes.",
+                "Low-band stereo is a correlation proxy.",
+            ),
             source_observation_ids=(observation_id,),
-            metadata={"evidence_type": EVIDENCE_TYPE_RENDERED_AUDIO},
+            metadata={
+                "evidence_type": EVIDENCE_TYPE_RENDERED_AUDIO,
+                "evidence_level": 3,
+                "evidence_level_label": "rendered_master_audio",
+                "finding_state": "accepted",
+                "proxy_evidence": True,
+                "stem_specific_claim": False,
+            },
         )
     peak = summary.get("peak_dbfs")
     severity = "high" if isinstance(peak, (int, float)) and peak >= 0 else "info"

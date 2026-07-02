@@ -46,16 +46,23 @@ def test_low_end_report_keeps_proxy_labeling(tmp_path) -> None:
             if row["rule_id"] == "low_end.rendered_audio_proxy"
         )
         assert finding["severity"] == "medium"
-        assert finding["evidence"][0]["proxy_notice"] == "Not mono-cancellation proof."
+        assert "stem-specific cause" in finding["evidence"][0]["proxy_notice"]
         assert "proxy" in finding["limitations"][0].lower()
         assert report["ruleset_id"] == "core.low-end.metadata"
         assert report["ruleset_version"] == "1.0.0"
         assert report["profile_id"] == "default"
-        assert report["metadata"]["evidence_level"] == 2
+        assert report["metadata"]["evidence_level"] == 3
         assert report["metadata"]["evidence_level_label"] == "rendered_master_audio"
         assert report["metadata"]["audio_evidence_status"] == "available"
+        assert report["metadata"]["score_status"] == "provisional"
+        assert report["metadata"]["audio_evidence_score_status"] == "partial"
+        assert report["metadata"]["score_status_reason"] == "rendered_master_audio_is_proxy_only"
+        assert report["metadata"]["role_confirmation_state"] == "master_proxy_only"
         assert report["metadata"]["automatic_fl_render"] is False
         assert report["metadata"]["evidence_level_4"]["status"] == "planned"
+        assert finding["metadata"]["evidence_level"] == 3
+        assert finding["metadata"]["proxy_evidence"] is True
+        assert finding["metadata"]["stem_specific_claim"] is False
     finally:
         runtime.close()
 

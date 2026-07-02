@@ -1,8 +1,8 @@
 {
   "snapshot_version": 1,
-  "as_of": "2026-07-01",
+  "as_of": "2026-07-02",
   "status": "governed",
-  "governance_note": "Updated for Mix Review Level 1-4 evidence workflow, MCP fl_review_mix level/profile/capture arguments, Control Center Level 2 peak-watch controls, and Level 3/4 rendered evidence placeholders. Persistent-write safety posture is unchanged; Level 2 uses transient playback controls in the UI and read-only meter snapshots, while Level 3/4 require external analyzer evidence before audio conclusions.",
+  "governance_note": "Updated for Low-End Analysis evidence levels 1-5, additive audio-feature metrics, rendered-master proxy-only claims, role-confirmed stem/bus gates for stem-specific conclusions, and declared manual/forbidden low-end workflow actions. Persistent-write safety posture is unchanged; FL Studio render automation, automatic project writes, plugin loading, and stem-specific claims from master-only audio remain forbidden.",
   "project": {
     "name": "fls-pilot",
     "package_version": "3.0.0b3",
@@ -351,6 +351,27 @@
     "audio_features_contract": "fls-pilot.audio-features.v1",
     "audio_artifact_contract": "fls-pilot.audio-artifact.v1",
     "evidence_link_contract": "fls-pilot.evidence-link.v1",
+    "low_end_contract": {
+      "evidence_levels": {
+        "1": "static_metadata",
+        "2": "live_playback_data",
+        "3": "rendered_master_audio",
+        "4": "role_confirmed_bus_or_stem_evidence",
+        "5": "deeper_batch_or_multi_source_evidence"
+      },
+      "rendered_master_claim_limit": "proxy_only_no_stem_specific_causes",
+      "stem_specific_claims_require": "role_confirmed_bus_or_stem_evidence",
+      "automatic_fl_render": false,
+      "persistent_writes": false,
+      "forbidden_actions": [
+        "automatic_fl_studio_render",
+        "automatic_project_writes",
+        "plugin_loading",
+        "unsafe_fix_application",
+        "stem_specific_claims_from_master_only_audio",
+        "final_fix_plan_from_unconfirmed_static_metadata"
+      ]
+    },
     "routing_audit_contract": {
       "levels": [
         "level_1_static",

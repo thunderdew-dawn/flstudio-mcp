@@ -136,6 +136,16 @@ stereo width, and master headroom.
 
 ![Low-end analysis details](../assets/control-center-low-end-analysis-2.png)
 
+Low-End Analysis evidence levels:
+
+| Level | Name | What it can support |
+|---|---|---|
+| 1 | Static metadata / project structure | Name, routing, plugin, color, group, and mixer-control evidence. Findings are provisional/static suspicions and cannot prove audio behavior. |
+| 2 | Live playback data | Playback telemetry such as peaks, meters, channel activity, and clipping indicators. This can strengthen level/risk findings but remains limited without explicit role evidence. |
+| 3 | Rendered master audio | User-rendered or user-provided master/mixdown audio. Findings are proxy-labeled low-end findings and must not claim kick, bass, sub, or stem-specific causes. |
+| 4 | Role-confirmed bus/stem evidence | Rendered stems or buses with roles confirmed by explicit metadata or user decision. This is the first level that can support stem-specific low-end conclusions. |
+| 5 | Deeper batch / multi-source evidence | Planned deeper diagnosis across multiple rendered channels, stems, buses, playback captures, or future evidence sources. |
+
 ## Routing Audit
 
 Routing Audit reviews mixer routes, bus structure, channels that skip groups,

@@ -383,8 +383,58 @@ DEFAULT_WORKFLOW_REGISTRY = WorkflowRegistry(
             action_label="Run Low-End Safety Check",
             safety_note=(
                 "Read-only low-end review. Metadata raises suspicions; rendered "
-                "audio is required for audio-backed energy and stereo proxy claims."
+                "master audio creates proxy claims only; stem-specific conclusions "
+                "require role-confirmed stem or bus evidence."
             ),
+            supported_next_actions=(
+                "low_end.confirm_detected_tracks",
+                "low_end.assign_track_roles:*",
+                "low_end.choose_genre_profile",
+                "low_end.confirm_finding:*",
+                "audio.render_master",
+                "audio.render_low_end_stems",
+                "low_end.approve_fix_plan",
+                "low_end.after_fix_render",
+            ),
+            manual_only_actions=(
+                "audio.render_master",
+                "audio.render_low_end_stems",
+                "low_end.confirm_detected_tracks",
+                "low_end.assign_track_roles:*",
+                "low_end.choose_genre_profile",
+                "low_end.confirm_finding:*",
+                "low_end.approve_fix_plan",
+                "low_end.after_fix_render",
+            ),
+            forbidden_actions=(
+                "automatic_fl_studio_render",
+                "automatic_project_writes",
+                "plugin_loading",
+                "unsafe_fix_application",
+                "stem_specific_claims_from_master_only_audio",
+                "final_fix_plan_from_unconfirmed_static_metadata",
+            ),
+            metadata={
+                "evidence_levels": {
+                    "1": "static_metadata",
+                    "2": "live_playback_data",
+                    "3": "rendered_master_audio",
+                    "4": "role_confirmed_bus_or_stem_evidence",
+                    "5": "deeper_batch_or_multi_source_evidence",
+                },
+                "genre_profiles": ["default", "psytrance"],
+                "future_genre_profiles": [
+                    "techno",
+                    "drum_and_bass",
+                    "hip_hop",
+                    "cinematic",
+                ],
+                "automatic_fl_render": False,
+                "master_audio_limit": (
+                    "Rendered master audio may create proxy low-end findings but "
+                    "must not create kick, bass, sub, or stem-specific causal claims."
+                ),
+            },
         ),
         _declaration(
             "project_organizer",

@@ -3778,11 +3778,24 @@ function renderExplicitLabels(containerSelector, report) {
   };
 
   const analysis = report.analysis || {};
+  const metadata = analysis.metadata || report.metadata || {};
   const h = analysis.health_score ?? report.summary?.health_score;
   const r = analysis.risk_score ?? report.summary?.risk_score;
   const c = analysis.coverage;
   const conf = analysis.confidence_score;
 
+  if (metadata.evidence_level_label) {
+    addStat("Evidence", safeString(metadata.evidence_level_label).replaceAll("_", " "));
+  }
+  if (metadata.audio_evidence_status) {
+    addStat("Audio Evidence", safeString(metadata.audio_evidence_status).replaceAll("_", " "));
+  }
+  if (metadata.score_status) {
+    addStat("Score Status", safeString(metadata.score_status).replaceAll("_", " "));
+  }
+  if (metadata.role_confirmation_state) {
+    addStat("Roles", safeString(metadata.role_confirmation_state).replaceAll("_", " "));
+  }
   if (h != null) addStat("Health", `${Math.round(h)} / 100`);
   if (r != null) addStat("Risk", `${Math.round(r)} / 100`);
   if (c != null && c.required) addStat("Coverage", `${c.available} / ${c.required}`);

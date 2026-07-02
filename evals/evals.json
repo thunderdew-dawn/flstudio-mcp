@@ -1065,6 +1065,8 @@
         "state that Control Center records user_decisions locally and sends them back on the next read-only workflow run",
         "state that confirmed or selected user_decisions clear the matching pending human validation request, while skipped decisions do not",
         "show that name-based low-end candidates use low_end.confirm_detected_tracks and Finding.metadata.human_validation_required",
+        "state that low-end evidence level 2 is live playback data, level 3 is rendered master proxy evidence, and level 4 requires role-confirmed stem or bus evidence",
+        "state that rendered master audio must not create kick, bass, sub, or other stem-specific causal claims",
         "state that unconfirmed heuristic findings make score_status provisional and block risky cleanup/fix-plan assumptions",
         "state that answering an interaction request is not a persistent FL Studio write approval and does not mutate the project",
         "do not invent unsupported interaction types like 'script' or 'eval'"
