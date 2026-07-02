@@ -26,7 +26,11 @@ from ..analysis import (
 from ..analysis.live import LiveMeterPolicy
 from ..connection import fetch_all_pages, get_bridge
 from ..music import mix_doctor as md
-from ..music.mix_review_levels import MixReviewLevel, normalize_mix_review_options
+from ..music.mix_review_levels import (
+    MixReviewLevel,
+    allow_inline_live_meter,
+    normalize_mix_review_options,
+)
 from ..project_templates import compact_context
 
 
@@ -70,7 +74,7 @@ def _gather_analysis_snapshot(bridge, *, with_params: bool = True, options=None)
         peaks_override=watch_peaks or None,
         live_window=live_window,
         static_snapshot=static_snapshot,
-        allow_live_meter=mix_options is None,
+        allow_live_meter=allow_inline_live_meter(mix_options),
     )
     if mix_options is not None:
         snap["mix_review_options"] = mix_options.to_dict()
@@ -360,14 +364,26 @@ def register(mcp: FastMCP) -> None:
         for p in proposed_changes:
             used_rule_ids.update(p.get("kb_rule_ids") or [])
         playing = snap.get("playing")
+        peak_source = str((snap.get("peak_window") or {}).get("source") or "")
+        needs_level_2_watch = (
+            options.level == MixReviewLevel.LIVE_WATCH
+            and snap.get("peak_window", {}).get("source") != "watch"
+        )
         guidance = (
-            "This is a static project/mixer review. Audio-dependent checks require "
-            "Level 2, Level 3 or Level 4 evidence."
+            "Current mixer peaks were collected because FL Studio playback was running. "
+            "Treat them as momentary live evidence, not a full-song watch window."
             if options.level == MixReviewLevel.STATIC
+            and snap.get("levels_valid")
+            and peak_source not in {"", "none", "watch"}
+            else "This is a static project/mixer review. Audio-dependent checks require "
+            "playback, Level 2 watch, Level 3, or Level 4 evidence."
+            if options.level == MixReviewLevel.STATIC
+            else "Current mixer peaks were collected for this run. Start Level 2 Watch "
+            "at the loudest section when you need bounded loud-section evidence."
+            if needs_level_2_watch and snap.get("levels_valid")
             else "Start Level 2 Watch at the loudest section for 8-60 seconds, then "
             "run Mix Review again."
-            if options.level == MixReviewLevel.LIVE_WATCH
-            and snap.get("peak_window", {}).get("source") != "watch"
+            if needs_level_2_watch
             else "Rendered/stem evidence is prepared, but audio feature analysis is "
             "pending the external analyzer integration."
             if options.level >= MixReviewLevel.RENDERED_MASTER
@@ -379,8 +395,7 @@ def register(mcp: FastMCP) -> None:
             title="Mix Review",
             status=(
                 "Needs Level 2 Watch"
-                if options.level == MixReviewLevel.LIVE_WATCH
-                and snap.get("peak_window", {}).get("source") != "watch"
+                if needs_level_2_watch and not snap.get("levels_valid")
                 else "Mix review generated"
             ),
             snap={**snap, "template_context": diag.get("template_context")},
@@ -391,8 +406,7 @@ def register(mcp: FastMCP) -> None:
             summary=plan["summary"],
             metadata={
                 "playing": playing,
-                "needs_playback": options.level == MixReviewLevel.LIVE_WATCH
-                and snap.get("peak_window", {}).get("source") != "watch",
+                "needs_playback": needs_level_2_watch and not snap.get("levels_valid"),
                 "peak_source": snap.get("peak_window", {}).get("source"),
                 **level_metadata,
             },

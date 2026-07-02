@@ -279,6 +279,12 @@ def normalize_mix_review_options(raw: Any = None, **overrides: Any) -> MixReview
     )
 
 
+def allow_inline_live_meter(options: MixReviewOptions | None) -> bool:
+    if options is None:
+        return True
+    return options.level in {MixReviewLevel.STATIC, MixReviewLevel.LIVE_WATCH}
+
+
 def normalize_mix_review_level(value: Any) -> MixReviewLevel:
     if isinstance(value, MixReviewLevel):
         return value

@@ -63,6 +63,7 @@ from .music.mix_review_levels import (
     RENDERED_STEM_EXPECTED_CHECKS,
     STEM_ROLES,
     MixReviewLevel,
+    allow_inline_live_meter,
     normalize_mix_review_options,
 )
 from .rules import RuleCondition, RuleDefinition, evaluate_rules
@@ -1231,7 +1232,7 @@ def _collect_mix_snapshot(
         peaks_override=watch_peaks or None,
         live_window=live_window,
         static_snapshot=static_snapshot,
-        allow_live_meter=mix_options is None,
+        allow_live_meter=allow_inline_live_meter(mix_options),
     )
     if mix_options is not None:
         snapshot["mix_review_options"] = mix_options.to_dict()
@@ -2517,11 +2518,26 @@ def _mix_review_level_payload(
     limits = []
     next_actions = []
     if mix_options.level == MixReviewLevel.STATIC:
-        limits.append(
-            "This is a static project/mixer review. Audio-dependent checks require "
-            "Level 2, Level 3 or Level 4 evidence."
-        )
+        if evidence_summary["live_meter"] == "available":
+            notes.append(
+                "Current mixer peaks were collected because FL Studio playback was "
+                "running during this Mix Review."
+            )
+            limits.append(
+                "Level 1 remains primarily structural. Current mixer peaks are "
+                "momentary live evidence, not a loud-section or full-song watch window."
+            )
+        else:
+            limits.append(
+                "This is a static project/mixer review. Audio-dependent checks require "
+                "playback, Level 2 watch, Level 3, or Level 4 evidence."
+            )
     if mix_options.level == MixReviewLevel.LIVE_WATCH and watch_status != "available":
+        if evidence_summary["live_meter"] == "available":
+            notes.append(
+                "Current mixer peaks were collected for this run, but Level 2 Watch "
+                "still needs a fresh bounded capture for loud-section evidence."
+            )
         next_actions.append(
             {
                 "type": "level_2_watch",

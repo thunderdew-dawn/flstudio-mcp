@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from fls_pilot.music.mix_review_levels import (
     MixReviewLevel,
+    allow_inline_live_meter,
     normalize_mix_review_options,
 )
 
@@ -23,6 +24,14 @@ def test_invalid_level_does_not_crash() -> None:
     options = normalize_mix_review_options({"level": "not-a-level"})
 
     assert options.level == MixReviewLevel.STATIC
+
+
+def test_inline_live_meter_policy_allows_only_static_and_watch_levels() -> None:
+    assert allow_inline_live_meter(None) is True
+    assert allow_inline_live_meter(normalize_mix_review_options({"level": 1})) is True
+    assert allow_inline_live_meter(normalize_mix_review_options({"level": 2})) is True
+    assert allow_inline_live_meter(normalize_mix_review_options({"level": 3})) is False
+    assert allow_inline_live_meter(normalize_mix_review_options({"level": 4})) is False
 
 
 def test_loop_seconds_bounds() -> None:

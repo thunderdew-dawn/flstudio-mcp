@@ -2,7 +2,7 @@
   "snapshot_version": 1,
   "as_of": "2026-07-02",
   "status": "governed",
-  "governance_note": "Updated for Project Organizer template-aware stored plans and plan-based apply gates. Persistent-write safety posture is unchanged: planning remains read-only, organization apply requires a stored plan, explicit approval, fingerprint/hash/expiry validation, safety-layer writes, readback, and rollback.",
+  "governance_note": "Updated for Project Organizer template-aware stored plans and plan-based apply gates, plus Mix Review inline live-meter fallback for already-running playback. Persistent-write safety posture is unchanged: planning and review remain read-only, organization apply requires a stored plan, explicit approval, fingerprint/hash/expiry validation, safety-layer writes, readback, and rollback.",
   "project": {
     "name": "fls-pilot",
     "package_version": "3.0.0b3",
@@ -358,6 +358,7 @@
         "3": "rendered_master_audio_proxy",
         "4": "role_confirmed_stem_or_bus_audio"
       },
+      "inline_live_meter_policy": "Level 1 and Level 2 may sample current mixer peaks inline only when FL Studio playback is already running. Inline peaks are momentary live evidence; Level 2 watch evidence is still required for loud-section or full-song watch claims.",
       "finding_states": [
         "static_heuristic",
         "name_based_unconfirmed",

@@ -295,7 +295,8 @@ DEFAULT_WORKFLOW_REGISTRY = WorkflowRegistry(
             endpoint="/api/workflows/mix-review",
             action_label="Run Mix Review",
             safety_note=(
-                "Read-only mixer review. Level 1 is static; Level 2 uses optional "
+                "Read-only mixer review. Level 1 is static with opportunistic "
+                "current playback peaks when already playing; Level 2 uses optional "
                 "transient playback/watch evidence; Level 3 uses linked rendered "
                 "master proxy evidence; Level 4 uses role-confirmed stem/bus evidence."
             ),

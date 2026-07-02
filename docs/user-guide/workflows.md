@@ -75,11 +75,11 @@ FL Studio's Python API is useful but has strict boundaries. This project combine
 - **The Limitation:** Static project metadata can find routing, plugin, naming,
   and rough gain risks, but it cannot prove dynamic loudness, masking, phase, or
   spectrum facts.
-- **How it works:** `fl_review_mix()` defaults to Level 1 static review. Level
-  2 uses an explicit peak watch while the user plays a loud section. Level 3
-  and Level 4 prepare rendered-master and stem/bus evidence requests for the
-  external analyzer path; they list expected checks but do not invent audio
-  conclusions.
+- **How it works:** `fl_review_mix()` defaults to Level 1 static review and
+  may use current mixer peaks if FL Studio is already playing. Level 2 uses an
+  explicit peak watch while the user plays a loud section. Level 3 and Level 4
+  prepare rendered-master and stem/bus evidence requests for the external
+  analyzer path; they list expected checks but do not invent audio conclusions.
 
 **Knowledgebase & Intents (`fl_apply_eq_intent`)**
 - **The Problem:** AI notoriously "hallucinates" plugin parameter values (e.g. setting a knob to 150% when the limit is 100%).
@@ -121,7 +121,7 @@ Mix Review evidence levels:
 
 | Level | Name | What it can support |
 |---|---|---|
-| 1 | Static Mix Review | Default. Uses names, routing, mixer controls, plugins, template context, and other project metadata. Findings that depend on audio are marked heuristic, provisional, or low confidence. |
+| 1 | Static Mix Review | Default. Uses names, routing, mixer controls, plugins, template context, and other project metadata. If FL Studio is already playing, current mixer peaks may support clipping/headroom checks as momentary live evidence. Findings without audio evidence are marked heuristic, provisional, or low confidence. |
 | 2 | Live Peak Watch | Uses a fresh 8-60 second meter watch for peak, clipping risk, headroom, and hot-track evidence. Playback is user-guided or explicitly triggered from the GUI as a transient action. |
 | 3 | Rendered Master Evidence | Prepared contract for linked rendered-master evidence and expected checks such as LUFS, true peak, clipping count, crest factor, stereo correlation, mono loss, and band energy. This beta does not calculate or claim those facts in Mix Review without external analyzer results. |
 | 4 | Stem/Bus Evidence | Prepared contract for stem roles and expected checks such as kick/bass masking, low-end phase, bus balance, stem headroom, and mono compatibility. This beta does not claim masking, phase, or spectrum conclusions without external analyzer results. |

@@ -5,7 +5,7 @@
   "source_snapshot": "agent-docs/machine/architecture-analysis.snapshot.json",
   "source_snapshot_sha256": "ff0d38588b91510a3073e81d885de38f9116cddfbcd95686cbf11c28a6db8d7f",
   "generated_at": "2026-07-02",
-  "note": "Scoped slice refreshed for Low-End Analysis runtime evidence levels 1-5, proxy rendered-master metadata, and manual/forbidden action declarations; full static architecture analysis was not regenerated.",
+  "note": "Scoped slice refreshed for Low-End Analysis runtime evidence levels 1-5 and Mix Review inline live-meter fallback; full static architecture analysis was not regenerated.",
   "load_when": [
     "daemon, RuntimeCore, runtime RPC, report store, or workflow execution changes",
     "bridge/session runtime ownership, freshness, invalidation, or observation state changes",
@@ -164,7 +164,7 @@
           "group": "Project Review",
           "endpoint": "/api/workflows/mix-review",
           "action_label": "Run Mix Review",
-          "safety_note": "Read-only mixer review. Level 1 is static; Level 2 uses optional transient playback/watch evidence; Level 3/4 audio evidence is prepared for external analyzer integration.",
+          "safety_note": "Read-only mixer review. Level 1 is static with opportunistic current playback peaks when already playing; Level 2 uses optional transient playback/watch evidence; Level 3/4 audio evidence is prepared for external analyzer integration.",
           "supported_next_actions": [
             "run_static_review",
             "start_level_2_watch",
