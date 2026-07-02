@@ -296,30 +296,74 @@ DEFAULT_WORKFLOW_REGISTRY = WorkflowRegistry(
             action_label="Run Mix Review",
             safety_note=(
                 "Read-only mixer review. Level 1 is static; Level 2 uses optional "
-                "transient playback/watch evidence; Level 3/4 audio evidence is "
-                "prepared for external analyzer integration."
+                "transient playback/watch evidence; Level 3 uses linked rendered "
+                "master proxy evidence; Level 4 uses role-confirmed stem/bus evidence."
             ),
             supported_next_actions=(
                 "run_static_review",
                 "start_level_2_watch",
                 "link_rendered_master_evidence",
                 "link_stem_bus_evidence",
+                "confirm_mix_review_finding",
+                "accept_mix_review_finding",
+                "reject_mix_review_finding",
+                "ignore_mix_review_finding",
             ),
             manual_only_actions=(
                 "choose_loudest_section",
                 "manual_audio_render",
                 "manual_stem_export",
+                "confirm_track_roles",
+                "approve_fix_plan",
             ),
             forbidden_actions=("automatic_render", "plugin_loading", "playlist_clip_editing"),
             metadata={
                 "mix_review_levels": [
-                    "level_1_static",
-                    "level_2_live_peak_watch",
-                    "level_3_rendered_master_placeholder",
-                    "level_4_stem_bus_placeholder",
+                    "level_1_static_project_metadata",
+                    "level_2_live_meter_window",
+                    "level_3_rendered_master_audio_proxy",
+                    "level_4_role_confirmed_stem_bus_audio",
                 ],
-                "external_audio_analyzer_status": "not_merged_yet",
-                "genre_profiles": ["default", "psytrance"],
+                "finding_states": [
+                    "static_heuristic",
+                    "name_based_unconfirmed",
+                    "metadata_suspected",
+                    "live_meter_supported",
+                    "rendered_master_proxy",
+                    "stem_audio_confirmed",
+                    "accepted_by_user",
+                    "rejected_by_user",
+                    "ignored_by_user",
+                    "requires_more_evidence",
+                ],
+                "score_fields": [
+                    "legacy_score",
+                    "risk_score_v2",
+                    "score_status",
+                    "score_inputs",
+                    "evidence_weight",
+                    "decision_adjusted_score",
+                    "blocked_findings_count",
+                    "provisional_findings_count",
+                    "confirmed_findings_count",
+                ],
+                "fix_plan_statuses": [
+                    "blocked",
+                    "draft",
+                    "requires_user_approval",
+                    "approved",
+                    "not_applicable",
+                ],
+                "genre_profiles": [
+                    "default",
+                    "psytrance",
+                    "techno",
+                    "hiphop",
+                    "ambient",
+                    "rock",
+                    "cinematic",
+                ],
+                "target_contexts": ["streaming", "club", "festival", "demo", "unknown"],
             },
         ),
         _declaration(
@@ -347,7 +391,53 @@ DEFAULT_WORKFLOW_REGISTRY = WorkflowRegistry(
             panel_id="producer_routing",
             endpoint="/api/workflows/routing-audit",
             action_label="Run Routing Audit",
-            safety_note="Read-only routing audit. Cleanup remains proposal-first.",
+            safety_note=(
+                "Read-only routing audit. Static and meter findings remain evidence-labeled; "
+                "cleanup remains proposal-first and confirmation-gated."
+            ),
+            supported_next_actions=(
+                "run_static_routing_snapshot",
+                "run_meter_snapshot_proxy",
+                "confirm_template_profile",
+                "confirm_track_roles",
+                "plan_cleanup_after_confirmation",
+            ),
+            manual_only_actions=(
+                "confirm_direct_to_master_intent",
+                "confirm_reference_monitor_only",
+                "confirm_sidechain_control_not_audible",
+                "approve_cleanup_plan",
+            ),
+            forbidden_actions=(
+                "automatic_routing_cleanup",
+                "playlist_clip_editing",
+                "plugin_loading",
+                "automatic_render",
+            ),
+            metadata={
+                "routing_evidence_levels": [
+                    "static_routing_snapshot",
+                    "meter_snapshot_proxy",
+                    "user_confirmed_routing_intent",
+                    "verified_cleanup_readback",
+                ],
+                "plan_gating_statuses": [
+                    "blocked_requires_confirmation",
+                    "draft_proxy_evidence",
+                    "ready_for_user_approval",
+                    "no_actionable_findings",
+                ],
+                "intent_profiles": [
+                    "default",
+                    "psytrance_stem_bus_template",
+                    "mixdown_premaster_template",
+                    "recording_session",
+                    "sound_design_session",
+                    "live_performance",
+                    "minimal_sketch",
+                    "reference_monitoring",
+                ],
+            },
         ),
         _declaration(
             "low_end_analysis",

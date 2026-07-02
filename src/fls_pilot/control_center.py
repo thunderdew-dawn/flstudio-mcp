@@ -53,6 +53,7 @@ from .analysis import (
     routing_checks,
     routing_health_score,
     weighted_low_end_risk,
+    weighted_mix_review_risk,
 )
 from .analysis.live import LiveMeterPolicy
 from .connection import DEFAULT_TCP_HOST, DEFAULT_TCP_PORT, TCPBridge, fetch_all_pages
@@ -104,6 +105,13 @@ MIX_REVIEW_HEURISTIC_RULES = {
     "ungrouped",
     "eq_clash",
 }
+MIX_REVIEW_FINDING_DECISION_REQUEST_IDS = {
+    "mix_review.confirm_finding",
+    "mix_review.accept_finding",
+    "mix_review.reject_finding",
+    "mix_review.ignore_finding",
+}
+MIX_REVIEW_FIX_PLAN_APPROVAL_REQUEST_ID = "mix_review.approve_fix_plan"
 CONTROL_CENTER_TRANSPORT_ACTIONS = {
     "get_play_state",
     "get_song_position",
@@ -1735,6 +1743,283 @@ def _apply_mix_user_decisions(
         row["metadata"] = {**dict(row.get("metadata") or {}), **metadata}
 
 
+def _finalize_mix_review_findings(
+    findings: list[dict[str, Any]],
+    *,
+    mix_level: MixReviewLevel,
+    evidence_mode: str,
+    user_decisions: tuple[dict[str, Any], ...],
+) -> None:
+    decisions = _mix_finding_decisions(user_decisions)
+    for row in findings:
+        row_id = str(row.get("id") or "")
+        rule = str(row.get("rule") or "")
+        metadata = dict(row.get("metadata") or {})
+        evidence_level = _mix_finding_evidence_level(mix_level, evidence_mode, rule)
+        finding_state = str(metadata.get("finding_state") or "").strip()
+        if not finding_state:
+            finding_state = _default_mix_finding_state(rule, evidence_level, metadata)
+        decision = decisions.get(row_id)
+        if decision:
+            metadata["user_decision"] = decision
+            metadata["decision_source"] = "user_decision"
+            metadata["human_validation_required"] = False
+            metadata["provisional"] = False
+            if decision == "accepted":
+                finding_state = "accepted_by_user"
+                metadata["validated_by_user"] = True
+            elif decision == "rejected":
+                finding_state = "rejected_by_user"
+            elif decision == "ignored":
+                finding_state = "ignored_by_user"
+        metadata.update(
+            {
+                "evidence_level": evidence_level,
+                "evidence_level_label": _mix_review_level_label(evidence_level),
+                "finding_state": finding_state,
+                "fix_plan_status": _mix_finding_fix_plan_status(rule, finding_state),
+            }
+        )
+        row["metadata"] = metadata
+        row["evidence_level"] = evidence_level
+        row["finding_state"] = finding_state
+        row["fix_plan_status"] = metadata["fix_plan_status"]
+
+
+def _mix_finding_decisions(
+    user_decisions: tuple[dict[str, Any], ...],
+) -> dict[str, str]:
+    out: dict[str, str] = {}
+    for row in user_decisions:
+        request_id = _user_decision_request_id(row)
+        decision = _normalize_mix_finding_decision(row, request_id)
+        if decision is None:
+            continue
+        ids = list(_user_decision_selected_values(row))
+        for key in ("finding_id", "finding"):
+            value = str(row.get(key) or "").strip()
+            if value and value not in ids:
+                ids.append(value)
+        raw_ids = row.get("finding_ids")
+        if isinstance(raw_ids, (list, tuple, set)):
+            ids.extend(str(value).strip() for value in raw_ids if str(value).strip())
+        for finding_id in dict.fromkeys(ids):
+            out[finding_id] = decision
+    return out
+
+
+def _normalize_mix_finding_decision(
+    row: dict[str, Any],
+    request_id: str,
+) -> str | None:
+    decision = str(row.get("decision") or "").strip().lower()
+    if decision in {"accept", "accepted", "confirm", "confirmed", "selected"}:
+        return "accepted"
+    if decision in {"reject", "rejected"}:
+        return "rejected"
+    if decision in {"ignore", "ignored"}:
+        return "ignored"
+    if request_id not in MIX_REVIEW_FINDING_DECISION_REQUEST_IDS:
+        if request_id == MIX_REVIEW_VALIDATION_REQUEST_ID and _user_decision_selected_values(row):
+            return "accepted"
+        return None
+    if request_id in {"mix_review.accept_finding", "mix_review.confirm_finding"}:
+        return "accepted"
+    if request_id == "mix_review.reject_finding":
+        return "rejected"
+    if request_id == "mix_review.ignore_finding":
+        return "ignored"
+    return None
+
+
+def _mix_finding_evidence_level(
+    mix_level: MixReviewLevel,
+    evidence_mode: str,
+    rule: str,
+) -> int:
+    if rule.startswith("rendered_master") or rule.startswith("mix_review.rendered_master"):
+        return 3
+    if "stem" in rule or "kick_bass" in rule:
+        return 4
+    if evidence_mode in {
+        "short_live_snapshot",
+        "recent_live_meter_window",
+        "sufficient_watch_window",
+    }:
+        return max(2, int(mix_level))
+    return int(mix_level) if mix_level >= MixReviewLevel.RENDERED_MASTER else 1
+
+
+def _default_mix_finding_state(
+    rule: str,
+    evidence_level: int,
+    metadata: dict[str, Any],
+) -> str:
+    if bool(metadata.get("human_validation_required")):
+        evidence_type = str(metadata.get("evidence_type") or "")
+        if evidence_type == EVIDENCE_TYPE_NAME_BASED_DETECTION:
+            return "name_based_unconfirmed"
+        return "static_heuristic"
+    if evidence_level >= 4:
+        return "stem_audio_confirmed"
+    if evidence_level == 3:
+        return "rendered_master_proxy"
+    if evidence_level == 2 and rule in {"clipping", "headroom", "master_headroom_risk"}:
+        return "live_meter_supported"
+    if rule in MIX_REVIEW_HEURISTIC_RULES:
+        return "static_heuristic"
+    if str(metadata.get("proof_status") or "").lower() == "provisional":
+        return "metadata_suspected"
+    return "requires_more_evidence" if evidence_level <= 1 else "metadata_suspected"
+
+
+def _mix_review_level_label(level: int) -> str:
+    return {
+        1: "static_project_metadata",
+        2: "live_meter_window",
+        3: "rendered_master_audio",
+        4: "stem_or_bus_audio",
+    }.get(level, "static_project_metadata")
+
+
+def _mix_finding_fix_plan_status(rule: str, finding_state: str) -> str:
+    if finding_state in {"rejected_by_user", "ignored_by_user"}:
+        return "blocked"
+    if rule in {"missing_hpf", "missing_compressor", "eq_clash"}:
+        return "blocked"
+    if finding_state in {"static_heuristic", "name_based_unconfirmed", "metadata_suspected"}:
+        return "blocked"
+    return "draft"
+
+
+def _scored_mix_findings(findings: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        row
+        for row in findings
+        if str((row.get("metadata") or {}).get("finding_state") or row.get("finding_state") or "")
+        not in {"rejected_by_user", "ignored_by_user"}
+    ]
+
+
+def _mix_review_score_metadata(
+    findings: list[dict[str, Any]],
+    *,
+    legacy_health_score: int,
+    pending_validation: tuple[str, ...],
+    mix_options: Any,
+    levels_valid: bool,
+) -> dict[str, Any]:
+    risk_score_v2, score_inputs = weighted_mix_review_risk(
+        tuple(findings),
+        genre_profile=getattr(mix_options, "genre_profile", None),
+        levels_valid=levels_valid,
+    )
+    states = [
+        str((row.get("metadata") or {}).get("finding_state") or row.get("finding_state") or "")
+        for row in findings
+    ]
+    provisional = bool(pending_validation) or (
+        int(mix_options.level) <= 1 and not levels_valid
+    )
+    score_status = "provisional" if provisional else "final"
+    if int(mix_options.level) >= 3 and any(
+        state in {"rendered_master_proxy", "requires_more_evidence"} for state in states
+    ):
+        score_status = "partial" if not pending_validation else "provisional"
+    evidence_weights = [
+        float(row.get("evidence_weight") or 0.0)
+        for row in score_inputs
+        if isinstance(row.get("evidence_weight"), (int, float))
+    ]
+    return {
+        "legacy_score": legacy_health_score,
+        "risk_score_v2": risk_score_v2,
+        "score_status": score_status,
+        "score_inputs": score_inputs,
+        "evidence_weight": round(sum(evidence_weights) / len(evidence_weights), 3)
+        if evidence_weights
+        else 0.0,
+        "decision_adjusted_score": risk_score_v2,
+        "blocked_findings_count": sum(
+            1
+            for row in findings
+            if (row.get("metadata") or {}).get("fix_plan_status") == "blocked"
+        ),
+        "provisional_findings_count": sum(
+            1
+            for state in states
+            if state
+            in {
+                "static_heuristic",
+                "name_based_unconfirmed",
+                "metadata_suspected",
+                "requires_more_evidence",
+                "rendered_master_proxy",
+            }
+        ),
+        "confirmed_findings_count": sum(
+            1
+            for state in states
+            if state
+            in {
+                "live_meter_supported",
+                "stem_audio_confirmed",
+                "user_confirmed",
+                "accepted_by_user",
+            }
+        ),
+    }
+
+
+def _apply_mix_fix_plan_gating(
+    proposals: list[dict[str, Any]],
+    *,
+    findings: list[dict[str, Any]],
+    pending_validation: tuple[str, ...],
+    mix_options: Any,
+    user_decisions: tuple[dict[str, Any], ...],
+) -> list[dict[str, Any]]:
+    approved = _approved_mix_proposal_ids(user_decisions)
+    blocked_tracks = {
+        row.get("track")
+        for row in findings
+        if str((row.get("metadata") or {}).get("finding_state") or "")
+        in {"rejected_by_user", "ignored_by_user"}
+    }
+    out = []
+    for row in proposals:
+        item = dict(row)
+        status = "requires_user_approval" if item.get("actionable") else "draft"
+        blocked_reason = None
+        if str(item.get("id")) in approved:
+            status = "approved"
+        elif item.get("track") in blocked_tracks:
+            status = "blocked"
+            blocked_reason = "user_rejected"
+        elif pending_validation:
+            status = "blocked"
+            blocked_reason = "insufficient_evidence"
+        elif item.get("kind") == "group":
+            status = "blocked"
+            blocked_reason = "role_unconfirmed"
+        elif int(mix_options.level) <= 1 and item.get("kind") == "trim_volume":
+            status = "draft"
+            blocked_reason = "insufficient_evidence"
+        item["fix_plan_status"] = status
+        if blocked_reason:
+            item["blocked_reason"] = blocked_reason
+        item["requires_user_approval"] = status == "requires_user_approval"
+        out.append(item)
+    return out
+
+
+def _approved_mix_proposal_ids(user_decisions: tuple[dict[str, Any], ...]) -> set[str]:
+    decision = _user_decision_for_request(user_decisions, MIX_REVIEW_FIX_PLAN_APPROVAL_REQUEST_ID)
+    if decision is None:
+        return set()
+    return set(_user_decision_selected_values(decision))
+
+
 def _mix_validation_requests(findings: list[dict[str, Any]]) -> tuple[dict[str, Any], ...]:
     options = [
         {
@@ -2433,6 +2718,23 @@ def _build_mix_review_report(
         for index, finding in enumerate(diagnosis.get("findings") or [], start=1)
     ]
     _apply_mix_user_decisions(findings, user_decisions)
+    evidence_mode = diagnosis.get("evidence_mode", "static_snapshot_only")
+    _finalize_mix_review_findings(
+        findings,
+        mix_level=mix_options.level,
+        evidence_mode=evidence_mode,
+        user_decisions=user_decisions,
+    )
+    low_end_findings = [
+        _mix_finding_summary(finding, index=index)
+        for index, finding in enumerate(low_end.get("findings") or [], start=1)
+    ]
+    _finalize_mix_review_findings(
+        low_end_findings,
+        mix_level=mix_options.level,
+        evidence_mode=evidence_mode,
+        user_decisions=user_decisions,
+    )
     proposals = _mix_proposal_summaries(
         list(fix_plan.get("plans") or []),
         list(gain_plan.get("plans") or []),
@@ -2460,9 +2762,17 @@ def _build_mix_review_report(
         user_decisions=user_decisions,
     )
     proposals = _blocked_until_validation(proposals, pending_validation)
-    high = sum(1 for row in findings if row["severity"] == "high")
-    medium = sum(1 for row in findings if row["severity"] == "medium")
-    low = sum(1 for row in findings if row["severity"] == "low")
+    proposals = _apply_mix_fix_plan_gating(
+        proposals,
+        findings=findings,
+        pending_validation=pending_validation,
+        mix_options=mix_options,
+        user_decisions=user_decisions,
+    )
+    scored_findings = _scored_mix_findings(findings)
+    high = sum(1 for row in scored_findings if row["severity"] == "high")
+    medium = sum(1 for row in scored_findings if row["severity"] == "medium")
+    low = sum(1 for row in scored_findings if row["severity"] == "low")
     levels_valid = bool(snapshot.get("levels_valid"))
     master_peak = _as_float(master.get("peak_db")) if master else None
     peak_source = (snapshot.get("peak_window") or {}).get("source")
@@ -2480,6 +2790,13 @@ def _build_mix_review_report(
         low=low,
         levels_valid=levels_valid,
         master_peak=master_peak,
+    )
+    score_metadata = _mix_review_score_metadata(
+        [*findings, *low_end_findings],
+        legacy_health_score=health_score,
+        pending_validation=pending_validation,
+        mix_options=mix_options,
+        levels_valid=levels_valid,
     )
     audible = [row for row in used_tracks if _as_int(row.get("index")) != 0 and not row.get("mute")]
     eq_count = sum(1 for row in audible if _mix_has_plugin_keyword(row, ("eq",)))
@@ -2563,10 +2880,7 @@ def _build_mix_review_report(
             "low_end": {
                 "summary": low_end.get("summary") or {},
                 "tracks": list(low_end.get("low_end_tracks") or []),
-                "findings": [
-                    _mix_finding_summary(finding, index=index)
-                    for index, finding in enumerate(low_end.get("findings") or [], start=1)
-                ],
+                "findings": low_end_findings,
                 "manual_checks": list(low_end.get("manual_checks") or []),
             },
             "kb_policy_refs": kb_policy.rule_refs(MIX_POLICY_RULE_IDS),
@@ -2577,6 +2891,7 @@ def _build_mix_review_report(
         "user_decisions": [dict(row) for row in user_decisions],
         "metadata": {
             **provisional_score_metadata(pending_validation),
+            **score_metadata,
             "mix_review_level": int(mix_options.level),
             "level_label": mix_options.level_label,
             "genre_profile": mix_options.genre_profile,
@@ -3149,8 +3464,15 @@ def _generic_analysis_report_from_legacy(
         interaction_requests=interaction_requests,
         user_decisions=user_decisions,
     )
-    metadata = dict(report.get("metadata") or {})
+    report_metadata = dict(report.get("metadata") or {})
+    metadata = dict(report_metadata)
     metadata.update(provisional_score_metadata(pending_validation))
+    if report_metadata.get("score_status") and not pending_validation:
+        metadata["score_status"] = report_metadata["score_status"]
+    if workflow == "mix_review" and metadata.get("risk_score_v2") is not None:
+        risk_v2 = _as_int(metadata.get("risk_score_v2"))
+        if risk_v2 is not None:
+            risk = risk_v2
 
     return AnalysisReport(
         workflow=workflow,
@@ -4540,6 +4862,12 @@ def _build_routing_audit_report(
         request_id=ROUTING_VALIDATION_REQUEST_ID,
         user_decisions=user_decisions,
     )
+    findings = routing_checks.enrich_routing_findings(
+        findings,
+        options=options,
+        template_summary=template_compliance["summary"],
+        user_decisions=user_decisions,
+    )
     interaction_requests = _routing_validation_requests(findings)
     template_request = _template_profile_validation_request(template_context)
     if template_request is not None:
@@ -4557,6 +4885,10 @@ def _build_routing_audit_report(
         ),
         interaction_requests=interaction_requests,
         user_decisions=user_decisions,
+    )
+    plan_gating = routing_checks.routing_cleanup_plan_gating(
+        findings,
+        required_decision_ids=pending_validation,
     )
 
     track_details = []
@@ -4581,6 +4913,12 @@ def _build_routing_audit_report(
         "generated_at": _now_iso(),
         "analysis_mode": "hybrid" if options.level == 2 else "static_snapshot",
         "evidence_mode": options.static_evidence_mode,
+        "routing_evidence_level": (
+            routing_checks.ROUTING_EVIDENCE_LEVEL_METER_PROXY
+            if options.level == 2
+            else routing_checks.ROUTING_EVIDENCE_LEVEL_STATIC
+        ),
+        "routing_evidence_levels": routing_checks.routing_evidence_levels(),
         "routing_check_level": options.level,
         "display_name": options.display_name,
         "template_compliance_enabled": template_compliance["enabled"],
@@ -4597,6 +4935,10 @@ def _build_routing_audit_report(
         "marker_name_if_used": options.marker_name,
         "template_compliance_summary": template_compliance["summary"],
         "limitations": list((signal_flow or {}).get("limitations") or []),
+        "plan_gating_status": plan_gating["plan_gating_status"],
+        "cleanup_plan_allowed": plan_gating["cleanup_plan_allowed"],
+        "cleanup_plan_block_reason": plan_gating["cleanup_plan_block_reason"],
+        "required_user_decisions": plan_gating["required_user_decisions"],
         "summary": {
             "health_score": health_score,
             "health_label": _routing_health_label(health_score),
@@ -4615,8 +4957,16 @@ def _build_routing_audit_report(
             "template_compliance_findings": sum(
                 int(row.get("count") or 0) for row in template_compliance["findings"]
             ),
+            "plan_gating_status": plan_gating["plan_gating_status"],
+            "cleanup_plan_allowed": plan_gating["cleanup_plan_allowed"],
         },
         "findings": findings,
+        "cleanup_plan": {
+            "steps": [],
+            "mode": "dry_run",
+            "apply_tool": "fl_apply_routing_cleanup",
+            **plan_gating,
+        },
         "graph": graph,
         "details": {
             "channels": [
@@ -4630,6 +4980,10 @@ def _build_routing_audit_report(
             "routes": route_rows,
             "template_context": templates.compact_context(template_context),
             "policy_notes": [
+                (
+                    "Routing decisions are project- and template-dependent; static "
+                    "evidence can flag possible risks but does not prove musical intent."
+                ),
                 "Preserve recognizable existing routing structure before proposing cleanup.",
                 "Infer Channel Rack to Mixer relationships from channel target tracks.",
                 (
@@ -4647,6 +5001,7 @@ def _build_routing_audit_report(
                 compliance_summary=template_compliance["summary"],
             ),
             "template_profile_catalog": routing_checks.template_profile_catalog(),
+            "plan_gating": plan_gating,
             "signal_flow": signal_flow
             or {
                 "available": False,
@@ -4656,7 +5011,16 @@ def _build_routing_audit_report(
         },
         "interaction_requests": list(interaction_requests),
         "user_decisions": [dict(row) for row in user_decisions],
-        "metadata": provisional_score_metadata(pending_validation),
+        "metadata": {
+            **provisional_score_metadata(pending_validation),
+            "plan_gating": plan_gating,
+            "routing_evidence_level": (
+                routing_checks.ROUTING_EVIDENCE_LEVEL_METER_PROXY
+                if options.level == 2
+                else routing_checks.ROUTING_EVIDENCE_LEVEL_STATIC
+            ),
+            "routing_evidence_levels": routing_checks.routing_evidence_levels(),
+        },
         "safety": {"read_only": True, "project_changes": False},
     }
     analysis_report = routing_analysis_report_from_legacy_payload(
@@ -4890,7 +5254,10 @@ def _routing_findings(
                 "id": "generators_direct_to_master",
                 "severity": "warning",
                 "title": "Generators Direct to Master",
-                "detail": "Generator channels route through inserts that feed Master directly.",
+                "detail": (
+                    "Generator channels appear to route through inserts that feed Master "
+                    "directly. This may be intentional and requires confirmation before cleanup."
+                ),
                 "count": len(direct_to_master),
                 "items": direct_to_master[:8],
                 "metadata": _routing_heuristic_metadata(reason="master_routed_or_ungrouped"),
@@ -4903,7 +5270,7 @@ def _routing_findings(
                 "severity": "critical",
                 "title": "Unrouted Channels",
                 "detail": (
-                    "Channels without a usable mixer target may be silent or bypass bus processing."
+                    "Channels without a usable mixer target may bypass expected bus processing."
                 ),
                 "count": len(unrouted_channels),
                 "items": unrouted_channels[:8],
@@ -4915,7 +5282,10 @@ def _routing_findings(
                 "id": "dead_end_tracks",
                 "severity": "critical",
                 "title": "Mixer Paths Without Output",
-                "detail": "Targeted mixer inserts have no outgoing route in the routing matrix.",
+                "detail": (
+                    "Targeted mixer inserts appear to have no outgoing route in the routing "
+                    "matrix. Confirm the intended monitoring or hardware-output path."
+                ),
                 "count": len(dead_end_tracks),
                 "items": dead_end_tracks[:8],
             }

@@ -14,6 +14,29 @@ TEMPLATE_COMPLIANCE_AUTO = "auto_detect"
 TEMPLATE_COMPLIANCE_MANUAL = "manual_select"
 TEMPLATE_COMPLIANCE_OFF = "off"
 
+ROUTING_EVIDENCE_LEVEL_STATIC = "static_routing_snapshot"
+ROUTING_EVIDENCE_LEVEL_METER_PROXY = "meter_snapshot_proxy"
+ROUTING_EVIDENCE_LEVEL_USER_CONFIRMED = "user_confirmed_routing_intent"
+ROUTING_EVIDENCE_LEVEL_CLEANUP_READBACK = "verified_cleanup_readback"
+
+ROUTING_FINDING_STATE_STATIC = "static_suspected"
+ROUTING_FINDING_STATE_NAME_UNCONFIRMED = "name_based_unconfirmed"
+ROUTING_FINDING_STATE_TEMPLATE_LOW_CONFIDENCE = "template_profile_low_confidence"
+ROUTING_FINDING_STATE_TEMPLATE_CONFIRMED = "template_profile_confirmed"
+ROUTING_FINDING_STATE_METER_PROXY = "meter_snapshot_proxy"
+ROUTING_FINDING_STATE_SIGNAL_PROXY = "signal_activity_proxy"
+ROUTING_FINDING_STATE_USER_CONFIRMED = "user_confirmed_intent"
+ROUTING_FINDING_STATE_ACCEPTED = "accepted_by_user"
+ROUTING_FINDING_STATE_REJECTED = "rejected_by_user"
+ROUTING_FINDING_STATE_REQUIRES_MORE_EVIDENCE = "requires_more_evidence"
+ROUTING_FINDING_STATE_CLEANUP_BLOCKED = "cleanup_plan_blocked"
+ROUTING_FINDING_STATE_CLEANUP_READY = "cleanup_plan_ready"
+
+ROUTING_PLAN_BLOCKED_REQUIRES_CONFIRMATION = "blocked_requires_confirmation"
+ROUTING_PLAN_DRAFT_PROXY_EVIDENCE = "draft_proxy_evidence"
+ROUTING_PLAN_READY_FOR_APPROVAL = "ready_for_user_approval"
+ROUTING_PLAN_NO_ACTIONABLE_FINDINGS = "no_actionable_findings"
+
 ROUTING_LEVEL_LABELS = {
     ROUTING_MODE_LEVEL_1: "Static Routing & Settings Audit (Lvl 1)",
     ROUTING_MODE_LEVEL_2: "Signal Flow Assisted Routing Audit (Lvl 2)",
@@ -227,6 +250,510 @@ def routing_audit_options_from_inputs(inputs: dict[str, Any] | None) -> RoutingA
         marker_name=str(payload.get("marker_name") or "").strip() or None,
         loop_duration_seconds=loop_duration,
     )
+
+
+def routing_evidence_levels() -> list[dict[str, Any]]:
+    return [
+        {
+            "level": 1,
+            "id": ROUTING_EVIDENCE_LEVEL_STATIC,
+            "label": "Static routing snapshot",
+            "limitations": [
+                "Static routing metadata can raise suspicion but cannot prove musical intent.",
+                "Name-based role detection remains unconfirmed until the user validates it.",
+            ],
+        },
+        {
+            "level": 2,
+            "id": ROUTING_EVIDENCE_LEVEL_METER_PROXY,
+            "label": "Meter snapshot proxy",
+            "limitations": [
+                "Meter activity confirms signal activity only.",
+                "Meter activity does not prove routing intent or that a route is wrong.",
+            ],
+        },
+        {
+            "level": 3,
+            "id": ROUTING_EVIDENCE_LEVEL_USER_CONFIRMED,
+            "label": "User-confirmed routing intent",
+            "limitations": [
+                "Audit remains read-only.",
+                "Applying cleanup still requires a separate explicit approval.",
+            ],
+        },
+        {
+            "level": 4,
+            "id": ROUTING_EVIDENCE_LEVEL_CLEANUP_READBACK,
+            "label": "Verified cleanup readback",
+            "limitations": [
+                "Readback verifies local project routing state only.",
+                "Readback does not prove musical quality improvement.",
+            ],
+        },
+    ]
+
+
+def enrich_routing_findings(
+    findings: list[dict[str, Any]],
+    *,
+    options: RoutingAuditOptions | None = None,
+    template_summary: dict[str, Any] | None = None,
+    user_decisions: tuple[dict[str, Any], ...] | list[dict[str, Any]] = (),
+) -> list[dict[str, Any]]:
+    """Attach routing evidence, state, confidence, and cleanup-gating metadata."""
+    options = options or RoutingAuditOptions()
+    summary = dict(template_summary or {})
+    out: list[dict[str, Any]] = []
+    for row in findings:
+        item = dict(row)
+        metadata = dict(item.get("metadata") or {})
+        rule_id = str(item.get("id") or "")
+        decision_state = _routing_decision_state(rule_id, user_decisions)
+        evidence_level = _finding_evidence_level(item, metadata)
+        role_source = _role_detection_source(item, metadata)
+        template_confidence = _template_confidence_score(summary.get("confidence"))
+        role_confidence = _role_confidence(role_source, decision_state)
+        state = _finding_state(
+            item,
+            metadata=metadata,
+            evidence_level=evidence_level,
+            role_source=role_source,
+            template_confidence=template_confidence,
+            decision_state=decision_state,
+        )
+        requires_confirmation = _finding_requires_confirmation(
+            item,
+            metadata=metadata,
+            state=state,
+            evidence_level=evidence_level,
+        )
+        fix_allowed = _finding_fix_plan_allowed(
+            item,
+            state=state,
+            requires_confirmation=requires_confirmation,
+            evidence_level=evidence_level,
+        )
+        plan_status = _finding_plan_gating_status(
+            item,
+            state=state,
+            requires_confirmation=requires_confirmation,
+            fix_allowed=fix_allowed,
+            evidence_level=evidence_level,
+        )
+        limitations = _finding_limitations(item, evidence_level=evidence_level, state=state)
+        user_decision_effect = _user_decision_effect(decision_state)
+        risk_contribution = routing_finding_risk_contribution(
+            severity=str(item.get("severity") or "info"),
+            evidence_level=evidence_level,
+            role_confidence=role_confidence,
+            template_confidence=template_confidence,
+            state=state,
+            rule_id=rule_id,
+        )
+        metadata.update(
+            {
+                "routing_evidence_level": evidence_level,
+                "routing_evidence_sources": _evidence_sources(evidence_level),
+                "finding_state": state,
+                "role_detection_source": role_source,
+                "role_confidence": role_confidence,
+                "template_confidence": template_confidence,
+                "user_decision_effect": user_decision_effect,
+                "requires_user_confirmation": requires_confirmation,
+                "fix_plan_allowed": fix_allowed,
+                "plan_gating_status": plan_status,
+                "cleanup_plan_block_reason": _cleanup_block_reason(
+                    state=state,
+                    evidence_level=evidence_level,
+                    requires_confirmation=requires_confirmation,
+                    fix_allowed=fix_allowed,
+                ),
+                "limitations": limitations,
+                "risk_contribution": risk_contribution,
+            }
+        )
+        if evidence_level == ROUTING_EVIDENCE_LEVEL_METER_PROXY:
+            metadata["proxy_label"] = "meter_snapshot_proxy"
+        if requires_confirmation:
+            metadata.setdefault("human_validation_required", True)
+            metadata.setdefault("provisional", True)
+            metadata.setdefault(
+                "interaction_request_id",
+                "routing.confirm_cleanup_heuristics",
+            )
+        if state in {ROUTING_FINDING_STATE_ACCEPTED, ROUTING_FINDING_STATE_REJECTED}:
+            metadata["human_validation_required"] = False
+            metadata["provisional"] = False
+        item["metadata"] = metadata
+        item["routing_evidence_level"] = evidence_level
+        item["routing_evidence_sources"] = metadata["routing_evidence_sources"]
+        item["finding_state"] = state
+        item["role_detection_source"] = role_source
+        item["role_confidence"] = role_confidence
+        item["template_confidence"] = template_confidence
+        item["user_decision_effect"] = user_decision_effect
+        item["requires_user_confirmation"] = requires_confirmation
+        item["fix_plan_allowed"] = fix_allowed
+        item["plan_gating_status"] = plan_status
+        item["cleanup_plan_block_reason"] = metadata["cleanup_plan_block_reason"]
+        item["limitations"] = limitations
+        item["risk_contribution"] = risk_contribution
+        if "proxy_label" in metadata:
+            item["proxy_label"] = metadata["proxy_label"]
+        out.append(item)
+    return out
+
+
+def routing_cleanup_plan_gating(
+    findings: list[dict[str, Any]],
+    *,
+    required_decision_ids: list[str] | tuple[str, ...] = (),
+) -> dict[str, Any]:
+    blocked = []
+    eligible = []
+    proxy = []
+    for row in findings:
+        row_id = str(row.get("id") or "")
+        if row.get("fix_plan_allowed"):
+            eligible.append(row_id)
+        if row.get("routing_evidence_level") == ROUTING_EVIDENCE_LEVEL_METER_PROXY:
+            proxy.append(row_id)
+        if row.get("requires_user_confirmation") or row.get("plan_gating_status") in {
+            ROUTING_PLAN_BLOCKED_REQUIRES_CONFIRMATION,
+            ROUTING_PLAN_DRAFT_PROXY_EVIDENCE,
+        }:
+            blocked.append(row_id)
+    required = list(dict.fromkeys(str(item) for item in required_decision_ids if str(item)))
+    for row in findings:
+        metadata = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
+        request_id = str(metadata.get("interaction_request_id") or "").strip()
+        if row.get("requires_user_confirmation") and request_id and request_id not in required:
+            required.append(request_id)
+    if blocked or required:
+        status = ROUTING_PLAN_BLOCKED_REQUIRES_CONFIRMATION
+        reason = "Cleanup plan blocked until routing intent and findings are confirmed."
+    elif proxy and not eligible:
+        status = ROUTING_PLAN_DRAFT_PROXY_EVIDENCE
+        reason = "Meter snapshot evidence is proxy-only; user intent is still required."
+    elif eligible:
+        status = ROUTING_PLAN_READY_FOR_APPROVAL
+        reason = None
+    else:
+        status = ROUTING_PLAN_NO_ACTIONABLE_FINDINGS
+        reason = "No cleanup-eligible routing findings are available."
+    return {
+        "plan_gating_status": status,
+        "cleanup_plan_allowed": status == ROUTING_PLAN_READY_FOR_APPROVAL,
+        "cleanup_plan_block_reason": reason,
+        "required_user_decisions": required,
+        "required_evidence_level": ROUTING_EVIDENCE_LEVEL_USER_CONFIRMED,
+        "blocked_findings": list(dict.fromkeys(blocked)),
+        "eligible_findings": list(dict.fromkeys(eligible)),
+        "proxy_findings": list(dict.fromkeys(proxy)),
+    }
+
+
+def routing_finding_risk_contribution(
+    *,
+    severity: str,
+    evidence_level: str,
+    role_confidence: float,
+    template_confidence: float,
+    state: str,
+    rule_id: str,
+) -> int:
+    severity_weight = {
+        "critical": 45,
+        "high": 32,
+        "error": 32,
+        "medium": 16,
+        "warning": 12,
+        "low": 6,
+        "info": 2,
+        "ok": 0,
+    }.get(str(severity).lower(), 0)
+    evidence_confidence = {
+        ROUTING_EVIDENCE_LEVEL_STATIC: 0.55,
+        ROUTING_EVIDENCE_LEVEL_METER_PROXY: 0.72,
+        ROUTING_EVIDENCE_LEVEL_USER_CONFIRMED: 0.95,
+        ROUTING_EVIDENCE_LEVEL_CLEANUP_READBACK: 1.0,
+    }.get(evidence_level, 0.45)
+    decision_factor = {
+        ROUTING_FINDING_STATE_ACCEPTED: 0.0,
+        ROUTING_FINDING_STATE_REJECTED: 0.0,
+        ROUTING_FINDING_STATE_TEMPLATE_CONFIRMED: 0.85,
+        ROUTING_FINDING_STATE_USER_CONFIRMED: 1.0,
+        ROUTING_FINDING_STATE_CLEANUP_READY: 1.0,
+        ROUTING_FINDING_STATE_METER_PROXY: 0.75,
+        ROUTING_FINDING_STATE_SIGNAL_PROXY: 0.75,
+        ROUTING_FINDING_STATE_NAME_UNCONFIRMED: 0.45,
+        ROUTING_FINDING_STATE_TEMPLATE_LOW_CONFIDENCE: 0.35,
+        ROUTING_FINDING_STATE_REQUIRES_MORE_EVIDENCE: 0.35,
+        ROUTING_FINDING_STATE_CLEANUP_BLOCKED: 0.4,
+    }.get(state, 0.65)
+    template_factor = template_confidence if str(rule_id).startswith("template.") else 1.0
+    return max(
+        0,
+        min(
+            100,
+            round(
+                severity_weight
+                * evidence_confidence
+                * max(0.0, min(1.0, role_confidence))
+                * max(0.0, min(1.0, template_factor))
+                * decision_factor
+            ),
+        ),
+    )
+
+
+def _routing_decision_state(
+    finding_id: str,
+    user_decisions: tuple[dict[str, Any], ...] | list[dict[str, Any]],
+) -> str | None:
+    for decision in reversed([row for row in user_decisions if isinstance(row, dict)]):
+        request_id = str(
+            decision.get("interaction_request_id")
+            or decision.get("interaction_id")
+            or decision.get("id")
+            or ""
+        ).strip()
+        if request_id and not request_id.startswith("routing."):
+            continue
+        rejected = set(_decision_values(decision, "rejected_findings"))
+        rejected.update(_decision_values(decision, "removed_entities"))
+        ignored = set(_decision_values(decision, "ignored_findings"))
+        accepted = set(_decision_values(decision, "accepted_findings"))
+        accepted.update(_decision_values(decision, "selected"))
+        accepted.update(_decision_values(decision, "selected_values"))
+        if finding_id in rejected or str(decision.get("decision") or "").lower() == "rejected":
+            return "rejected"
+        if finding_id in ignored or str(decision.get("decision") or "").lower() == "ignored":
+            return "ignored"
+        decision_name = str(decision.get("decision") or "").strip().lower()
+        if finding_id in accepted or (not accepted and decision_name in {"confirm", "confirmed"}):
+            return "accepted"
+    return None
+
+
+def _decision_values(decision: dict[str, Any], key: str) -> tuple[str, ...]:
+    value = decision.get(key)
+    if value is None:
+        return ()
+    if isinstance(value, str):
+        return (value,)
+    if isinstance(value, (list, tuple, set)):
+        return tuple(str(item) for item in value if str(item))
+    return ()
+
+
+def _finding_evidence_level(row: dict[str, Any], metadata: dict[str, Any]) -> str:
+    explicit = str(
+        row.get("routing_evidence_level") or metadata.get("routing_evidence_level") or ""
+    ).strip()
+    if explicit:
+        return explicit
+    if metadata.get("signal_flow") or metadata.get("evidence_type") == "live_meter_window":
+        return ROUTING_EVIDENCE_LEVEL_METER_PROXY
+    if metadata.get("validated_by_user"):
+        return ROUTING_EVIDENCE_LEVEL_USER_CONFIRMED
+    return ROUTING_EVIDENCE_LEVEL_STATIC
+
+
+def _role_detection_source(row: dict[str, Any], metadata: dict[str, Any]) -> str:
+    explicit = str(row.get("role_detection_source") or metadata.get("role_detection_source") or "")
+    if explicit:
+        return explicit
+    rule_id = str(row.get("id") or "")
+    if metadata.get("validation_source") == "user_decision":
+        return "user_decision"
+    if rule_id.startswith("template."):
+        return "template_profile" if "profile" in rule_id else "name_alias"
+    if rule_id in {"unused_mixer_tracks", "template_context"}:
+        return "template_profile"
+    if rule_id in {"routing_clear", "unrouted_channels", "dead_end_tracks"}:
+        return "routing_snapshot"
+    return "metadata"
+
+
+def _template_confidence_score(value: Any) -> float:
+    normalized = str(value or "").strip().lower()
+    if normalized in {"manual", "user_confirmed", "confirmed"}:
+        return 1.0
+    if normalized == "high":
+        return 0.9
+    if normalized == "medium":
+        return 0.65
+    if normalized == "off":
+        return 0.0
+    return 0.35
+
+
+def _role_confidence(role_source: str, decision_state: str | None) -> float:
+    if decision_state in {"accepted", "rejected", "ignored"}:
+        return 1.0
+    return {
+        "user_decision": 1.0,
+        "routing_snapshot": 0.8,
+        "template_profile": 0.7,
+        "metadata": 0.6,
+        "name_alias": 0.45,
+    }.get(role_source, 0.55)
+
+
+def _finding_state(
+    row: dict[str, Any],
+    *,
+    metadata: dict[str, Any],
+    evidence_level: str,
+    role_source: str,
+    template_confidence: float,
+    decision_state: str | None,
+) -> str:
+    if decision_state == "rejected":
+        return ROUTING_FINDING_STATE_REJECTED
+    if decision_state in {"accepted", "ignored"}:
+        return ROUTING_FINDING_STATE_ACCEPTED
+    explicit = str(row.get("finding_state") or metadata.get("finding_state") or "").strip()
+    if explicit in {ROUTING_FINDING_STATE_ACCEPTED, "accepted"}:
+        return ROUTING_FINDING_STATE_ACCEPTED
+    if explicit in {ROUTING_FINDING_STATE_REJECTED, "rejected"}:
+        return ROUTING_FINDING_STATE_REJECTED
+    if evidence_level == ROUTING_EVIDENCE_LEVEL_METER_PROXY:
+        return ROUTING_FINDING_STATE_METER_PROXY
+    rule_id = str(row.get("id") or "")
+    if rule_id == "template.profile_detected" and template_confidence >= 1.0:
+        return ROUTING_FINDING_STATE_TEMPLATE_CONFIRMED
+    if rule_id.startswith("template.") and template_confidence <= 0.4:
+        return ROUTING_FINDING_STATE_TEMPLATE_LOW_CONFIDENCE
+    if metadata.get("human_validation_required") or role_source == "name_alias":
+        return ROUTING_FINDING_STATE_NAME_UNCONFIRMED
+    if str(row.get("severity") or "").lower() in {"ok", "info"}:
+        return ROUTING_FINDING_STATE_REQUIRES_MORE_EVIDENCE
+    return ROUTING_FINDING_STATE_STATIC
+
+
+def _finding_requires_confirmation(
+    row: dict[str, Any],
+    *,
+    metadata: dict[str, Any],
+    state: str,
+    evidence_level: str,
+) -> bool:
+    if state in {
+        ROUTING_FINDING_STATE_ACCEPTED,
+        ROUTING_FINDING_STATE_REJECTED,
+        ROUTING_FINDING_STATE_TEMPLATE_CONFIRMED,
+    }:
+        return False
+    if metadata.get("human_validation_required"):
+        return True
+    if evidence_level == ROUTING_EVIDENCE_LEVEL_METER_PROXY:
+        return True
+    if state in {
+        ROUTING_FINDING_STATE_NAME_UNCONFIRMED,
+        ROUTING_FINDING_STATE_TEMPLATE_LOW_CONFIDENCE,
+    }:
+        return True
+    return str(row.get("id") or "").startswith("template.")
+
+
+def _finding_fix_plan_allowed(
+    row: dict[str, Any],
+    *,
+    state: str,
+    requires_confirmation: bool,
+    evidence_level: str,
+) -> bool:
+    if str(row.get("severity") or "").lower() in {"ok", "info"}:
+        return False
+    if requires_confirmation:
+        return False
+    if evidence_level == ROUTING_EVIDENCE_LEVEL_METER_PROXY:
+        return False
+    return state not in {
+        ROUTING_FINDING_STATE_ACCEPTED,
+        ROUTING_FINDING_STATE_REJECTED,
+        ROUTING_FINDING_STATE_REQUIRES_MORE_EVIDENCE,
+    }
+
+
+def _finding_plan_gating_status(
+    row: dict[str, Any],
+    *,
+    state: str,
+    requires_confirmation: bool,
+    fix_allowed: bool,
+    evidence_level: str,
+) -> str:
+    if fix_allowed:
+        return ROUTING_PLAN_READY_FOR_APPROVAL
+    if evidence_level == ROUTING_EVIDENCE_LEVEL_METER_PROXY:
+        return ROUTING_PLAN_DRAFT_PROXY_EVIDENCE
+    if requires_confirmation:
+        return ROUTING_PLAN_BLOCKED_REQUIRES_CONFIRMATION
+    if state in {ROUTING_FINDING_STATE_ACCEPTED, ROUTING_FINDING_STATE_REJECTED}:
+        return "excluded_by_user_decision"
+    if str(row.get("severity") or "").lower() in {"ok", "info"}:
+        return ROUTING_PLAN_NO_ACTIONABLE_FINDINGS
+    return ROUTING_PLAN_BLOCKED_REQUIRES_CONFIRMATION
+
+
+def _finding_limitations(
+    row: dict[str, Any],
+    *,
+    evidence_level: str,
+    state: str,
+) -> list[str]:
+    raw = row.get("limitations")
+    limitations = [raw] if isinstance(raw, str) else [str(item) for item in raw or ()]
+    if evidence_level == ROUTING_EVIDENCE_LEVEL_STATIC:
+        limitations.append("Static routing metadata does not prove musical intent.")
+    if evidence_level == ROUTING_EVIDENCE_LEVEL_METER_PROXY:
+        limitations.append(
+            "Meter activity is proxy evidence for signal presence, not proof of routing intent."
+        )
+    if state == ROUTING_FINDING_STATE_NAME_UNCONFIRMED:
+        limitations.append("Name-based role detection requires user confirmation.")
+    return list(dict.fromkeys(item for item in limitations if item))
+
+
+def _evidence_sources(evidence_level: str) -> list[str]:
+    if evidence_level == ROUTING_EVIDENCE_LEVEL_METER_PROXY:
+        return ["routing_snapshot", "channel_assignments", "meter_snapshot"]
+    if evidence_level == ROUTING_EVIDENCE_LEVEL_USER_CONFIRMED:
+        return ["routing_snapshot", "user_decision"]
+    if evidence_level == ROUTING_EVIDENCE_LEVEL_CLEANUP_READBACK:
+        return ["post_cleanup_snapshot", "readback", "change_record"]
+    return ["routing_snapshot", "channel_assignments", "track_names", "mixer_metadata"]
+
+
+def _user_decision_effect(decision_state: str | None) -> str:
+    if decision_state == "rejected":
+        return "excluded_from_score"
+    if decision_state == "ignored":
+        return "ignored_by_user"
+    if decision_state == "accepted":
+        return "confirmed_intent_or_intentional_exception"
+    return "pending_or_unconfirmed"
+
+
+def _cleanup_block_reason(
+    *,
+    state: str,
+    evidence_level: str,
+    requires_confirmation: bool,
+    fix_allowed: bool,
+) -> str | None:
+    if fix_allowed:
+        return None
+    if state in {ROUTING_FINDING_STATE_ACCEPTED, ROUTING_FINDING_STATE_REJECTED}:
+        return "User decision excludes this finding from cleanup planning."
+    if evidence_level == ROUTING_EVIDENCE_LEVEL_METER_PROXY:
+        return "Meter snapshot evidence is proxy-only until routing intent is confirmed."
+    if requires_confirmation:
+        return "User confirmation is required before cleanup planning."
+    return None
 
 
 def template_profile_catalog() -> list[dict[str, Any]]:
@@ -584,11 +1111,12 @@ def template_compliance_result(
                     _template_severity("critical", confidence, options),
                     title,
                     (
-                        "A reference track appears to feed the master path and should be reviewed."
+                        "A reference track appears to feed the master path and should be "
+                        "confirmed as monitoring-only or intentional."
                         if source_role == "reference"
                         else (
                             "A sidechain trigger or ghost kick appears to feed the audible "
-                            "master path and should be reviewed."
+                            "master path and should be confirmed as control-only or intentional."
                         )
                     ),
                     [_template_channel_item(channel, target, track_by_index, source_role)],
@@ -604,8 +1132,11 @@ def template_compliance_result(
                             else "template.sidechain_trigger_audible_signal_confirmed"
                         ),
                         "critical",
-                        title + " With Signal",
-                        "Playback evidence confirms activity on the source and master path.",
+                        title + " With Meter Activity",
+                        (
+                            "Meter snapshot evidence shows activity on the source and master "
+                            "path. This is signal-activity proxy evidence, not proof of intent."
+                        ),
                         [_template_channel_item(channel, target, track_by_index, source_role)],
                         signal_flow=signal_flow,
                     )
@@ -638,8 +1169,12 @@ def template_compliance_result(
                     _finding(
                         "template.source_bypass_signal_confirmed",
                         "high",
-                        "Template Bus Bypass Confirmed By Signal",
-                        "Playback evidence confirms activity on a direct-to-master source path.",
+                        "Template Bus Bypass Meter Proxy",
+                        (
+                            "Meter snapshot evidence shows activity on a direct-to-master "
+                            "source path. This is proxy evidence and requires user intent "
+                            "confirmation."
+                        ),
                         [_template_channel_item(channel, target, track_by_index, source_role)],
                         signal_flow=signal_flow,
                     )
@@ -682,9 +1217,11 @@ def template_compliance_result(
                     _finding(
                         "template.expected_bus_silent_signal_confirmed",
                         "high",
-                        "Expected Template Bus Silent During Playback",
-                        "Playback evidence shows source activity while an expected "
-                        "template bus remains silent.",
+                        "Expected Template Bus Silent In Meter Snapshot",
+                        (
+                            "Meter snapshot evidence shows source activity while an expected "
+                            "template bus remains silent. This is proxy evidence."
+                        ),
                         [item],
                         signal_flow=signal_flow,
                     )
@@ -699,9 +1236,11 @@ def template_compliance_result(
                     _finding(
                         "template.master_path_missing_signal_confirmed",
                         "critical",
-                        "Expected Master Path Silent During Playback",
-                        "Playback evidence suggests an active source does not reach "
-                        "the expected premaster/master path.",
+                        "Expected Master Path Silent In Meter Snapshot",
+                        (
+                            "Meter snapshot evidence suggests an active source may not reach "
+                            "the expected premaster/master path. This is proxy evidence."
+                        ),
                         [_template_channel_item(channel, target, track_by_index, source_role)],
                         signal_flow=signal_flow,
                     )
@@ -776,8 +1315,8 @@ def template_compliance_result(
                 _finding(
                     "template.bus_without_output_signal_confirmed",
                     "critical",
-                    "Active Template Bus Has No Output Signal Path",
-                    "Playback evidence suggests that a bus receives signal but does not "
+                    "Active Template Bus Has No Output Path Meter Proxy",
+                    "Meter snapshot evidence suggests that a bus receives signal but may not "
                     "pass signal to its expected downstream route.",
                     [_template_track_item(track, track_by_index, next(iter(bus_roles)))],
                     signal_flow=signal_flow,
@@ -836,11 +1375,11 @@ def level_2_signal_findings(
         if any_meter_active and _channel_static_active(channel) and not target_active:
             findings.append(
                 _finding(
-                    "channel_active_mixer_silent",
-                    "high",
-                    "Channel Active But Mixer Track Silent",
-                    "The Channel Rack item appears active, but the assigned Mixer Track "
-                    "shows no meter activity during playback.",
+                "channel_active_mixer_silent",
+                "high",
+                "Channel Active But Mixer Track Silent In Meter Snapshot",
+                "The Channel Rack item appears active, but the assigned Mixer Track "
+                "shows no meter activity in the snapshot.",
                     [
                         _template_channel_item(
                             channel, target, track_by_index, _source_role(channel)
@@ -852,11 +1391,11 @@ def level_2_signal_findings(
         if channel_muted and target_active:
             findings.append(
                 _finding(
-                    "mixer_active_despite_channel_mute",
-                    "high",
-                    "Mixer Active Despite Channel Mute",
-                    "The Channel Rack item is muted, but the assigned Mixer Track shows "
-                    "signal activity during playback.",
+                "mixer_active_despite_channel_mute",
+                "high",
+                "Mixer Active Despite Channel Mute In Meter Snapshot",
+                "The Channel Rack item is muted, but the assigned Mixer Track shows "
+                "signal activity in the snapshot.",
                     [
                         _template_channel_item(
                             channel, target, track_by_index, _source_role(channel)
@@ -868,11 +1407,11 @@ def level_2_signal_findings(
         if target_active and routes_to_master and master_active:
             findings.append(
                 _finding(
-                    "direct_to_master_signal_confirmed",
-                    "high",
-                    "Direct-To-Master Signal Confirmed",
-                    "A generator routes directly to Master and playback evidence confirms "
-                    "signal activity on the source and Master.",
+                "direct_to_master_signal_confirmed",
+                "high",
+                "Direct-To-Master Meter Proxy",
+                "A generator routes directly to Master and meter snapshot evidence shows "
+                "signal activity on the source and Master.",
                     [
                         _template_channel_item(
                             channel, target, track_by_index, _source_role(channel)

@@ -1204,6 +1204,120 @@ def test_mix_review_user_decision_validates_heuristic_findings():
     assert finding["metadata"]["user_intent"] == "intentional"
 
 
+def test_mix_review_rejected_and_ignored_findings_do_not_drive_score_or_fix_plan():
+    snapshot = {
+        "playing": True,
+        "levels_valid": True,
+        "peak_window": {"source": "sustained_1200ms"},
+        "tracks": [
+            {
+                "index": 0,
+                "name": "Master",
+                "vol_db": 0.0,
+                "peak_db": -3.0,
+                "peak_max": 0.7,
+                "pan": 0.0,
+                "stereo_sep": 0.0,
+                "plugins": [],
+                "routes_to": [],
+            },
+            {
+                "index": 5,
+                "name": "Pad",
+                "vol_db": -7.0,
+                "peak_db": -14.0,
+                "peak_max": 0.2,
+                "pan": 0.0,
+                "stereo_sep": 0.0,
+                "plugins": [],
+                "routes_to": [{"dst": 0, "dst_name": "Master"}],
+            },
+        ],
+        "template_context": {},
+        "gather_errors": [],
+    }
+
+    base = control_center._build_mix_review_report(snapshot, options={"level": 2})
+    heuristic = next(row for row in base["findings"] if row["rule"] == "missing_hpf")
+    rejected = control_center._build_mix_review_report(
+        snapshot,
+        options={"level": 2},
+        user_decisions=(
+            {
+                "interaction_id": "mix_review.reject_finding",
+                "decision": "rejected",
+                "finding_id": heuristic["id"],
+            },
+        ),
+    )
+    ignored = control_center._build_mix_review_report(
+        snapshot,
+        options={"level": 2},
+        user_decisions=(
+            {
+                "interaction_id": "mix_review.ignore_finding",
+                "decision": "ignored",
+                "finding_id": heuristic["id"],
+            },
+        ),
+    )
+
+    rejected_finding = next(row for row in rejected["findings"] if row["id"] == heuristic["id"])
+    ignored_finding = next(row for row in ignored["findings"] if row["id"] == heuristic["id"])
+    assert rejected_finding["metadata"]["finding_state"] == "rejected_by_user"
+    assert ignored_finding["metadata"]["finding_state"] == "ignored_by_user"
+    assert rejected["metadata"]["risk_score_v2"] < base["metadata"]["risk_score_v2"]
+    assert ignored["metadata"]["risk_score_v2"] < base["metadata"]["risk_score_v2"]
+
+
+def test_mix_review_psytrance_profile_changes_weights_not_claims():
+    snapshot = {
+        "playing": True,
+        "levels_valid": True,
+        "peak_window": {"source": "sustained_1200ms"},
+        "tracks": [
+            {
+                "index": 0,
+                "name": "Master",
+                "vol_db": 0.0,
+                "peak_db": -4.0,
+                "peak_max": 0.63,
+                "pan": 0.0,
+                "stereo_sep": 0.0,
+                "plugins": [],
+                "routes_to": [],
+            },
+            {
+                "index": 2,
+                "name": "Sub Bass",
+                "vol_db": -3.0,
+                "peak_db": -4.0,
+                "peak_max": 0.63,
+                "pan": 0.42,
+                "stereo_sep": 0.5,
+                "plugins": [],
+                "routes_to": [{"dst": 0, "dst_name": "Master"}],
+            },
+        ],
+        "template_context": {},
+        "gather_errors": [],
+    }
+
+    default = control_center._build_mix_review_report(
+        snapshot,
+        options={"level": 2, "genre_profile": "default"},
+    )
+    psytrance = control_center._build_mix_review_report(
+        snapshot,
+        options={"level": 2, "genre_profile": "psytrance"},
+    )
+
+    assert psytrance["metadata"]["risk_score_v2"] > default["metadata"]["risk_score_v2"]
+    assert {row["rule"] for row in psytrance["findings"]} == {
+        row["rule"] for row in default["findings"]
+    }
+
+
 def test_build_mix_review_report_skips_playback_requirement_for_default_level_1():
     snapshot = {
         "playing": False,

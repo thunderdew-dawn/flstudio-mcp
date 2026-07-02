@@ -4,8 +4,8 @@
   "title": "MCP tools, resources, prompts and public tool safety summary",
   "source_snapshot": "agent-docs/machine/architecture-analysis.snapshot.json",
   "source_snapshot_sha256": "ff0d38588b91510a3073e81d885de38f9116cddfbcd95686cbf11c28a6db8d7f",
-  "generated_at": "2026-06-19",
-  "note": "Slim generated MCP surface slice. For a concrete tool module, load the matching file under architecture/mcp-tools/.",
+  "generated_at": "2026-07-02",
+  "note": "Slim MCP surface slice refreshed for additive Routing Audit cleanup-plan gating arguments and behavior. Tool counts and safety-class totals are unchanged; for concrete tool details, load the matching file under architecture/mcp-tools/.",
   "load_when": [
     "MCP tools, resources, or prompts are added, removed, renamed, or changed",
     "public MCP behavior, safety annotations, or tool registration changes",

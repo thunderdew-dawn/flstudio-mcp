@@ -99,6 +99,7 @@ from .scoring import (
     risk_band,
     risk_from_severities,
     routing_health_score,
+    weighted_mix_review_risk,
 )
 
 __all__ = [
@@ -187,4 +188,5 @@ __all__ = [
     "require_analysis_report_version",
     "validate_audio_features",
     "weighted_low_end_risk",
+    "weighted_mix_review_risk",
 ]

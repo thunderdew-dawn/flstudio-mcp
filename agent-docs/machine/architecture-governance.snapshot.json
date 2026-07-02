@@ -2,7 +2,7 @@
   "snapshot_version": 1,
   "as_of": "2026-07-02",
   "status": "governed",
-  "governance_note": "Updated for Low-End Analysis evidence levels 1-5, additive audio-feature metrics, rendered-master proxy-only claims, role-confirmed stem/bus gates for stem-specific conclusions, and declared manual/forbidden low-end workflow actions. Persistent-write safety posture is unchanged; FL Studio render automation, automatic project writes, plugin loading, and stem-specific claims from master-only audio remain forbidden.",
+  "governance_note": "Updated for Routing Audit evidence levels, finding states, producer intent confirmation, meter-proxy labeling, cleanup-plan gating, and Mix Review evidence-weighted scoring with rendered-master proxy and role-confirmed stem evidence. Persistent-write safety posture is unchanged; Routing Audit and Mix Review remain read-only, planning remains confirmation-gated, and apply remains separate with explicit approval and rollback.",
   "project": {
     "name": "fls-pilot",
     "package_version": "3.0.0b3",
@@ -351,6 +351,32 @@
     "audio_features_contract": "fls-pilot.audio-features.v1",
     "audio_artifact_contract": "fls-pilot.audio-artifact.v1",
     "evidence_link_contract": "fls-pilot.evidence-link.v1",
+    "mix_review_contract": {
+      "evidence_levels": {
+        "1": "static_project_metadata",
+        "2": "live_meter_window",
+        "3": "rendered_master_audio_proxy",
+        "4": "role_confirmed_stem_or_bus_audio"
+      },
+      "finding_states": [
+        "static_heuristic",
+        "name_based_unconfirmed",
+        "metadata_suspected",
+        "live_meter_supported",
+        "rendered_master_proxy",
+        "stem_audio_confirmed",
+        "accepted_by_user",
+        "rejected_by_user",
+        "ignored_by_user",
+        "requires_more_evidence"
+      ],
+      "score_model": "risk_score_v2 uses severity, evidence confidence, rule/profile weight, and user decision modifiers while preserving legacy_score metadata.",
+      "rendered_master_claim_limit": "proxy_only_no_stem_specific_causes",
+      "stem_specific_claims_require": "role_confirmed_stem_or_bus_audio",
+      "automatic_fl_render": false,
+      "persistent_writes": false,
+      "fix_plan_gating": "blocked_or_draft_until_sufficient_evidence_and_user_approval"
+    },
     "low_end_contract": {
       "evidence_levels": {
         "1": "static_metadata",

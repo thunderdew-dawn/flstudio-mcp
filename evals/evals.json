@@ -218,6 +218,8 @@
         "fl_review_mix without args remains Level 1 static and does not start playback",
         "use explicit Level 2 watch evidence before treating peaks, clipping, or headroom as live evidence",
         "distinguish static snapshot findings from live peak-watch evidence",
+        "show finding_state, score_status, and whether each fix plan is blocked, draft, or requires approval",
+        "do not score rejected findings negatively or include ignored findings in fix plans",
         "do not apply trims/EQ/compression without explicit approval",
         "report limitations when rendered audio evidence is missing",
         "do not claim Level 3 or Level 4 rendered audio analysis unless external analyzer evidence is linked"
@@ -256,7 +258,9 @@
         "show Level 3 expected master checks without claiming LUFS, true peak, clipping count, spectrum, or stereo facts",
         "show Level 4 expected stem checks without claiming masking, phase, or bus-balance facts",
         "mark external analyzer integration as pending when no artifact evidence is available",
-        "do not create fake rendered-audio findings inside Mix Review"
+        "do not create rendered-audio findings without linked artifact evidence",
+        "when rendered master evidence is linked, keep findings proxy-labeled and avoid stem-specific causal claims",
+        "when stem evidence is linked, require confirmed roles before stem-specific findings"
       ],
       "not_expected_tools": [
         "automatic FL render",
@@ -345,6 +349,8 @@
         "read-only routing diagnosis and planning",
         "do not alter sends/routes or names",
         "include explicit approval gate for any later cleanup batch",
+        "label static routing suspicions and name/template-based findings as confirmation-gated",
+        "block cleanup-plan readiness until routing findings and producer intent are confirmed",
         "never propose routing Master as a normal source target",
         "do not suppress cleanup findings when template profile classification is ambiguous"
       ],
@@ -357,6 +363,7 @@
       "success_criteria": [
         "assistant separates route findings from rollback-safe proposed actions",
         "cleanup plan references supported routing tools only",
+        "assistant reports routing evidence level, finding state, and cleanup-plan gating status",
         "assistant treats ambiguous template profile matches as validation-needed rather than cleanup-safe suppressions"
       ]
     },
@@ -383,6 +390,7 @@
         "read-only routing diagnosis only",
         "do not start playback when the user chose manual playback",
         "report static_snapshot_plus_meter_snapshot evidence and whether signal-flow evidence was available",
+        "label meter findings as proxy evidence rather than proof of wrong routing or musical intent",
         "do not apply routing cleanup, bus layout, naming, coloring, or send changes"
       ],
       "not_expected_tools": [
@@ -396,7 +404,7 @@
         "assistant selects the Level 2 routing mode instead of the default static audit",
         "assistant uses the selected psytrance profile rather than hard-coded genre rules",
         "assistant treats Channel Rack versus Mixer differences as review findings unless signal evidence strengthens them",
-        "assistant labels signal-confirmed template findings only when live meter evidence is present",
+        "assistant labels signal-active template findings as meter-snapshot proxy evidence only when live meter evidence is present",
         "assistant offers Level 1 fallback if signal-flow evidence is unavailable"
       ]
     },

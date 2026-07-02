@@ -214,6 +214,8 @@ class AnalysisBroker:
                 "evidence_link_id": link.link_id,
                 "evidence_kind": evidence_kind,
                 "stem_role": stem_role,
+                "role_confirmed": bool(confirmed_by_user),
+                "role_confirmation_state": "user_confirmed" if confirmed_by_user else "unconfirmed",
                 "workflow_targets": list(workflow_targets),
                 "feature_summary": dict(features.get("summary") or {}),
                 "source": {

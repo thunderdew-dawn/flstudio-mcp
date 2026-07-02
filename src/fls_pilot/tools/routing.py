@@ -120,7 +120,10 @@ def _routing_review_findings(
                 "id": "generators_direct_to_master",
                 "severity": "warning",
                 "title": "Generators Direct to Master",
-                "detail": "Generator channels route through inserts that feed Master directly.",
+                "detail": (
+                    "Generator channels appear to route through inserts that feed Master "
+                    "directly. This may be intentional and requires confirmation before cleanup."
+                ),
                 "count": len(direct_to_master),
                 "items": direct_to_master[:8],
                 "metadata": heuristic_validation_metadata(
@@ -573,13 +576,25 @@ def register(mcp: FastMCP) -> None:
         if extra_findings:
             findings = [row for row in findings if row.get("id") != "routing_clear"]
             findings.extend(extra_findings)
+        findings = routing_checks.enrich_routing_findings(
+            findings,
+            options=options,
+            template_summary=template_compliance_result["summary"],
+        )
         interaction_request = _routing_validation_request(findings)
+        plan_gating = routing_checks.routing_cleanup_plan_gating(findings)
         legacy_payload = {
             "ok": True,
             "workflow": "routing_review",
             "title": "Routing Review",
             "analysis_mode": "hybrid" if options.level == 2 else "static_snapshot",
             "evidence_mode": options.static_evidence_mode,
+            "routing_evidence_level": (
+                routing_checks.ROUTING_EVIDENCE_LEVEL_METER_PROXY
+                if options.level == 2
+                else routing_checks.ROUTING_EVIDENCE_LEVEL_STATIC
+            ),
+            "routing_evidence_levels": routing_checks.routing_evidence_levels(),
             "routing_check_level": options.level,
             "display_name": options.display_name,
             "template_compliance_enabled": template_compliance_result["enabled"],
@@ -596,6 +611,10 @@ def register(mcp: FastMCP) -> None:
             "playback_used": bool(signal_flow and signal_flow.get("playback_used")),
             "template_compliance_summary": template_compliance_result["summary"],
             "limitations": list((signal_flow or {}).get("limitations") or []),
+            "plan_gating_status": plan_gating["plan_gating_status"],
+            "cleanup_plan_allowed": plan_gating["cleanup_plan_allowed"],
+            "cleanup_plan_block_reason": plan_gating["cleanup_plan_block_reason"],
+            "required_user_decisions": plan_gating["required_user_decisions"],
             "summary": {
                 "channels": len(channels),
                 "mixer_tracks": len(tracks),
@@ -606,6 +625,8 @@ def register(mcp: FastMCP) -> None:
                     for row in extra_findings
                     if str(row.get("id") or "").startswith("channel_mixer_")
                 ),
+                "plan_gating_status": plan_gating["plan_gating_status"],
+                "cleanup_plan_allowed": plan_gating["cleanup_plan_allowed"],
             },
             "findings": findings,
             "unrouted_channels": unrouted,
@@ -642,6 +663,10 @@ def register(mcp: FastMCP) -> None:
                 "project_fingerprint": snapshot.project_fingerprint,
                 "source_observation_ids": list(snapshot.source_observation_ids),
                 "policy_notes": [
+                    (
+                        "Routing decisions are project- and template-dependent; static "
+                        "evidence can flag possible risks but does not prove musical intent."
+                    ),
                     "Preserve recognizable existing routing structure before proposing cleanup.",
                     (
                         "Infer Channel Rack to Mixer relationships from channel "
@@ -652,8 +677,15 @@ def register(mcp: FastMCP) -> None:
                         "routing as manual guidance."
                     ),
                 ],
+                "plan_gating": plan_gating,
             },
             "policy_notes": [
+                (
+                    "Routing decisions are project- and template-dependent. fls-pilot can "
+                    "detect routing risk patterns from local project evidence, but final "
+                    "interpretation depends on confirmed track roles, template intent, and "
+                    "user-approved cleanup decisions."
+                ),
                 "Preserve recognizable existing routing structure before proposing cleanup.",
                 (
                     "Infer Channel Rack to Mixer relationships from channel "
@@ -672,6 +704,15 @@ def register(mcp: FastMCP) -> None:
                 ]
             ),
             "safety": {"read_only": True, "project_changes": False},
+            "metadata": {
+                "plan_gating": plan_gating,
+                "routing_evidence_level": (
+                    routing_checks.ROUTING_EVIDENCE_LEVEL_METER_PROXY
+                    if options.level == 2
+                    else routing_checks.ROUTING_EVIDENCE_LEVEL_STATIC
+                ),
+                "routing_evidence_levels": routing_checks.routing_evidence_levels(),
+            },
         }
         report = serialize_analysis_report(
             routing_analysis_report_from_legacy_payload(
@@ -686,6 +727,12 @@ def register(mcp: FastMCP) -> None:
         report["note"] = legacy_payload["note"]
         report["policy_notes"] = legacy_payload["policy_notes"]
         report["kb_policy_refs"] = legacy_payload["kb_policy_refs"]
+        report["routing_evidence_level"] = legacy_payload["routing_evidence_level"]
+        report["routing_evidence_levels"] = legacy_payload["routing_evidence_levels"]
+        report["plan_gating_status"] = plan_gating["plan_gating_status"]
+        report["cleanup_plan_allowed"] = plan_gating["cleanup_plan_allowed"]
+        report["cleanup_plan_block_reason"] = plan_gating["cleanup_plan_block_reason"]
+        report["required_user_decisions"] = plan_gating["required_user_decisions"]
         report["metadata"]["legacy_routing_review"] = {
             "unrouted_channels": unrouted,
             "generators_direct_to_master": direct_to_master,
@@ -699,11 +746,53 @@ def register(mcp: FastMCP) -> None:
         proposed_buses: Annotated[
             list[dict], Field(description="Buses to create (track, name, sources)")
         ],
+        source_findings: Annotated[
+            list[dict] | None,
+            Field(
+                description=(
+                    "Optional Routing Audit findings used to gate cleanup eligibility."
+                )
+            ),
+        ] = None,
+        user_decisions: Annotated[
+            list[dict] | None,
+            Field(description="Optional user decisions from Routing Audit interaction requests."),
+        ] = None,
     ) -> dict:
         """Create a dry-run plan for routing fixes.
 
         Safety: Read-Only (Dry-run).
         """
+        findings = routing_checks.enrich_routing_findings(
+            [dict(row) for row in source_findings or [] if isinstance(row, dict)],
+            user_decisions=tuple(
+                dict(row) for row in user_decisions or [] if isinstance(row, dict)
+            ),
+        )
+        if not findings and (issues or proposed_buses):
+            findings = routing_checks.enrich_routing_findings(
+                [
+                    {
+                        "id": "routing_cleanup_unconfirmed_input",
+                        "severity": "warning",
+                        "title": "Cleanup Input Needs Confirmation",
+                        "detail": (
+                            "Cleanup issues were provided without Routing Audit finding "
+                            "evidence or user-confirmed routing intent."
+                        ),
+                        "count": len(issues) + len(proposed_buses),
+                        "metadata": heuristic_validation_metadata(
+                            evidence_type=EVIDENCE_TYPE_ROUTING_BASED_DETECTION,
+                            interaction_request_id="routing.confirm_cleanup_candidates",
+                            reason="cleanup_plan_input_without_confirmed_evidence",
+                        ),
+                    }
+                ],
+                user_decisions=tuple(
+                    dict(row) for row in user_decisions or [] if isinstance(row, dict)
+                ),
+            )
+        plan_gating = routing_checks.routing_cleanup_plan_gating(findings)
         proposed_changes = []
         if issues:
             proposed_changes.append(
@@ -734,12 +823,35 @@ def register(mcp: FastMCP) -> None:
                 )
             )
 
+        if not plan_gating["cleanup_plan_allowed"]:
+            proposed_changes = [
+                {
+                    **dict(row),
+                    "status": "blocked",
+                    "blocked_until_human_validation": bool(
+                        plan_gating["required_user_decisions"]
+                    ),
+                    "blocked_until_interaction_request_ids": plan_gating[
+                        "required_user_decisions"
+                    ],
+                    "cleanup_plan_block_reason": plan_gating[
+                        "cleanup_plan_block_reason"
+                    ],
+                }
+                for row in proposed_changes
+            ]
+
         return workflow_report.workflow_report(
             workflow="routing_cleanup_plan",
             title="Routing Cleanup Plan",
             mode="dry_run",
-            status="Plan created. Please review and apply using fl_apply_routing_cleanup.",
+            status=(
+                "Cleanup plan blocked until routing findings and intent are confirmed."
+                if not plan_gating["cleanup_plan_allowed"] and proposed_changes
+                else "Plan created. Please review and apply using fl_apply_routing_cleanup."
+            ),
             proposed_changes=proposed_changes,
+            diagnostics=findings,
             kb_policy_refs=kb_policy.rule_refs(
                 [
                     "preserve_existing_structure_first",
@@ -751,12 +863,14 @@ def register(mcp: FastMCP) -> None:
             metadata={
                 "issues": issues,
                 "proposed_buses": proposed_buses,
+                **plan_gating,
                 "rules": [
                     "Preserve existing structure when it is recognizable.",
                     "Do not infer Playlist Track N maps to Mixer Track N.",
                     "Prefer bus placement before the group when it fits the current project.",
                     "Use one named rollback unit for approved grouped routing writes.",
                     "Keep plugin loading, external I/O, and broad UI routing manual.",
+                    "Block cleanup plans until routing findings and intent are confirmed.",
                 ],
                 "supported_bus_placement_policy": [
                     "before_group",

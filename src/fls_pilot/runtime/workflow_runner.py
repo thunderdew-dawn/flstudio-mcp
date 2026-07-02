@@ -15,7 +15,11 @@ from ..analysis.low_end import (
 )
 from ..analysis.reports import analysis_report_for_control_center
 from ..analysis.schema import AnalysisReport, Coverage, Finding, Freshness, Prerequisite
-from ..analysis.scoring import confidence_from_coverage, risk_from_severities
+from ..analysis.scoring import (
+    confidence_from_coverage,
+    risk_from_severities,
+    weighted_mix_review_risk,
+)
 from ..music.mix_review_levels import (
     RENDERED_MASTER_EXPECTED_CHECKS,
     RENDERED_STEM_EXPECTED_CHECKS,
@@ -219,8 +223,17 @@ def _apply_audio_evidence(
         master_payload = dict(effective_master.payload)
         summary = dict(master_payload.get("feature_summary") or {})
         source_observations.append(effective_master.observation_id)
-        if workflow_id != "mix_review":
+        if workflow_id == "mix_review":
+            findings.extend(
+                _mix_review_rendered_master_findings(
+                    summary,
+                    effective_master.observation_id,
+                )
+            )
+        else:
             findings.append(_audio_finding(workflow_id, summary, effective_master.observation_id))
+        if workflow_id == "mix_review" and effective_stems:
+            findings.extend(_mix_review_stem_findings(effective_stems))
         metadata["rendered_audio_evidence"] = {
             "level": evidence_level,
             "level_label": _evidence_level_label(evidence_level, workflow_id=workflow_id),
@@ -230,11 +243,11 @@ def _apply_audio_evidence(
                 dict(row.payload) for row in effective_stems if isinstance(row.payload, dict)
             ],
             "automatic_fl_render": False,
-            "mix_review_audio_findings": workflow_id != "mix_review",
+            "mix_review_audio_findings": workflow_id == "mix_review",
             "claim_limit": (
                 "Master-only audio is proxy evidence and must not create "
                 "kick/bass/stem-specific causal claims."
-                if workflow_id == "low_end_analysis" and not stem_available
+                if workflow_id in {"low_end_analysis", "mix_review"} and not stem_available
                 else None
             ),
         }
@@ -302,6 +315,46 @@ def _apply_audio_evidence(
     risk_score = min(100, report.risk_score + audio_risk)
     if workflow_id == "low_end_analysis":
         risk_score = weighted_low_end_risk(tuple(findings))
+    elif workflow_id == "mix_review":
+        risk_score, score_inputs = weighted_mix_review_risk(
+            tuple(findings),
+            genre_profile=str(metadata.get("genre_profile") or "default"),
+            levels_valid=not bool(metadata.get("levels_valid") is False),
+        )
+        metadata.update(
+            {
+                "legacy_score": report.health_score,
+                "risk_score_v2": risk_score,
+                "decision_adjusted_score": risk_score,
+                "score_inputs": score_inputs,
+                "score_status": "partial"
+                if audio_available and not stem_available and requested_level >= 3
+                else metadata.get("score_status", "provisional"),
+                "provisional_findings_count": sum(
+                    1
+                    for row in findings
+                    if str(row.metadata.get("finding_state") or "")
+                    in {
+                        "static_heuristic",
+                        "name_based_unconfirmed",
+                        "metadata_suspected",
+                        "requires_more_evidence",
+                        "rendered_master_proxy",
+                    }
+                ),
+                "confirmed_findings_count": sum(
+                    1
+                    for row in findings
+                    if str(row.metadata.get("finding_state") or "")
+                    in {"live_meter_supported", "stem_audio_confirmed", "accepted_by_user"}
+                ),
+                "blocked_findings_count": sum(
+                    1
+                    for row in findings
+                    if row.metadata.get("fix_plan_status") == "blocked"
+                ),
+            }
+        )
     confidence = confidence_from_coverage(
         required=coverage.required,
         available=coverage.available,
@@ -320,16 +373,16 @@ def _apply_audio_evidence(
             **report.__dict__,
             "analysis_mode": (
                 "hybrid"
-                if audio_available and workflow_id != "mix_review"
+                if audio_available
                 else report.analysis_mode
             ),
             "evidence_mode": (
-                report.evidence_mode
-                if workflow_id == "mix_review"
-                else "role_confirmed_stems"
+                "role_confirmed_stems"
                 if stem_available
                 else "rendered_master"
                 if audio_available
+                else report.evidence_mode
+                if workflow_id == "mix_review"
                 else "static_snapshot_only"
             ),
             "freshness": Freshness(
@@ -560,6 +613,244 @@ def _latest_audio_observation(observations, evidence_kind: str):  # noqa: ANN001
         == evidence_kind
     ]
     return max(rows, key=lambda row: row.created_at) if rows else None
+
+
+def _mix_review_rendered_master_findings(
+    summary: dict[str, Any],
+    observation_id: str,
+) -> tuple[Finding, ...]:
+    findings: list[Finding] = []
+    peak = _number(summary.get("peak_dbfs"))
+    if peak is not None:
+        severity = "high" if peak >= 0 else "medium" if peak > -3 else "info"
+        findings.append(
+            _mix_review_audio_proxy_finding(
+                "mix_review.rendered_master_headroom",
+                "Rendered master headroom proxy is available",
+                severity,
+                observation_id,
+                {
+                    "peak_dbfs": peak,
+                    "rms_dbfs": summary.get("rms_dbfs"),
+                    "crest_factor_db": summary.get("crest_factor_db"),
+                },
+            )
+        )
+    loudness = _number(summary.get("integrated_lufs"))
+    if loudness is not None:
+        findings.append(
+            _mix_review_audio_proxy_finding(
+                "mix_review.rendered_master_loudness_proxy",
+                "Rendered master loudness proxy is available",
+                "info",
+                observation_id,
+                {"integrated_lufs": loudness},
+            )
+        )
+    low_energy_ratio = _number(
+        summary.get("low_end_20_120_ratio") or summary.get("low_end_energy_ratio")
+    )
+    if isinstance(summary.get("band_energy"), dict) or any(
+        key in summary for key in ("low_end_energy_ratio", "low_end_20_120_ratio")
+    ):
+        findings.append(
+            _mix_review_audio_proxy_finding(
+                "mix_review.tonal_balance_proxy",
+                "Rendered master tonal-balance proxy is available",
+                "medium" if low_energy_ratio is not None and low_energy_ratio >= 0.45 else "info",
+                observation_id,
+                {
+                    "band_energy": summary.get("band_energy"),
+                    "low_end_energy_ratio": summary.get("low_end_energy_ratio"),
+                    "low_end_20_120_ratio": summary.get("low_end_20_120_ratio"),
+                },
+            )
+        )
+    if any(key in summary for key in ("stereo_width_proxy", "stereo_correlation_proxy")):
+        findings.append(
+            _mix_review_audio_proxy_finding(
+                "mix_review.stereo_width_proxy",
+                "Rendered master stereo-width proxy is available",
+                "info",
+                observation_id,
+                {
+                    "stereo_width_proxy": summary.get("stereo_width_proxy"),
+                    "stereo_correlation_proxy": summary.get("stereo_correlation_proxy"),
+                },
+            )
+        )
+    if any(key in summary for key in ("low_band_stereo_proxy", "low_band_side_ratio")):
+        low_stereo = _number(summary.get("low_band_stereo_proxy"))
+        findings.append(
+            _mix_review_audio_proxy_finding(
+                "mix_review.low_band_stereo_proxy",
+                "Rendered master low-band stereo proxy is available",
+                "medium" if low_stereo is not None and low_stereo < 0 else "info",
+                observation_id,
+                {
+                    "low_band_stereo_proxy": summary.get("low_band_stereo_proxy"),
+                    "low_band_side_ratio": summary.get("low_band_side_ratio"),
+                },
+            )
+        )
+    if any(key in summary for key in ("crest_factor_db", "rms_dbfs")):
+        findings.append(
+            _mix_review_audio_proxy_finding(
+                "mix_review.dynamic_density_proxy",
+                "Rendered master dynamic-density proxy is available",
+                "info",
+                observation_id,
+                {
+                    "crest_factor_db": summary.get("crest_factor_db"),
+                    "rms_dbfs": summary.get("rms_dbfs"),
+                },
+            )
+        )
+    return tuple(findings)
+
+
+def _mix_review_audio_proxy_finding(
+    rule_id: str,
+    title: str,
+    severity: str,
+    observation_id: str,
+    evidence: dict[str, Any],
+) -> Finding:
+    return Finding(
+        id=rule_id,
+        rule_id=rule_id,
+        title=title,
+        severity=severity,
+        risk_score=risk_from_severities((severity,)),
+        confidence_score=82,
+        evidence_mode="rendered_audio",
+        evidence=(
+            {
+                **evidence,
+                "proxy_notice": (
+                    "Rendered master evidence is an audio-backed proxy and does "
+                    "not prove stem-specific causes."
+                ),
+            },
+        ),
+        limitations=(
+            "Master-only audio remains proxy evidence.",
+            "Do not infer kick, bass, vocal, FX, or bus-specific causes from this finding.",
+        ),
+        source_observation_ids=(observation_id,),
+        metadata={
+            "evidence_type": EVIDENCE_TYPE_RENDERED_AUDIO,
+            "evidence_level": 3,
+            "evidence_level_label": "rendered_master_audio",
+            "finding_state": "rendered_master_proxy",
+            "proxy_evidence": True,
+            "stem_specific_claim": False,
+            "fix_plan_status": "blocked",
+            "blocked_reason": "master_only_proxy",
+        },
+    )
+
+
+def _mix_review_stem_findings(stems: tuple[Any, ...]) -> tuple[Finding, ...]:
+    rows = []
+    for observation in stems:
+        payload = getattr(observation, "payload", None)
+        if not isinstance(payload, dict):
+            continue
+        summary = dict(payload.get("feature_summary") or {})
+        rows.append(
+            {
+                "role": _confirmed_stem_role(observation),
+                "summary": summary,
+                "observation_id": getattr(observation, "observation_id", ""),
+            }
+        )
+    findings: list[Finding] = []
+    roles = {row["role"] for row in rows}
+    aligned = any(
+        bool(row["summary"].get("time_alignment_checked") or row["summary"].get("aligned"))
+        for row in rows
+    )
+    overlap = max(
+        (
+            _number(
+                row["summary"].get("kick_bass_overlap")
+                or row["summary"].get("overlap_ratio")
+                or row["summary"].get("spectral_overlap_proxy")
+            )
+            or 0.0
+            for row in rows
+        ),
+        default=0.0,
+    )
+    if {"kick", "bass"}.issubset(roles) and aligned and overlap >= 0.5:
+        findings.append(
+            _mix_review_stem_finding(
+                "mix_review.kick_bass_overlap",
+                "Role-confirmed kick/bass overlap evidence is available",
+                "high" if overlap >= 0.75 else "medium",
+                rows,
+                {"overlap_ratio": overlap, "time_alignment_checked": True},
+            )
+        )
+    peaks = [
+        value
+        for value in (_number(row["summary"].get("peak_dbfs")) for row in rows)
+        if value is not None
+    ]
+    if len(peaks) >= 2 and max(peaks) - min(peaks) >= 12:
+        findings.append(
+            _mix_review_stem_finding(
+                "mix_review.stem_balance_outlier",
+                "Role-confirmed stem balance outlier evidence is available",
+                "medium",
+                rows,
+                {"peak_dbfs_range": round(max(peaks) - min(peaks), 2)},
+            )
+        )
+    return tuple(findings)
+
+
+def _mix_review_stem_finding(
+    rule_id: str,
+    title: str,
+    severity: str,
+    rows: list[dict[str, Any]],
+    evidence: dict[str, Any],
+) -> Finding:
+    return Finding(
+        id=rule_id,
+        rule_id=rule_id,
+        title=title,
+        severity=severity,
+        risk_score=risk_from_severities((severity,)),
+        confidence_score=90,
+        evidence_mode="rendered_audio",
+        evidence=(evidence,),
+        assumptions=("Stem roles were confirmed by metadata or user decision.",),
+        limitations=("Fix planning still requires explicit producer approval.",),
+        source_observation_ids=tuple(
+            str(row["observation_id"]) for row in rows if row.get("observation_id")
+        ),
+        metadata={
+            "evidence_type": EVIDENCE_TYPE_RENDERED_AUDIO,
+            "evidence_level": 4,
+            "evidence_level_label": "stem_or_bus_audio",
+            "finding_state": "stem_audio_confirmed",
+            "proxy_evidence": False,
+            "stem_specific_claim": True,
+            "fix_plan_status": "requires_user_approval",
+        },
+    )
+
+
+def _number(value: Any) -> float | None:
+    if isinstance(value, bool) or value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _audio_finding(
