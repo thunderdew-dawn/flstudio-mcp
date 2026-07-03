@@ -112,6 +112,8 @@ SERVER_STATE_TOOLS = {
     "fl_take_snapshot",
     "fl_rollback_last_change",
     "fl_rollback_change",
+    "fl_update_organization_plan_decision",
+    "fl_rollback_organization_change",
 }
 EXTERNAL_WRITE_TOOLS = {"fl_export_midi", "fl_export_change_log"}
 APPROVED_SAFE_WRITE_HELPERS = {"safe_set_steps"}

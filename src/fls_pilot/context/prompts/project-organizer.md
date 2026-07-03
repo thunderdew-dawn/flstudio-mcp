@@ -16,16 +16,19 @@ project cleanup plan.
 1. Confirm bridge/session health.
 2. Read current channels, mixer, and playlist metadata through capped resources
    or domain tools.
-3. Run `fl_plan_project_organization` when template-aware organization is useful,
-   or `fl_plan_project_cleanup` for the legacy one-step cleanup plan.
+3. Run `fl_scan_project_organization` or `fl_analyze_project_organization`,
+   then run `fl_plan_project_organization` when template-aware organization is
+   useful, or `fl_plan_project_cleanup` for the legacy one-step cleanup plan.
 4. Present the stored organizer plan id, plan hash, blocked steps, manual
    checks, and required user decisions.
-5. Ask for explicit confirmation before mutation, including exact step ids.
-6. Apply only approved stored plan steps with `fl_apply_organization_plan`, or
+5. Store exact producer decisions with
+   `fl_update_organization_plan_decision`; approved steps must be named by id.
+6. Ask for explicit confirmation before mutation, including exact step ids.
+7. Apply only approved stored plan steps with `fl_apply_organization_plan`, or
    one approved legacy cleanup step with `fl_apply_project_cleanup_step`, and
    only when rollback/readback are clear.
-7. After the write, read back where supported, report before/after plus rollback
-   or `change_id`, then stop.
+8. After the write, call `fl_get_organization_status`, report before/after plus
+   rollback or `change_id`, then stop.
 
 ## Stop Conditions
 

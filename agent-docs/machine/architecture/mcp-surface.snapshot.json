@@ -4,8 +4,8 @@
   "title": "MCP tools, resources, prompts and public tool safety summary",
   "source_snapshot": "agent-docs/machine/architecture-analysis.snapshot.json",
   "source_snapshot_sha256": "ff0d38588b91510a3073e81d885de38f9116cddfbcd95686cbf11c28a6db8d7f",
-  "generated_at": "2026-07-02",
-  "note": "Slim MCP surface slice refreshed for additive Project Organizer template-aware planning/apply tools. For concrete tool details, load the matching file under architecture/mcp-tools/.",
+  "generated_at": "2026-07-03",
+  "note": "Slim MCP surface slice refreshed for Project Organizer scan, decision, status, and rollback lifecycle tools. For concrete tool details, load the matching file under architecture/mcp-tools/.",
   "load_when": [
     "MCP tools, resources, or prompts are added, removed, renamed, or changed",
     "public MCP behavior, safety annotations, or tool registration changes",
@@ -14,12 +14,12 @@
   "payload": {
     "tool_safety_summary": {
       "external-write": 2,
-      "read-only": 72,
-      "server-state": 5,
+      "read-only": 74,
+      "server-state": 7,
       "transient": 6,
       "write-safe-required": 85
     },
-    "tools_total": 170,
+    "tools_total": 174,
     "tool_module_slices": {
       "arrange": {
         "path": "agent-docs/machine/architecture/mcp-tools/arrange.snapshot.json",
@@ -227,12 +227,13 @@
       },
       "project_organizer": {
         "path": "agent-docs/machine/architecture/mcp-tools/project_organizer.snapshot.json",
-        "tools_total": 7,
+        "tools_total": 11,
         "safety_class_counts": {
-          "read-only": 3,
+          "read-only": 5,
+          "server-state": 2,
           "write-safe-required": 4
         },
-        "destructive_hint_true_count": 0
+        "destructive_hint_true_count": 1
       },
       "routing": {
         "path": "agent-docs/machine/architecture/mcp-tools/routing.snapshot.json",

@@ -21,20 +21,20 @@ from fls_pilot import __version__  # noqa: E402
 from fls_pilot import server as server_module  # noqa: E402
 from fls_pilot.tools.registration import RETIRED_LOW_LEVEL_TOOLS  # noqa: E402
 
-EXPECTED_REGISTERED_TOOL_COUNT = 94
-EXPECTED_STATIC_TOOL_COUNT = 170
+EXPECTED_REGISTERED_TOOL_COUNT = 98
+EXPECTED_STATIC_TOOL_COUNT = 174
 EXPECTED_REGISTERED_SAFETY_SUMMARY = {
     "external-write": 2,
-    "read-only": 51,
-    "server-state": 5,
+    "read-only": 53,
+    "server-state": 7,
     "transient": 1,
     "unannotated": 1,
     "write-safe-required": 34,
 }
 EXPECTED_STATIC_SAFETY_SUMMARY = {
     "external-write": 2,
-    "read-only": 72,
-    "server-state": 5,
+    "read-only": 74,
+    "server-state": 7,
     "transient": 6,
     "write-gap": 0,
     "write-safe-required": 85,

@@ -1,8 +1,8 @@
 {
   "snapshot_version": 1,
-  "as_of": "2026-07-02",
+  "as_of": "2026-07-03",
   "status": "governed",
-  "governance_note": "Updated for Project Organizer template-aware stored plans and plan-based apply gates, plus Mix Review inline live-meter fallback for already-running playback. Persistent-write safety posture is unchanged: planning and review remain read-only, organization apply requires a stored plan, explicit approval, fingerprint/hash/expiry validation, safety-layer writes, readback, and rollback.",
+  "governance_note": "Updated for Project Organizer plan lifecycle tools: read-only scan/status, server-state decision updates and rollback wrapper, and stored plan apply status persistence. Persistent-write safety posture is unchanged: planning and review remain read-only, organization apply requires a stored plan, explicit approval, fingerprint/hash/expiry validation, safety-layer writes, readback, changelog, and rollback.",
   "project": {
     "name": "fls-pilot",
     "package_version": "3.0.0b3",
@@ -238,8 +238,8 @@
       "registration_source": "src/fls_pilot/server.py",
       "tool_modules_source": "src/fls_pilot/tools/",
       "baseline": {
-        "registered_public_tools": 94,
-        "static_audited_tools": 170,
+        "registered_public_tools": 98,
+        "static_audited_tools": 174,
         "check": "python scripts/check_tool_registration_baseline.py"
       },
       "resources": [

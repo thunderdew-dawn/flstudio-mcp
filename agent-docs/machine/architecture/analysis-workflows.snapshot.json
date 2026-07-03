@@ -4,8 +4,8 @@
   "title": "Analysis workflows, reports, scoring, evidence, health aggregation and Control Center workflow panels",
   "source_snapshot": "agent-docs/machine/architecture-analysis.snapshot.json",
   "source_snapshot_sha256": "ff0d38588b91510a3073e81d885de38f9116cddfbcd95686cbf11c28a6db8d7f",
-  "generated_at": "2026-07-02",
-  "note": "Scoped slice refreshed for Project Organizer template-aware plan metadata and Mix Review inline live-meter fallback; full static architecture analysis was not regenerated.",
+  "generated_at": "2026-07-03",
+  "note": "Scoped slice refreshed for Project Organizer plan lifecycle metadata and Mix Review inline live-meter fallback; full static architecture analysis was not regenerated.",
   "load_when": [
     "workflow registry, report schema, scoring, evidence, freshness, prerequisites, or health aggregation changes",
     "Control Center project-review workflow panel ownership or endpoint changes",
@@ -433,7 +433,10 @@
         "supported_next_actions": [
           "scan_project_organization",
           "plan_template_organization",
+          "update_organization_plan_decisions",
           "approve_organization_steps",
+          "get_organization_status",
+          "rollback_organization_change",
           "review_safe_proposals"
         ],
         "manual_only_actions": [
@@ -449,8 +452,12 @@
           "automatic_save_as"
         ],
         "metadata": {
+          "scan_tool": "fl_scan_project_organization",
           "plan_tool": "fl_plan_project_organization",
+          "decision_tool": "fl_update_organization_plan_decision",
           "apply_tool": "fl_apply_organization_plan",
+          "status_tool": "fl_get_organization_status",
+          "rollback_tool": "fl_rollback_organization_change",
           "plan_store_required": true,
           "step_selection_required": true
         }

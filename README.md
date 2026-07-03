@@ -56,6 +56,10 @@ external audio analyzer path supplies those facts.
 
 ### Project Organizer
 
+Scan project structure, build a fingerprint-bound organization plan, store
+producer decisions, apply selected approved steps through rollback-safe writes,
+and inspect change status or rollback ids afterward.
+
 [![Project Organizer](docs/assets/ai-color-my-tracks-example.gif)](docs/assets/ai-color-my-tracks-example.gif)
 
 ### Plugin & EQ Workflows

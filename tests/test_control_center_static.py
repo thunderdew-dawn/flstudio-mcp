@@ -1869,7 +1869,7 @@ assert.strictEqual(elements.get("run-project-organizer").disabled, false);
 assert.strictEqual(elements.get("organizer-score-value").textContent, "76 / 100");
 assert.strictEqual(elements.get("organizer-routing-total").textContent, "1");
 assert.match(textTree(elements.get("organizer-feedback")), /Last scan/);
-assert.match(textTree(elements.get("organizer-map-grid")), /fl_analyze_project_organization/);
+assert.match(textTree(elements.get("organizer-map-grid")), /fl_scan_project_organization/);
 assert.match(textTree(elements.get("organizer-guided-steps")), /fl_plan_project_cleanup/);
 assert.match(textTree(elements.get("organizer-finding-list")), /Default Channel Names/);
 assert.match(textTree(elements.get("organizer-plan-list")), /fl_apply_project_cleanup_step/);

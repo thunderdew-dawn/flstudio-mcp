@@ -28,7 +28,7 @@ checks.
 | Project export readiness | `fl_check_project_preflight`, `fl_project_health_overview` | `fl://project`, `fl://mixer`, `fl://channels` |
 | Diagnose mix problems | `fl_review_mix`, `fl_review_low_end_stereo` | `fl_mixer(action="list")`, `fl_batch` read batch |
 | Review routing | `fl_review_routing`, `fl_plan_routing_cleanup` | `fl_get_routing_all`, `fl_channel(action="list")` |
-| Organize names/colors/routes | `fl_plan_project_organization`, `fl_apply_organization_plan` | `fl_plan_project_cleanup`, `fl_channel`, `fl_mixer`, `fl_playlist` reads |
+| Organize names/colors/routes | `fl_scan_project_organization`, `fl_plan_project_organization`, `fl_update_organization_plan_decision`, `fl_apply_organization_plan`, `fl_get_organization_status` | `fl_plan_project_cleanup`, `fl_channel`, `fl_mixer`, `fl_playlist` reads |
 | Channel Rack edits | `fl_channel` | `fl://channels` |
 | Mixer edits | `fl_mixer` | `fl://mixer` |
 | Pattern or playlist metadata | `fl_pattern`, `fl_playlist` | `fl://patterns` |

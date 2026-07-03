@@ -5341,10 +5341,24 @@ function renderOrganizerMap(report) {
   const cards = [
     {
       title: "Analyze Organization",
-      tool: "fl_analyze_project_organization",
+      tool: report?.cleanup_plan?.scan_tool || "fl_scan_project_organization",
       value: summary.diagnostics ?? "--",
       detail: "Finds naming, routing, color-readback, pattern, and playlist cleanup signals.",
       state: Number(summary.diagnostics || 0) ? "warning" : "ok"
+    },
+    {
+      title: "Stored Plan",
+      tool: report?.organization_plan?.plan_tool || "fl_plan_project_organization",
+      value: safeString(report?.organization_plan?.status || "pending"),
+      detail: "Creates a fingerprint-bound plan with step ids, blocked assumptions, and manual checks.",
+      state: report?.organization_plan?.status === "no_template_plan_generated" ? "ok" : "info"
+    },
+    {
+      title: "Plan Decisions",
+      tool: report?.organization_plan?.decision_tool || "fl_update_organization_plan_decision",
+      value: report?.organization_plan?.step_selection_required ? "Required" : "Optional",
+      detail: "Stores exact producer decisions before any stored plan step can apply.",
+      state: report?.organization_plan?.step_selection_required ? "warning" : "ok"
     },
     {
       title: "Plan Cleanup",
@@ -5355,10 +5369,24 @@ function renderOrganizerMap(report) {
     },
     {
       title: "Apply One Step",
-      tool: "fl_apply_project_cleanup_step",
+      tool: report?.organization_plan?.apply_tool || "fl_apply_organization_plan",
       value: summary.routing_cleanup ?? "--",
-      detail: "Routes, renames, or colors one approved cleanup unit with rollback.",
+      detail: "Applies selected approved plan steps as one named rollback unit.",
       state: Number(summary.routing_cleanup || 0) ? "warning" : "ok"
+    },
+    {
+      title: "Plan Status",
+      tool: report?.organization_plan?.status_tool || "fl_get_organization_status",
+      value: report?.organization_plan?.plan_store_required ? "Stored" : "Draft",
+      detail: "Shows plan state, verified steps, change ids, and rollback unit ids.",
+      state: report?.organization_plan?.plan_store_required ? "info" : "ok"
+    },
+    {
+      title: "Rollback",
+      tool: report?.organization_plan?.rollback_tool || "fl_rollback_organization_change",
+      value: "LIFO",
+      detail: "Rolls back organizer changes through the MCP changelog rollback path.",
+      state: "info"
     },
     {
       title: "Guided Cleanup",

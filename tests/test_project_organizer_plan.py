@@ -8,8 +8,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from fls_pilot.analysis.broker import StaticProjectSnapshot
 from fls_pilot import project_templates as templates
+from fls_pilot.analysis.broker import StaticProjectSnapshot
 from fls_pilot.tools import project_organizer
 
 
@@ -94,6 +94,25 @@ def test_organizer_plan_static_only_is_provisional(monkeypatch) -> None:
     assert plan["interaction_requests"][0]["id"] == "organizer.choose_target_template"
     assert plan["blocked_steps"][0]["evidence_type"] == "name_based_detection"
     assert plan["blocked_steps"][0]["safe_to_apply"] is False
+    assert plan["organization_plan_status"] == plan["plan_status"]
+    assert plan["metadata"]["organizer_plan"]["status"] == plan["plan_status"]
+    assert plan["source_report_id"] == "snap_proj_static"
+    assert plan["findings"]
+    assert plan["decisions_required"]
+    assert plan["blocked_steps"][0]["step_id"] == "name_based_rename_channel_0"
+    assert plan["blocked_steps"][0]["kind"] == "rename"
+    assert plan["blocked_steps"][0]["before_state"] == {"name": "Channel 0"}
+    assert plan["blocked_steps"][0]["required_user_decision"]["required"] is True
+
+
+def test_organizer_scan_alias_returns_read_only_analysis(monkeypatch) -> None:
+    mcp, _broker = _registered(monkeypatch, _snapshot())
+
+    result = mcp.tools["fl_scan_project_organization"]()
+
+    assert result["workflow"] == "project_organizer"
+    assert result["safety"]["read_only"] is True
+    assert result["summary"]["unnamed_channels"] == 1
 
 
 def test_organizer_template_ambiguous_blocks_apply_plan(monkeypatch) -> None:
@@ -318,6 +337,95 @@ def test_organizer_template_confirmed_rename_step_can_apply(monkeypatch) -> None
     assert result["applied_changes"][0]["change_id"] == "chg_organization_plan"
     assert safe_write_calls[0]["tool"] == "apply_organization_plan"
     assert safe_write_calls[0]["rollback_unit"] == f"organization_plan_{plan['plan_id']}"
+    status = mcp.tools["fl_get_organization_status"](
+        plan_id=plan["plan_id"],
+        include_history=False,
+    )
+    assert status["plans"][0]["step_status_counts"]["verified"] == 1
+
+
+def test_organizer_decision_update_unblocks_name_based_step(monkeypatch) -> None:
+    mcp, _broker = _registered(monkeypatch, _snapshot())
+    safe_write_calls = []
+
+    def mock_safe_write_group(*args, **kwargs):
+        safe_write_calls.append(kwargs)
+        return {
+            "dry_run": False,
+            "before": [{"name": "Channel 0"}],
+            "after": [{"name": "Instrument 0"}],
+            "change_id": "chg_name_based",
+            "rollback": {"rollback_unit": kwargs["rollback_unit"]},
+            "undo": "call fl_rollback_change(change_id='chg_name_based')",
+        }
+
+    monkeypatch.setattr(project_organizer.safety, "safe_write_group", mock_safe_write_group)
+    plan = mcp.tools["fl_plan_project_organization"]()
+
+    updated = mcp.tools["fl_update_organization_plan_decision"](
+        plan_id=plan["plan_id"],
+        approve_step_ids=["name_based_rename_channel_0"],
+    )
+    step = next(row for row in updated["steps"] if row["id"] == "name_based_rename_channel_0")
+
+    assert updated["plan_status"] == "approved"
+    assert step["status"] == "approved"
+    assert step["safe_to_apply"] is True
+    assert step["blocked_reason"] is None
+
+    result = mcp.tools["fl_apply_organization_plan"](
+        plan_id=plan["plan_id"],
+        approved_step_ids=["name_based_rename_channel_0"],
+        approved=True,
+    )
+
+    assert result["mode"] == "applied"
+    assert safe_write_calls[0]["tool"] == "apply_organization_plan"
+
+
+def test_organizer_status_lists_stored_plans(monkeypatch) -> None:
+    mcp, _broker = _registered(monkeypatch, _snapshot())
+    plan = mcp.tools["fl_plan_project_organization"](target_template="psytrance")
+
+    status = mcp.tools["fl_get_organization_status"](include_history=False)
+
+    assert status["ok"] is True
+    assert status["active_plan_count"] == 1
+    assert status["plans"][0]["plan_id"] == plan["plan_id"]
+    assert status["plans"][0]["plan_hash"] == plan["plan_hash"]
+
+
+def test_organizer_rollback_by_unit_delegates_to_lifo_safety(monkeypatch) -> None:
+    mcp, _broker = _registered(monkeypatch, _snapshot())
+    calls = []
+
+    monkeypatch.setattr(
+        project_organizer.safety,
+        "change_history",
+        lambda *args, **kwargs: {
+            "entries": [
+                {
+                    "change_id": "chg_organization_plan",
+                    "rollback_unit": "organization_plan_orgplan_123",
+                    "scope": "project_organizer",
+                    "tool": "apply_organization_plan",
+                }
+            ]
+        },
+    )
+
+    def mock_rollback_change(_bridge, change_id):
+        calls.append(change_id)
+        return {"ok": True, "change_id": change_id}
+
+    monkeypatch.setattr(project_organizer.safety, "rollback_change", mock_rollback_change)
+
+    result = mcp.tools["fl_rollback_organization_change"](
+        rollback_unit_id="organization_plan_orgplan_123"
+    )
+
+    assert result["ok"] is True
+    assert calls == ["chg_organization_plan"]
 
 
 def test_organizer_bus_layout_reuses_routing_apply_path(monkeypatch) -> None:

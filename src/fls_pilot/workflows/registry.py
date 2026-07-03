@@ -544,7 +544,10 @@ DEFAULT_WORKFLOW_REGISTRY = WorkflowRegistry(
             supported_next_actions=(
                 "scan_project_organization",
                 "plan_template_organization",
+                "update_organization_plan_decisions",
                 "approve_organization_steps",
+                "get_organization_status",
+                "rollback_organization_change",
                 "review_safe_proposals",
             ),
             manual_only_actions=(
@@ -560,8 +563,12 @@ DEFAULT_WORKFLOW_REGISTRY = WorkflowRegistry(
                 "automatic_save_as",
             ),
             metadata={
+                "scan_tool": "fl_scan_project_organization",
                 "plan_tool": "fl_plan_project_organization",
+                "decision_tool": "fl_update_organization_plan_decision",
                 "apply_tool": "fl_apply_organization_plan",
+                "status_tool": "fl_get_organization_status",
+                "rollback_tool": "fl_rollback_organization_change",
                 "plan_store_required": True,
                 "step_selection_required": True,
             },
