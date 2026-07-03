@@ -6490,6 +6490,7 @@ def _setup_guidance(
     daemon_process = processes.get("daemon", {})
     daemon_running = _process_running(daemon_process)
     daemon_start_action_shown = False
+    fl_app_needs_action = _group_needs_action(groups, "fl_app")
     autostart_state = str(daemon_autostart.get("state") or "")
     if autostart_state in {"started", "starting", "external", "failed"}:
         daemon_status = _daemon_startup_status(
@@ -6503,7 +6504,7 @@ def _setup_guidance(
             daemon_action_path = "/api/process/daemon/start"
             daemon_action_label = "Start daemon"
             daemon_start_action_shown = True
-        if daemon_status != "OK":
+        if daemon_status != "OK" and not (fl_app_needs_action and daemon_running):
             guidance.append(
                 _guidance_item(
                     title="Daemon startup",
@@ -6555,7 +6556,7 @@ def _setup_guidance(
             )
         )
 
-    if _group_needs_action(groups, "fl_app"):
+    if fl_app_needs_action:
         guidance.append(
             _guidance_item(
                 title="Open FL Studio",
@@ -6570,7 +6571,7 @@ def _setup_guidance(
             )
         )
 
-    if _group_needs_action(groups, "controller"):
+    if _group_needs_action(groups, "controller") and not fl_app_needs_action:
         guidance.append(
             _guidance_item(
                 title="Connect FL Studio to the controller",

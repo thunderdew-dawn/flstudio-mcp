@@ -466,6 +466,44 @@ def test_setup_guidance_surfaces_mcp_stdio_blocker_without_ok_daemon_card():
     assert stdio["action_label"] == "Re-check"
 
 
+def test_setup_guidance_prioritizes_open_fl_when_bridge_failure_is_derivative():
+    groups = {
+        "environment": [],
+        "fl_app": [
+            _finding("FL Studio Application", "blocker", "failed").to_dict(),
+        ],
+        "midi": [],
+        "controller": [
+            _finding("FL Studio Controller Script", "blocker", "probe_needed").to_dict(),
+        ],
+        "daemon": [
+            _finding("TCP Daemon / Bridge", "blocker", "failed").to_dict(),
+        ],
+        "mcp_stdio": [
+            _finding("MCP stdio Transport", "blocker", "failed").to_dict(),
+        ],
+        "mcp_sse": [],
+        "mcp_apply": [],
+        "optional_dependencies": [],
+        "other": [],
+    }
+
+    guidance = control_center._setup_guidance(
+        groups=groups,
+        readiness={"state": "blocked"},
+        processes={"daemon": {"state": "external"}},
+        ports={"daemon": {"host": "127.0.0.1", "selected_port": 9787}},
+        daemon_autostart={"state": "external", "message": "A daemon is already reachable."},
+        sse_probe={},
+    )
+
+    titles = [item["title"] for item in guidance]
+    assert titles[0] == "Open FL Studio"
+    assert "Daemon startup" not in titles
+    assert "Connect FL Studio to the controller" not in titles
+    assert "Fix MCP stdio startup" in titles
+
+
 def test_setup_guidance_prioritizes_midi_manual_action(monkeypatch):
     findings = [
         _finding("Python Environment"),
