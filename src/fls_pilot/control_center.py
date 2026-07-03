@@ -3883,7 +3883,8 @@ def _build_project_organizer_report(
     unnamed_playlist_tracks = [
         _organizer_named_item(row, "playlist_track")
         for row in playlist_tracks
-        if _looks_default_named_item(row, "playlist_track")
+        if _playlist_track_has_content_evidence(row)
+        and _looks_default_named_item(row, "playlist_track")
     ]
     duplicate_mixer = _duplicate_name_rows(mixer_tracks, "mixer")
     duplicate_patterns = _duplicate_name_rows(patterns, "pattern")
@@ -3905,7 +3906,6 @@ def _build_project_organizer_report(
         unnamed_playlist_tracks=unnamed_playlist_tracks,
         duplicate_mixer=duplicate_mixer,
         duplicate_patterns=duplicate_patterns,
-        color_readback_missing=color_readback_missing,
         candidate_groups=candidate_groups,
         template_context=template_context,
     )
@@ -3913,7 +3913,6 @@ def _build_project_organizer_report(
         unnamed_channels=unnamed_channels,
         routing_cleanup=routing_cleanup,
         duplicate_mixer=duplicate_mixer,
-        unnamed_patterns=unnamed_patterns,
         candidate_groups=candidate_groups,
     )
     _apply_group_user_decisions(
@@ -3946,6 +3945,7 @@ def _build_project_organizer_report(
         if step.get("kind") in {"channel_naming", "mixer_naming", "pattern_naming"}
     ]
     color_rules = _organizer_color_standard_rules(channels, mixer_tracks)
+    diagnostic_findings = [row for row in findings if row.get("severity") != "ok"]
     score = organizer_score(
         unnamed_channels=len(unnamed_channels),
         routing_cleanup=len(routing_cleanup),
@@ -3969,11 +3969,16 @@ def _build_project_organizer_report(
             "mixer_tracks": len(mixer_tracks),
             "patterns": len(patterns),
             "playlist_tracks": len(playlist_tracks),
-            "diagnostics": len(findings),
+            "diagnostics": len(diagnostic_findings),
             "proposed_changes": len(cleanup_steps),
             "unnamed_channels": len(unnamed_channels),
+            "unnamed_patterns": len(unnamed_patterns),
+            "unnamed_playlist_tracks": len(unnamed_playlist_tracks),
+            "duplicate_mixer_names": len(duplicate_mixer),
+            "duplicate_pattern_names": len(duplicate_patterns),
             "routing_cleanup": len(routing_cleanup),
             "naming_cleanup": len(naming_rules),
+            "color_cleanup": len(color_rules),
             "color_readback_missing": color_readback_missing,
             "grouping_candidates": len(candidate_groups),
         },
@@ -4023,14 +4028,22 @@ def _build_project_organizer_report(
                 playlist_tracks=playlist_tracks,
             ),
             "routing_rows": len(routing),
+            "playlist_tracks_with_content_evidence": sum(
+                1 for row in playlist_tracks if _playlist_track_has_content_evidence(row)
+            ),
+            "color_readback_missing": color_readback_missing,
             "template_context": templates.compact_context(template_context),
             "notes": [
                 "Project Organizer is read-only in Control Center.",
                 "Use fl_plan_project_organization for a stored template-aware plan with step ids.",
                 "Apply only one approved cleanup step or one named rollback unit at a time.",
                 (
-                    "Color counts only flag missing readback fields; default FL colors "
-                    "are not guessed."
+                    f"Color readback is unavailable for {color_readback_missing} rows; "
+                    "this is a snapshot limitation, not cleanup work."
+                ),
+                (
+                    "Playlist track names are only flagged when the read-only snapshot includes "
+                    "clip or occupancy evidence for that slot."
                 ),
                 (
                     "Playlist clip editing, pattern deletion, plugin loading, save, "
@@ -4099,6 +4112,48 @@ def _looks_default_named_item(row: dict[str, Any], kind: str) -> bool:
         return idx is not None and name == f"Pattern {idx}"
     if kind == "playlist_track":
         return idx is not None and name in {f"Track {idx}", f"Playlist Track {idx}"}
+    return False
+
+
+def _playlist_track_has_content_evidence(row: dict[str, Any]) -> bool:
+    """Return true only when the snapshot proves the playlist slot is in use."""
+
+    content_keys = (
+        "clip_count",
+        "clips_count",
+        "item_count",
+        "items_count",
+        "pattern_clip_count",
+        "audio_clip_count",
+        "automation_clip_count",
+        "event_count",
+        "clips",
+        "items",
+        "used",
+        "occupied",
+        "has_clips",
+        "has_content",
+    )
+    for key in content_keys:
+        if key not in row:
+            continue
+        value = row.get(key)
+        if isinstance(value, bool):
+            if value:
+                return True
+            continue
+        if isinstance(value, (int, float)):
+            if value > 0:
+                return True
+            continue
+        if isinstance(value, (list, tuple, set, dict)):
+            if len(value) > 0:
+                return True
+            continue
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized and normalized not in {"0", "false", "no", "none", "unknown", "n/a"}:
+                return True
     return False
 
 
@@ -4260,7 +4315,6 @@ def _organizer_findings(
     unnamed_playlist_tracks: list[dict[str, Any]],
     duplicate_mixer: list[dict[str, Any]],
     duplicate_patterns: list[dict[str, Any]],
-    color_readback_missing: int,
     candidate_groups: list[dict[str, Any]],
     template_context: dict[str, Any],
 ) -> list[dict[str, Any]]:
@@ -4329,17 +4383,6 @@ def _organizer_findings(
         "Patterns sharing the same visible name.",
         duplicate_patterns,
     )
-    if color_readback_missing:
-        findings.append(
-            {
-                "id": "color_readback_missing",
-                "severity": "info",
-                "title": "Color Readback Limited",
-                "detail": "Some rows did not include color data in the read-only snapshot.",
-                "count": color_readback_missing,
-                "items": [],
-            }
-        )
     if candidate_groups:
         findings.append(
             {
@@ -4451,7 +4494,6 @@ def _organizer_cleanup_steps(
     unnamed_channels: list[dict[str, Any]],
     routing_cleanup: list[dict[str, Any]],
     duplicate_mixer: list[dict[str, Any]],
-    unnamed_patterns: list[dict[str, Any]],
     candidate_groups: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     steps = []
@@ -4468,7 +4510,12 @@ def _organizer_cleanup_steps(
                 detail="Creates a one-step routing proposal using an existing free mixer track.",
                 tool="fl_apply_project_cleanup_step",
                 params={"routing": [{"channel": channel, "mode": "free"}], "approved": True},
-                risk="low",
+                risk="medium",
+                observed_state={
+                    "target_mixer_track": item.get("target"),
+                    "target_name": item.get("target_name"),
+                },
+                proposed_state={"target_mixer_track": "next_free"},
             )
         )
     for item in unnamed_channels[:6]:
@@ -4489,6 +4536,8 @@ def _organizer_cleanup_steps(
                     "approved": True,
                 },
                 risk="low",
+                observed_state={"name": item.get("name")},
+                proposed_state={"name": suggested},
             )
         )
     for item in duplicate_mixer[:4]:
@@ -4514,22 +4563,8 @@ def _organizer_cleanup_steps(
                     "approved": True,
                 },
                 risk="low",
-            )
-        )
-    for item in unnamed_patterns[:4]:
-        pattern = item.get("index")
-        if pattern is None:
-            continue
-        steps.append(
-            _organizer_step(
-                step_id=f"rename_pattern_{pattern}",
-                kind="pattern_naming",
-                priority="low",
-                title=f"Rename pattern {pattern}",
-                detail="Pattern names use the pattern domain tool and need the same approval flow.",
-                tool="fl_pattern",
-                params={"action": "set_name", "index": pattern, "name": f"Pattern {pattern}"},
-                risk="low",
+                observed_state={"name": item.get("name")},
+                proposed_state={"name": item.get("suggested_name")},
             )
         )
     for group in candidate_groups[:2]:
@@ -4548,6 +4583,12 @@ def _organizer_cleanup_steps(
                     "approved": True,
                 },
                 risk="medium",
+                observed_state={"sources": group.get("sources", []), "bus": None},
+                proposed_state={
+                    "sources": group.get("sources", []),
+                    "bus": "select_existing_bus",
+                    "name": group.get("name"),
+                },
             )
         )
     return steps[:12]
@@ -4563,7 +4604,11 @@ def _organizer_step(
     tool: str,
     params: dict[str, Any],
     risk: str,
+    observed_state: dict[str, Any] | None = None,
+    proposed_state: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    before_state = dict(observed_state or {})
+    after_state = dict(proposed_state or params)
     return {
         "id": step_id,
         "kind": kind,
@@ -4573,9 +4618,20 @@ def _organizer_step(
         "tool": tool,
         "params": params,
         "risk": risk,
+        "status": "requires_user_approval",
+        "observed_state": before_state,
+        "before_state": before_state,
+        "proposed_state": after_state,
+        "proposed_after_state": after_state,
+        "rollback_scope": "one_named_rollback_unit",
+        "decision_values": ["approved_for_apply", "rejected", "ignored"],
         "requires_explicit_approval": True,
         "readback": "Read back the affected channel, mixer, pattern, or route after applying.",
+        "readback_expectation": (
+            "Read back the affected channel, mixer, pattern, or route after applying."
+        ),
         "rollback": "Rollback through the MCP changelog if the result is not intended.",
+        "rollback_tool": "fl_rollback_organization_change",
     }
 
 
@@ -4674,7 +4730,11 @@ def _organizer_guided_context(
     return {
         "state": "clear",
         "priority": "Review",
-        "next_issue": ok_finding.get("title") if ok_finding else "No cleanup step is queued.",
+        "next_issue": (
+            ok_finding.get("title")
+            if ok_finding
+            else "Review findings manually; no write-safe cleanup step is queued."
+        ),
         "next_tool": None,
         "next_step_id": None,
         "steps": _organizer_guided_steps(active_index=0),
@@ -4743,15 +4803,17 @@ def _organizer_detail_rows(
             }
         )
     for row in playlist_tracks[:8]:
+        has_content = _playlist_track_has_content_evidence(row)
+        needs_name = has_content and _looks_default_named_item(row, "playlist_track")
         rows.append(
             {
                 "area": "Playlist",
                 "index": _organizer_item_index(row),
                 "name": str(row.get("name") or "").strip() or "Unnamed playlist track",
-                "status": "Needs name"
-                if _looks_default_named_item(row, "playlist_track")
-                else "Named",
-                "detail": "Muted" if row.get("mute") else "Visible",
+                "status": "Needs name" if needs_name else ("Used" if has_content else "Slot"),
+                "detail": (
+                    "Content evidence" if has_content else "No clip evidence in snapshot"
+                ),
             }
         )
     return rows[:48]

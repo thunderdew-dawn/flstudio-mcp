@@ -3197,13 +3197,22 @@ details[open] .raw-report-summary::before { content: "▼ Raw"; }
 
 .organizer-layout {
   display: grid;
-  grid-template-columns: minmax(520px, 1.45fr) minmax(320px, 0.95fr);
+  grid-template-columns: minmax(0, 1.35fr) minmax(300px, 0.85fr);
   gap: 16px;
   align-items: start;
 }
 
+#organizer-interactions {
+  display: block;
+  grid-column: 1 / -1;
+}
+
+#organizer-interactions:empty {
+  display: none;
+}
+
 .organizer-board-panel {
-  min-height: 560px;
+  min-height: unset;
 }
 
 .organizer-board-panel .panel-heading,
@@ -3253,7 +3262,7 @@ details[open] .raw-report-summary::before { content: "▼ Raw"; }
 
 .organizer-map-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 12px;
   padding: 10px 20px 20px;
 }
@@ -3261,7 +3270,7 @@ details[open] .raw-report-summary::before { content: "▼ Raw"; }
 .organizer-map-card {
   display: grid;
   gap: 10px;
-  min-height: 132px;
+  min-height: 118px;
   padding: 13px 14px;
   background: rgba(12, 27, 50, 0.72);
   border: 1px solid rgba(130, 180, 245, 0.18);
@@ -3283,12 +3292,14 @@ details[open] .raw-report-summary::before { content: "▼ Raw"; }
   overflow: hidden;
   color: #dce8f8;
   font-size: 13px;
+  overflow-wrap: anywhere;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
 }
 
 .organizer-map-card-top span,
 .organizer-standard-top span {
+  flex-shrink: 0;
   min-width: 34px;
   padding: 2px 9px;
   color: #d4c5ff;
@@ -3321,8 +3332,9 @@ details[open] .raw-report-summary::before { content: "▼ Raw"; }
   border-radius: 6px;
   font-family: ui-monospace, "Cascadia Code", monospace;
   font-size: 11px;
+  overflow-wrap: anywhere;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
 }
 
 .organizer-map-card.is-critical {
@@ -3666,6 +3678,26 @@ details[open] .raw-report-summary::before { content: "▼ Raw"; }
   font-size: 11px;
   font-weight: 800;
   text-transform: uppercase;
+}
+
+.organizer-plan-preview {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.organizer-plan-preview span {
+  overflow: hidden;
+  padding: 6px 8px;
+  color: #c7d2fe;
+  background: rgba(15, 23, 42, 0.52);
+  border: 1px solid rgba(130, 180, 245, 0.14);
+  border-radius: 6px;
+  font-size: 11px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  text-overflow: ellipsis;
+  white-space: normal;
 }
 
 .organizer-standard-grid {
@@ -4972,6 +5004,10 @@ dd { margin: 6px 0 0; color: var(--green); font-size: 17px; font-weight: 760; fo
   .organizer-standard-meta {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .organizer-plan-preview {
+    grid-template-columns: 1fr;
   }
 
   .organizer-table-wrap {

@@ -130,6 +130,7 @@ const SCORE_STATUS_CLASSES = {
 };
 
 const API_REQUEST_TIMEOUT_MS = 20000;
+const ORGANIZER_REQUEST_TIMEOUT_MS = 60000;
 
 const DEFAULT_WORKFLOW_CATALOG = [
   { id: "project_health", panel_id: "producer_health", title: "Health", group: "Project Review", maturity: "read_only", enabled: true, endpoint: null, client_action: "runProjectHealth", action_label: "Run Health Scan", safety_note: "Read-only overview across available workflow reports." },
@@ -5236,6 +5237,7 @@ async function runProjectOrganizer() {
   try {
     const result = await api("/api/workflows/project-organizer", {
       method: "POST",
+      timeoutMs: ORGANIZER_REQUEST_TIMEOUT_MS,
       body: JSON.stringify(workflowRunBody("project_organizer"))
     });
     state.projectOrganizer.report = result;
@@ -5306,7 +5308,7 @@ function renderOrganizerSummary(report, isLoading) {
   text("organizer-proposal-total", summary.proposed_changes ?? "--");
   text("organizer-name-total", summary.naming_cleanup ?? "--");
   text("organizer-routing-total", summary.routing_cleanup ?? "--");
-  text("organizer-color-total", summary.color_readback_missing ?? "--");
+  text("organizer-color-total", summary.color_cleanup ?? "--");
   text("organizer-group-total", summary.grouping_candidates ?? "--");
   text("organizer-findings-count", summary.diagnostics ?? 0);
   text("organizer-plan-count", summary.proposed_changes ?? 0);
@@ -5338,83 +5340,61 @@ function renderOrganizerMap(report) {
   grid.innerHTML = "";
 
   const summary = report?.summary || {};
+  const findings = Array.isArray(report?.findings) ? report.findings : [];
+  const cleanupSteps = Array.isArray(report?.cleanup_plan?.steps) ? report.cleanup_plan.steps : [];
+  const firstFinding = findings.find((finding) => finding?.severity !== "ok") || findings[0];
+  const guided = report?.guided || {};
+  const planStatus = organizerPlanStatusLabel(report?.organization_plan?.status);
+  const namingCount = Number(summary.naming_cleanup || 0);
+  const colorCount = Number(summary.color_cleanup || 0);
   const cards = [
     {
-      title: "Analyze Organization",
+      title: "Findings",
       tool: report?.cleanup_plan?.scan_tool || "fl_scan_project_organization",
       value: summary.diagnostics ?? "--",
-      detail: "Finds naming, routing, color-readback, pattern, and playlist cleanup signals.",
+      detail: firstFinding
+        ? safeString(firstFinding.title)
+        : "No actionable organizer findings in the current snapshot.",
       state: Number(summary.diagnostics || 0) ? "warning" : "ok"
+    },
+    {
+      title: "Next Step",
+      tool: guided.next_tool || "manual review",
+      value: guided.state === "ready" ? "Ready" : "Review",
+      detail: guided.next_issue || "Run Organizer to choose the next safe action.",
+      state: guided.state === "ready" ? "warning" : "ok"
+    },
+    {
+      title: "Cleanup Plan",
+      tool: report?.cleanup_plan?.apply_tool || "fl_apply_project_cleanup_step",
+      value: summary.proposed_changes ?? "--",
+      detail: cleanupSteps.length
+        ? "Exact before/after proposals are listed below for one-step approval."
+        : "No write-safe cleanup proposal is available from current evidence.",
+      state: cleanupSteps.length ? "info" : "ok"
+    },
+    {
+      title: "Standards",
+      tool: "fl_apply_naming_standard",
+      value: `${namingCount} / ${colorCount}`,
+      detail: "Naming and color rules are suggestions only until individually approved.",
+      state: namingCount || colorCount ? "info" : "ok"
     },
     {
       title: "Stored Plan",
       tool: report?.organization_plan?.plan_tool || "fl_plan_project_organization",
-      value: safeString(report?.organization_plan?.status || "pending"),
-      detail: "Creates a fingerprint-bound plan with step ids, blocked assumptions, and manual checks.",
-      state: report?.organization_plan?.status === "no_template_plan_generated" ? "ok" : "info"
-    },
-    {
-      title: "Plan Decisions",
-      tool: report?.organization_plan?.decision_tool || "fl_update_organization_plan_decision",
-      value: report?.organization_plan?.step_selection_required ? "Required" : "Optional",
-      detail: "Stores exact producer decisions before any stored plan step can apply.",
-      state: report?.organization_plan?.step_selection_required ? "warning" : "ok"
-    },
-    {
-      title: "Plan Cleanup",
-      tool: "fl_plan_project_cleanup",
-      value: summary.proposed_changes ?? "--",
-      detail: "Builds proposal-mode actions before any write is considered.",
-      state: Number(summary.proposed_changes || 0) ? "info" : "ok"
-    },
-    {
-      title: "Apply One Step",
-      tool: report?.organization_plan?.apply_tool || "fl_apply_organization_plan",
-      value: summary.routing_cleanup ?? "--",
-      detail: "Applies selected approved plan steps as one named rollback unit.",
-      state: Number(summary.routing_cleanup || 0) ? "warning" : "ok"
-    },
-    {
-      title: "Plan Status",
-      tool: report?.organization_plan?.status_tool || "fl_get_organization_status",
-      value: report?.organization_plan?.plan_store_required ? "Stored" : "Draft",
-      detail: "Shows plan state, verified steps, change ids, and rollback unit ids.",
-      state: report?.organization_plan?.plan_store_required ? "info" : "ok"
+      value: planStatus,
+      detail: "Template-aware batches require stored decisions before any apply step.",
+      state: cleanupSteps.length ? "warning" : "ok"
     },
     {
       title: "Rollback",
       tool: report?.organization_plan?.rollback_tool || "fl_rollback_organization_change",
-      value: "LIFO",
-      detail: "Rolls back organizer changes through the MCP changelog rollback path.",
-      state: "info"
-    },
-    {
-      title: "Guided Cleanup",
-      tool: "fl_start_guided_cleanup",
-      value: safeString(report?.guided?.state || "idle"),
-      detail: "Presents the next issue, one proposed fix, approval, readback, and rollback note.",
-      state: report?.guided?.state === "ready" ? "info" : "ok"
-    },
-    {
-      title: "Naming Standard",
-      tool: "fl_apply_naming_standard",
-      value: summary.naming_cleanup ?? "--",
-      detail: "Collects consistent channel and mixer naming rules for approval.",
-      state: Number(summary.naming_cleanup || 0) ? "info" : "ok"
-    },
-    {
-      title: "Color Standard",
-      tool: "fl_apply_color_standard",
-      value: summary.color_readback_missing ?? "--",
-      detail: "Shows color coverage limits and prepares approved color rules.",
-      state: Number(summary.color_readback_missing || 0) ? "info" : "ok"
-    },
-    {
-      title: "Group Tracks",
-      tool: "fl_group_tracks",
-      value: summary.grouping_candidates ?? "--",
-      detail: "Suggests bus grouping candidates without selecting a bus automatically.",
-      state: Number(summary.grouping_candidates || 0) ? "info" : "ok"
+      value: cleanupSteps.length ? "Required" : "Idle",
+      detail: cleanupSteps.length
+        ? "Any applied organizer write must create one named rollback unit."
+        : "Rollback is only relevant after an approved write.",
+      state: cleanupSteps.length ? "info" : "ok"
     }
   ];
 
@@ -5438,6 +5418,18 @@ function renderOrganizerMap(report) {
     node.append(top, detail, tool);
     grid.appendChild(node);
   }
+}
+
+function organizerPlanStatusLabel(value) {
+  const status = String(value || "").toLowerCase();
+  if (status === "requires_template_or_step_approval") return "Approval";
+  if (status === "no_template_plan_generated") return "No Plan";
+  if (!status) return "Pending";
+  return status
+    .split("_")
+    .filter(Boolean)
+    .map((part) => part[0]?.toUpperCase() + part.slice(1))
+    .join(" ");
 }
 
 function renderOrganizerGuided(report) {
@@ -5488,6 +5480,7 @@ function renderOrganizerFindings(report) {
   }
 
   for (const finding of findings) {
+    const evidence = organizerFindingEvidence(finding);
     const row = document.createElement("div");
     row.className = `organizer-finding ${routingSeverityClass(finding.severity)}`;
 
@@ -5499,16 +5492,23 @@ function renderOrganizerFindings(report) {
     const title = document.createElement("strong");
     title.textContent = safeString(finding.title);
     const detail = document.createElement("span");
-    detail.textContent = safeString(finding.detail);
+    detail.textContent = safeString(finding.detail || evidence?.detail || finding.rule_id);
     body.append(title, detail);
 
     const count = document.createElement("span");
     count.className = "organizer-finding-count";
-    count.textContent = safeString(finding.count ?? 0);
+    count.textContent = safeString(finding.count ?? evidence?.count ?? 0);
 
     row.append(icon, body, count);
     list.appendChild(row);
   }
+}
+
+function organizerFindingEvidence(finding) {
+  const evidenceRows = Array.isArray(finding?.evidence) ? finding.evidence : [];
+  return evidenceRows.find(
+    (row) => row && typeof row === "object" && (row.detail || row.count != null)
+  );
 }
 
 function renderOrganizerPlan(report) {
@@ -5518,7 +5518,9 @@ function renderOrganizerPlan(report) {
 
   const steps = Array.isArray(report?.cleanup_plan?.steps) ? report.cleanup_plan.steps : [];
   if (!steps.length) {
-    list.appendChild(organizerPlaceholder("No cleanup proposals yet."));
+    list.appendChild(
+      organizerPlaceholder("No write-safe cleanup proposal is available from current evidence.")
+    );
     return;
   }
 
@@ -5537,17 +5539,57 @@ function renderOrganizerPlan(report) {
     const detail = document.createElement("p");
     detail.textContent = safeString(step.detail);
 
+    const preview = document.createElement("div");
+    preview.className = "organizer-plan-preview";
+    const before = document.createElement("span");
+    before.textContent = `Before: ${organizerPreviewText(
+      step.before_state || step.observed_state
+    )}`;
+    const after = document.createElement("span");
+    after.textContent = `After: ${organizerPreviewText(
+      step.proposed_after_state || step.proposed_state
+    )}`;
+    preview.append(before, after);
+
     const footer = document.createElement("div");
     footer.className = "organizer-plan-footer";
     const tool = document.createElement("code");
     tool.textContent = safeString(step.tool);
     const approval = document.createElement("em");
-    approval.textContent = step.requires_explicit_approval ? "Approval required" : "Read-only";
+    const stepStatus = safeString(
+      step.status || (step.requires_explicit_approval ? "requires_user_approval" : "read_only")
+    );
+    approval.textContent = `${stepStatus.replaceAll("_", " ")} · ${safeString(
+      step.rollback_tool || "rollback available"
+    )}`;
     footer.append(tool, approval);
 
-    row.append(header, detail, footer);
+    row.append(header, detail, preview, footer);
     list.appendChild(row);
   }
+}
+
+function organizerPreviewText(value) {
+  if (value == null || value === "") return "Unavailable";
+  if (typeof value !== "object") return safeString(value);
+  const entries = Object.entries(value)
+    .filter(([, entryValue]) => entryValue != null && entryValue !== "")
+    .slice(0, 4);
+  if (!entries.length) return "Unavailable";
+  return entries
+    .map(
+      ([key, entryValue]) =>
+        `${key.replaceAll("_", " ")}: ${organizerPreviewValue(entryValue)}`
+    )
+    .join(" · ");
+}
+
+function organizerPreviewValue(value) {
+  if (Array.isArray(value)) return value.map(organizerPreviewValue).join(", ");
+  if (value && typeof value === "object") {
+    try { return JSON.stringify(value); } catch { return "Unavailable"; }
+  }
+  return safeString(value);
 }
 
 function renderOrganizerStandards(report) {

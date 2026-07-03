@@ -6,6 +6,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from fls_pilot import project_templates as templates
@@ -149,6 +151,42 @@ def test_organizer_user_template_decision_unblocks_template_plan(monkeypatch) ->
     assert step["confidence"] == "confirmed"
 
 
+def test_organization_step_schema_rejects_invalid_risk_level() -> None:
+    step = project_organizer._organizer_step(
+        id="schema_test_step",
+        action_type="rename",
+        tool="fl_apply_project_cleanup_step",
+        target={"type": "channel", "index": 1},
+        observed_state={"name": "Channel 1"},
+        proposed_state={
+            "renames": [{"type": "channel", "index": 1, "name": "Lead"}]
+        },
+        reason="Validate typed organizer step schema.",
+        evidence_type="template_profile",
+        confidence="high",
+        risk_level="low",
+        rollback_unit="organization_plan_schema_test",
+        user_decisions=[],
+    )
+    invalid = dict(step)
+    invalid["risk_level"] = "tiny"
+
+    with pytest.raises(ValueError, match="invalid organization step schema_test_step"):
+        project_organizer._validate_organization_step_payload(invalid)
+
+
+def test_organizer_template_routing_steps_are_medium_risk(monkeypatch) -> None:
+    mcp, _broker = _registered(monkeypatch, _snapshot())
+
+    plan = mcp.tools["fl_plan_project_organization"](target_template="psytrance")
+    route_step = next(
+        row for row in plan["steps"] if row["id"] == "template_route_channel_0_to_2"
+    )
+
+    assert route_step["risk_level"] == "medium"
+    assert route_step["required_user_decision"]["required"] is True
+
+
 def test_organizer_reserved_placeholders_are_never_cleanup_targets() -> None:
     profile = {
         "template_name": "Test",
@@ -290,6 +328,49 @@ def test_organizer_apply_excludes_ignored_steps(monkeypatch) -> None:
         "status"
     ] == "ignored"
     assert result["diagnostics"][0]["id"] == "organization_plan_step_blocked"
+
+
+def test_organizer_apply_rejects_mixed_low_and_routing_steps(monkeypatch) -> None:
+    mcp, _broker = _registered(monkeypatch, _snapshot())
+
+    def fail_safe_write_group(*args, **kwargs):
+        raise AssertionError("safe_write_group must not run for mixed-risk steps")
+
+    monkeypatch.setattr(project_organizer.safety, "safe_write_group", fail_safe_write_group)
+    plan = mcp.tools["fl_plan_project_organization"](
+        target_template="psytrance",
+        user_decisions=[
+            {"step_id": "template_rename_channel_0", "decision": "approved_for_apply"},
+            {"step_id": "template_route_channel_0_to_2", "decision": "approved_for_apply"},
+        ],
+    )
+
+    result = mcp.tools["fl_apply_organization_plan"](
+        plan_id=plan["plan_id"],
+        approved_step_ids=[
+            "template_rename_channel_0",
+            "template_route_channel_0_to_2",
+        ],
+        approved=True,
+    )
+
+    assert result["mode"] == "rejected"
+    assert result["diagnostics"][0]["id"] == (
+        "organization_plan_risky_step_requires_separate_apply"
+    )
+
+
+def test_project_cleanup_step_rejects_routing_mixed_with_renames(monkeypatch) -> None:
+    mcp, _broker = _registered(monkeypatch, _snapshot())
+
+    result = mcp.tools["fl_apply_project_cleanup_step"](
+        renames=[{"type": "channel", "index": 0, "name": "Kick"}],
+        routing=[{"channel": 0, "track": 2}],
+        approved=True,
+    )
+
+    assert result["mode"] == "rejected"
+    assert result["diagnostics"][0]["id"] == "routing_cleanup_requires_separate_approval"
 
 
 def test_organizer_name_based_step_requires_user_confirmation(monkeypatch) -> None:

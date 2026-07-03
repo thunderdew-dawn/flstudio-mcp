@@ -1191,12 +1191,122 @@ def test_build_project_organizer_report_surfaces_cleanup_plan():
     assert report["workflow"] == "project_organizer"
     assert report["summary"]["unnamed_channels"] == 1
     assert report["summary"]["routing_cleanup"] == 1
+    assert report["summary"]["unnamed_playlist_tracks"] == 0
     assert report["summary"]["proposed_changes"] >= 3
     assert any(
         step["tool"] == "fl_apply_project_cleanup_step" for step in report["cleanup_plan"]["steps"]
     )
     assert report["guided"]["next_tool"] == "fl_apply_project_cleanup_step"
     assert report["safety"]["read_only"] is True
+
+
+def test_project_organizer_ignores_empty_playlist_slots_without_content_evidence():
+    report = control_center._build_project_organizer_report(
+        channels=[],
+        mixer_tracks=[],
+        patterns=[],
+        playlist_tracks=[
+            {"index": 1, "name": "Track 1", "mute": False, "solo": False},
+            {"index": 2, "name": "Playlist Track 2", "mute": False, "solo": False},
+            {"index": 3, "name": "Arranged Hook", "mute": False, "solo": False},
+        ],
+        routing=[],
+        template_context={},
+    )
+
+    assert report["summary"]["unnamed_playlist_tracks"] == 0
+    assert report["summary"]["diagnostics"] == 0
+    assert report["summary"]["organization_score"] == 100
+    assert report["summary"]["proposed_changes"] == 0
+    assert report["guided"]["state"] == "clear"
+    assert report["guided"]["next_tool"] is None
+    assert all(
+        finding["id"] != "unnamed_playlist_tracks" for finding in report["findings"]
+    )
+    playlist_rows = [
+        row for row in report["details"]["items"] if row["area"] == "Playlist"
+    ]
+    assert playlist_rows[0]["status"] == "Slot"
+
+
+def test_project_organizer_counts_playlist_tracks_only_with_content_evidence():
+    report = control_center._build_project_organizer_report(
+        channels=[],
+        mixer_tracks=[],
+        patterns=[],
+        playlist_tracks=[
+            {"index": 1, "name": "Track 1", "clip_count": 2},
+            {"index": 2, "name": "Playlist Track 2", "clips": []},
+        ],
+        routing=[],
+        template_context={},
+    )
+
+    assert report["summary"]["unnamed_playlist_tracks"] == 1
+    assert report["summary"]["diagnostics"] == 1
+    assert report["summary"]["organization_score"] == 98
+    assert any(finding["id"] == "unnamed_playlist_tracks" for finding in report["findings"])
+    playlist_rows = [
+        row for row in report["details"]["items"] if row["area"] == "Playlist"
+    ]
+    assert playlist_rows[0]["status"] == "Needs name"
+    assert playlist_rows[1]["status"] == "Slot"
+
+
+def test_project_organizer_does_not_emit_noop_pattern_rename():
+    report = control_center._build_project_organizer_report(
+        channels=[],
+        mixer_tracks=[],
+        patterns=[{"index": 1, "name": "Pattern 1", "color": None}],
+        playlist_tracks=[],
+        routing=[],
+        template_context={},
+    )
+
+    assert report["summary"]["unnamed_patterns"] == 1
+    assert report["summary"]["proposed_changes"] == 0
+    assert report["guided"]["state"] == "clear"
+    assert report["guided"]["next_tool"] is None
+    assert not any(
+        step.get("id") == "rename_pattern_1"
+        for step in report["cleanup_plan"]["steps"]
+    )
+
+
+def test_control_center_exposes_before_after_and_rollback_for_organizer():
+    report = control_center._build_project_organizer_report(
+        channels=[
+            {
+                "channel": 1,
+                "name": "Channel 1",
+                "type": {"label": "genplug"},
+                "target_mixer_track": 0,
+                "target_name": "Master",
+            }
+        ],
+        mixer_tracks=[{"i": 0, "name": "Master", "color": 1}],
+        patterns=[],
+        playlist_tracks=[],
+        routing=[{"i": 0, "name": "Master", "routes_to": []}],
+        template_context={},
+    )
+
+    route_step = next(
+        step for step in report["cleanup_plan"]["steps"] if step["kind"] == "channel_routing"
+    )
+    rename_step = next(
+        step for step in report["cleanup_plan"]["steps"] if step["kind"] == "channel_naming"
+    )
+
+    assert route_step["risk"] == "medium"
+    assert route_step["before_state"] == {
+        "target_mixer_track": 0,
+        "target_name": "Master",
+    }
+    assert route_step["proposed_after_state"] == {"target_mixer_track": "next_free"}
+    assert route_step["rollback_tool"] == "fl_rollback_organization_change"
+    assert rename_step["before_state"] == {"name": "Channel 1"}
+    assert rename_step["proposed_after_state"] == {"name": "Instrument 1"}
 
 
 def test_build_mix_review_report_summarizes_levels_findings_and_visuals():

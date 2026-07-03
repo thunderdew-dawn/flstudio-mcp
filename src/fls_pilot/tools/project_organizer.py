@@ -10,10 +10,10 @@ import hashlib
 import json
 import time
 import uuid
-from typing import Annotated
+from typing import Annotated, Any, Literal
 
 from fastmcp import FastMCP
-from pydantic import Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from .. import kb_policy, operations, safety
 from .. import project_templates as templates
@@ -53,8 +53,121 @@ _SAFE_STEP_TOOLS = {
 }
 _SAFE_RISK_LEVELS = {"low", "medium"}
 _SAFE_ACTION_TYPES = {"rename", "color", "route_channel", "group_to_bus", "create_bus_layout"}
+_SEPARATE_APPROVAL_ACTION_TYPES = {"route_channel", "group_to_bus", "create_bus_layout"}
 _REVIEW_ONLY_BLOCK_REASONS = {"name_based_step_requires_user_confirmation"}
 _PLAN_STORE: dict[str, dict] = {}
+
+
+class OrganizationStep(BaseModel):
+    """Typed schema for stored Project Organizer plan steps."""
+
+    model_config = ConfigDict(extra="allow")
+
+    id: str
+    step_id: str
+    action_type: Literal["rename", "color", "route_channel", "group_to_bus", "create_bus_layout"]
+    kind: str
+    tool: str
+    target: dict[str, Any]
+    targets: list[dict[str, Any]]
+    observed_state: dict[str, Any]
+    before_state: dict[str, Any]
+    proposed_state: dict[str, Any]
+    proposed_after_state: dict[str, Any]
+    reason: str
+    title: str
+    evidence_type: str
+    confidence: str
+    risk_level: Literal["low", "medium", "high", "unsupported"]
+    status: Literal[
+        "requires_user_approval",
+        "approved",
+        "blocked",
+        "rejected",
+        "ignored",
+        "applied",
+        "verified",
+    ]
+    blocked_reason: str | None = None
+    rollback_unit: str
+    rollback_scope: str
+    safe_to_apply: bool
+    required_user_decision: dict[str, Any]
+    operations: list[dict[str, Any]]
+    readback_expectation: str
+
+    @model_validator(mode="after")
+    def _validate_step_contract(self) -> OrganizationStep:
+        if self.step_id != self.id:
+            raise ValueError("step_id must match id")
+        if self.before_state != self.observed_state:
+            raise ValueError("before_state must mirror observed_state")
+        if self.proposed_after_state != self.proposed_state:
+            raise ValueError("proposed_after_state must mirror proposed_state")
+        if self.rollback_scope != self.rollback_unit:
+            raise ValueError("rollback_scope must match rollback_unit")
+        if not self.operations:
+            raise ValueError("operations must not be empty")
+        if self.safe_to_apply:
+            if self.status != "approved":
+                raise ValueError("safe_to_apply requires approved status")
+            if self.action_type not in _SAFE_ACTION_TYPES:
+                raise ValueError("safe_to_apply uses an unsupported action type")
+            if self.tool not in _SAFE_STEP_TOOLS:
+                raise ValueError("safe_to_apply uses an unsupported tool")
+            if self.risk_level not in _SAFE_RISK_LEVELS:
+                raise ValueError("safe_to_apply uses an unsupported risk level")
+            if self.blocked_reason:
+                raise ValueError("safe_to_apply cannot have a blocked reason")
+        return self
+
+
+class OrganizationPlan(BaseModel):
+    """Typed schema for stored Project Organizer plans."""
+
+    model_config = ConfigDict(extra="allow")
+
+    plan_id: str
+    created_at: float
+    expires_at: float
+    project_fingerprint: str
+    snapshot_id: str
+    source_observation_ids: list[str]
+    target_template: dict[str, Any]
+    template_match_status: str
+    plan_status: Literal[
+        "draft",
+        "requires_user_approval",
+        "partially_approved",
+        "approved",
+        "blocked",
+        "partially_applied",
+        "completed",
+    ]
+    status: str
+    steps: list[OrganizationStep]
+    blocked_steps: list[OrganizationStep]
+    manual_checks: list[dict[str, Any]]
+    interaction_requests: list[dict[str, Any]]
+    user_decisions: list[dict[str, Any]]
+    findings: list[dict[str, Any]]
+    decisions_required: list[dict[str, Any]]
+    safety: dict[str, Any]
+    contract_version: Literal["fls-pilot.organization-plan.v1"]
+    plan_hash: str | None = None
+
+    @model_validator(mode="after")
+    def _validate_plan_contract(self) -> OrganizationPlan:
+        if not self.plan_id:
+            raise ValueError("plan_id must not be empty")
+        if not self.project_fingerprint:
+            raise ValueError("project_fingerprint must not be empty")
+        if self.expires_at <= self.created_at:
+            raise ValueError("expires_at must be after created_at")
+        ids = [step.id for step in [*self.steps, *self.blocked_steps]]
+        if len(ids) != len(set(ids)):
+            raise ValueError("step ids must be unique across steps and blocked_steps")
+        return self
 
 
 def _looks_default_channel_name(name) -> bool:
@@ -152,6 +265,44 @@ def _stable_json(value) -> str:
 
 def _digest(value) -> str:
     return hashlib.sha256(_stable_json(value).encode("utf-8")).hexdigest()
+
+
+def _validation_message(exc: ValidationError) -> str:
+    details = []
+    for row in exc.errors():
+        loc = ".".join(str(part) for part in row.get("loc", ()))
+        msg = str(row.get("msg") or "")
+        details.append(f"{loc}: {msg}" if loc else msg)
+    return "; ".join(details) or str(exc)
+
+
+def _validate_organization_step_payload(step: dict) -> dict:
+    try:
+        OrganizationStep.model_validate(step)
+    except ValidationError as exc:
+        step_id = step.get("id") or step.get("step_id") or "<unknown>"
+        raise ValueError(
+            f"invalid organization step {step_id}: {_validation_message(exc)}"
+        ) from exc
+    return step
+
+
+def _validate_organization_plan_payload(plan: dict) -> dict:
+    try:
+        OrganizationPlan.model_validate(plan)
+    except ValidationError as exc:
+        plan_id = plan.get("plan_id") or "<unknown>"
+        raise ValueError(
+            f"invalid organization plan {plan_id}: {_validation_message(exc)}"
+        ) from exc
+    return plan
+
+
+def _requires_separate_approval(step: dict) -> bool:
+    return (
+        str(step.get("risk_level") or "") != "low"
+        or str(step.get("action_type") or "") in _SEPARATE_APPROVAL_ACTION_TYPES
+    )
 
 
 def _store_plan(plan: dict) -> dict:
@@ -361,7 +512,7 @@ def _organizer_step(
     }
     if decision:
         step["user_decision"] = dict(decision)
-    return step
+    return _validate_organization_step_payload(step)
 
 
 def _step_kind(action_type: str) -> str:
@@ -484,8 +635,10 @@ def _decisions_required(plan: dict) -> list[dict]:
 
 
 def _enrich_plan_contract_fields(plan: dict) -> dict:
-    steps = [dict(row) for row in plan.get("steps") or []]
-    blocked_steps = [dict(row) for row in plan.get("blocked_steps") or []]
+    steps = [_validate_organization_step_payload(dict(row)) for row in plan.get("steps") or []]
+    blocked_steps = [
+        _validate_organization_step_payload(dict(row)) for row in plan.get("blocked_steps") or []
+    ]
     manual_checks = [dict(row) for row in plan.get("manual_checks") or []]
     plan["steps"] = steps
     plan["blocked_steps"] = blocked_steps
@@ -499,7 +652,7 @@ def _enrich_plan_contract_fields(plan: dict) -> dict:
     plan["findings"] = _plan_findings(steps, blocked_steps, manual_checks)
     plan["decisions_required"] = _decisions_required(plan)
     plan["contract_version"] = "fls-pilot.organization-plan.v1"
-    return plan
+    return _validate_organization_plan_payload(plan)
 
 
 def _set_plan_hash(plan: dict) -> dict:
@@ -1047,7 +1200,7 @@ def build_template_alignment_plan(
                             reason=f"Align channel {idx} mixer target with target template.",
                             evidence_type="template_profile",
                             confidence="high" if target_selected_by_user else "medium",
-                            risk_level="low",
+                            risk_level="medium",
                             rollback_unit="organization_plan_routing",
                             user_decisions=decisions,
                         )
@@ -1224,7 +1377,7 @@ def _proposal_for_channel_routing(
         id=f"route_channel_{channel}_mixer_target",
         title=title,
         reason="Channel is routed only to Master or has unknown routing.",
-        risk="low",
+        risk="medium",
         params={"routing": [route]},
         target=target,
     )
@@ -1290,9 +1443,11 @@ def _apply_report(
         )
     before = res.get("before") or []
     after = res.get("after") or []
-    risk = "medium" if len(requested_changes) > 1 else "low"
     applied = []
     for index, proposal in enumerate(requested_changes):
+        risk = str(
+            proposal.get("risk_level") or ("medium" if len(requested_changes) > 1 else "low")
+        )
         applied.append(
             wr.applied_change(
                 id=proposal["id"],
@@ -1984,6 +2139,36 @@ def register(mcp: FastMCP) -> None:
 
         Safety: Write-Safe-Required with Rollback.
         """
+        routing_count = len(routing or [])
+        if routing_count and (renames or colors or routing_count > 1):
+            return wr.workflow_report(
+                workflow="project_organizer_apply",
+                title="Apply Project Cleanup Step",
+                mode="rejected",
+                status="Routing cleanup requires a separate approved step",
+                summary={"applied_changes": 0},
+                diagnostics=[
+                    wr.diagnostic(
+                        id="routing_cleanup_requires_separate_approval",
+                        severity="error",
+                        message=(
+                            "Channel routing is medium risk and must not be mixed "
+                            "with rename/color cleanup or multiple routing changes."
+                        ),
+                        evidence={
+                            "rename_count": len(renames or []),
+                            "color_count": len(colors or []),
+                            "routing_count": routing_count,
+                        },
+                    )
+                ],
+                ok=False,
+                safety={
+                    "read_only": True,
+                    "requires_explicit_approval": True,
+                    "approval_received": False,
+                },
+            )
         bridge = get_bridge()
         writes = []
         requested_changes = []
@@ -2207,6 +2392,24 @@ def register(mcp: FastMCP) -> None:
                     "step_statuses": {
                         step.get("id"): step.get("status") for step in selected_steps
                     }
+                },
+            )
+        separate_approval_steps = [
+            step for step in selected_steps if _requires_separate_approval(step)
+        ]
+        if separate_approval_steps and len(selected_steps) > 1:
+            return _reject_organization_apply(
+                status="Risky organization plan steps require separate apply",
+                diagnostic_id="organization_plan_risky_step_requires_separate_apply",
+                message=(
+                    "Routing and bus-layout steps are medium risk and must be "
+                    "applied as their own approved rollback unit."
+                ),
+                evidence={
+                    "separate_step_ids": [
+                        step.get("id") for step in separate_approval_steps
+                    ],
+                    "selected_step_ids": approved_ids,
                 },
             )
         proposed_changes = [_step_to_proposed_change(step) for step in selected_steps]

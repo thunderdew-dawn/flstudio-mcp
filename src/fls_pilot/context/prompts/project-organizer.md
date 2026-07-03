@@ -26,7 +26,8 @@ project cleanup plan.
 6. Ask for explicit confirmation before mutation, including exact step ids.
 7. Apply only approved stored plan steps with `fl_apply_organization_plan`, or
    one approved legacy cleanup step with `fl_apply_project_cleanup_step`, and
-   only when rollback/readback are clear.
+   only when rollback/readback are clear. Keep medium-risk routing or bus-layout
+   steps separate from low-risk rename/color cleanup.
 8. After the write, call `fl_get_organization_status`, report before/after plus
    rollback or `change_id`, then stop.
 
@@ -35,7 +36,8 @@ project cleanup plan.
 Stop when target selection, color mapping, routing destination, readback, or
 rollback is unclear. Do not delete patterns/clips or edit playlist clip
 placement. Do not apply blocked, rejected, ignored, expired, or stale-fingerprint
-organization plan steps.
+organization plan steps. Do not combine routing/bus-layout steps with
+rename/color steps in one apply call.
 
 ## Response Shape
 

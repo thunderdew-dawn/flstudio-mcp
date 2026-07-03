@@ -2,7 +2,7 @@
   "snapshot_version": 1,
   "as_of": "2026-07-03",
   "status": "governed",
-  "governance_note": "Updated for Project Organizer plan lifecycle tools: read-only scan/status, server-state decision updates and rollback wrapper, and stored plan apply status persistence. Persistent-write safety posture is unchanged: planning and review remain read-only, organization apply requires a stored plan, explicit approval, fingerprint/hash/expiry validation, safety-layer writes, readback, changelog, and rollback.",
+  "governance_note": "Updated for Project Organizer plan lifecycle tools: read-only scan/status, server-state decision updates and rollback wrapper, and stored plan apply status persistence. Persistent-write safety posture remains rollback-first and is stricter for organizer routing: planning and review remain read-only, organization apply requires a typed stored plan, explicit step approval, fingerprint/hash/expiry validation, medium-risk routing or bus-layout steps are applied separately from low-risk rename/color cleanup, safety-layer writes, readback, changelog, and rollback.",
   "project": {
     "name": "fls-pilot",
     "package_version": "3.0.0b3",

@@ -9,6 +9,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 APP_JS = ROOT / "src" / "fls_pilot" / "control_center_static" / "app.js"
 INDEX_HTML = ROOT / "src" / "fls_pilot" / "control_center_static" / "index.html"
+STYLES_CSS = ROOT / "src" / "fls_pilot" / "control_center_static" / "styles.css"
 
 
 def _run_node_dom_check(script: str) -> None:
@@ -28,6 +29,7 @@ def _run_node_dom_check(script: str) -> None:
 def test_v3_runtime_workflow_copy_exposes_evidence_limits() -> None:
     html = INDEX_HTML.read_text("utf-8")
     js = APP_JS.read_text("utf-8")
+    css = STYLES_CSS.read_text("utf-8")
 
     assert 'Preflight <span class="badge badge-ok">Read-only</span>' in html
     assert "Level evidence, render settings, and mastering remain separate checks." in html
@@ -54,6 +56,8 @@ def test_v3_runtime_workflow_copy_exposes_evidence_limits() -> None:
     assert "removed_entities" in js
     assert 'id="routing-audit-interactions"' in html
     assert 'id="organizer-interactions"' in html
+    assert "#organizer-interactions" in css
+    assert "grid-column: 1 / -1;" in css
     assert "Routing Check Mode" in html
     assert "Static Routing &amp; Settings Audit (Lvl 1)" in html
     assert "Signal Flow Assisted Routing Audit (Lvl 2)" in html
@@ -89,6 +93,8 @@ def test_initial_refresh_runs_full_status_before_quick_status() -> None:
 
     assert 'const statusPath = state.status ? "/api/status/quick" : "/api/status";' in js
     assert "const API_REQUEST_TIMEOUT_MS = 20000;" in js
+    assert "const ORGANIZER_REQUEST_TIMEOUT_MS = 60000;" in js
+    assert "timeoutMs: ORGANIZER_REQUEST_TIMEOUT_MS" in js
 
 
 def test_control_center_static_status_failure_guides_setup_recheck() -> None:
@@ -1764,6 +1770,7 @@ controls.state.projectOrganizer.report = {
     proposed_changes: 4,
     naming_cleanup: 2,
     routing_cleanup: 1,
+    color_cleanup: 4,
     color_readback_missing: 6,
     grouping_candidates: 1
   },
@@ -1781,6 +1788,18 @@ controls.state.projectOrganizer.report = {
       title: "Channels Need Mixer Targets",
       detail: "Channels routed only to Master or with unknown routing.",
       count: 1
+    },
+    {
+      id: "unnamed_patterns",
+      rule_id: "project_organizer.unnamed_patterns",
+      severity: "warning",
+      title: "Default Pattern Names",
+      evidence: [
+        {
+          detail: "Patterns with empty or default-looking names.",
+          count: 1
+        }
+      ]
     }
   ],
   cleanup_plan: {
@@ -1868,10 +1887,12 @@ controls.renderProjectOrganizer();
 assert.strictEqual(elements.get("run-project-organizer").disabled, false);
 assert.strictEqual(elements.get("organizer-score-value").textContent, "76 / 100");
 assert.strictEqual(elements.get("organizer-routing-total").textContent, "1");
+assert.strictEqual(elements.get("organizer-color-total").textContent, "4");
 assert.match(textTree(elements.get("organizer-feedback")), /Last scan/);
 assert.match(textTree(elements.get("organizer-map-grid")), /fl_scan_project_organization/);
 assert.match(textTree(elements.get("organizer-guided-steps")), /fl_plan_project_cleanup/);
 assert.match(textTree(elements.get("organizer-finding-list")), /Default Channel Names/);
+assert.match(textTree(elements.get("organizer-finding-list")), /Patterns with empty or default-looking names/);
 assert.match(textTree(elements.get("organizer-plan-list")), /fl_apply_project_cleanup_step/);
 assert.match(textTree(elements.get("organizer-standard-grid")), /fl_apply_color_standard/);
 assert.match(textTree(elements.get("organizer-group-list")), /Drum Bus/);
