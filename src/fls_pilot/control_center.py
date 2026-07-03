@@ -1307,7 +1307,7 @@ def client_snippets(state: ControlCenterState) -> dict[str, Any]:
 
 
 def setup_report(state: ControlCenterState) -> str:
-    status = collect_status(state, refresh=False)
+    status = collect_status(state, refresh=True, status_mode="diagnose")
     lines = [
         "# fls-pilot setup report",
         "",
