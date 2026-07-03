@@ -4,7 +4,7 @@
   "description": "Prompt-level regression evals for the fls-pilot 3.0 runtime surface. The suite checks agent tool/resource selection, current product workflow names, Knowledgebase-backed value discipline, hard API limits, Control Center/runtime evidence handling, and rollback-first write behavior.",
   "target_package": "fls-pilot",
   "target_version": "3.0.0b3",
-  "last_updated": "2026-07-02",
+  "last_updated": "2026-07-03",
   "source_of_truth": [
     "README.md",
     "AGENTS.md",
@@ -70,7 +70,10 @@
     "Generated Piano Roll script writes must disclose MCP_Apply/script-bridge arming and Piano Roll readback limits.",
     "Project title, author, and genre are read-only metadata; metadata writes must be reported as API-limited.",
     "Playback controls, record-arm toggles, song-position moves, and playlist marker navigation are transient runtime controls, not persistent FL project writes.",
-    "Audio analysis jobs and MIDI export are not FL Studio project writes; they are server-state or external file writes and still require clear user-facing scope."
+    "Audio analysis jobs and MIDI export are not FL Studio project writes; they are server-state or external file writes and still require clear user-facing scope.",
+    "Control Center workflow responses expose ui_state as the public UI truth for status, phase, freshness, scores, and interaction requests; legacy payload fields must not be used as primary score semantics.",
+    "Project Health reports Health, Risk, Coverage, Confidence, and Freshness separately; missing reports are Not Run, not zero-risk or high-risk findings.",
+    "Low-End Analysis lets the user add/remove mixer tracks and edit kick/sub/bass/other roles through user_decisions before the next read-only run."
   ],
   "evals": [
     {
@@ -1103,6 +1106,7 @@
         "list only the supported interaction types: multi_select, single_select, confirm, manual_task",
         "state that interaction_requests are serialized inside AnalysisReport and round-trip deterministically",
         "state that Control Center records user_decisions locally and sends them back on the next read-only workflow run",
+        "state that Control Center low-end selection can add/remove mixer tracks and send role_changes, added_entities, and removed_entities with low_end.confirm_detected_tracks",
         "state that confirmed or selected user_decisions clear the matching pending human validation request, while skipped decisions do not",
         "show that name-based low-end candidates use low_end.confirm_detected_tracks and Finding.metadata.human_validation_required",
         "state that low-end evidence level 2 is live playback data, level 3 is rendered master proxy evidence, and level 4 requires role-confirmed stem or bus evidence",
@@ -1117,7 +1121,7 @@
       ],
       "success_criteria": [
         "assistant correctly names the four supported interaction types",
-        "assistant describes the user_decisions rerun loop and skip semantics",
+        "assistant describes the user_decisions rerun loop, low-end role correction fields, and skip semantics",
         "assistant does not claim that 'script' or any non-allowlisted type is valid"
       ]
     }

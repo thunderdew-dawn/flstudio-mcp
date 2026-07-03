@@ -8,6 +8,7 @@ from unittest import mock
 import pytest
 
 from fls_pilot import control_center, doctor, runtime_config
+from fls_pilot.analysis.store import ReportStore
 from fls_pilot.packs import load_pack_manifest
 from fls_pilot.workflows.registry import (
     DEFAULT_WORKFLOW_REGISTRY,
@@ -431,6 +432,40 @@ def test_daemon_startup_guidance_is_not_ok_when_daemon_stopped():
     assert "not running" in daemon_items[0]["text"]
 
 
+def test_setup_guidance_surfaces_mcp_stdio_blocker_without_ok_daemon_card():
+    groups = {
+        "environment": [],
+        "fl_app": [],
+        "midi": [],
+        "controller": [],
+        "daemon": [_finding("TCP Daemon / Bridge").to_dict()],
+        "mcp_stdio": [
+            _finding("MCP stdio Transport", "blocker", "failed").to_dict(),
+        ],
+        "mcp_sse": [],
+        "mcp_apply": [],
+        "optional_dependencies": [],
+        "other": [],
+    }
+
+    guidance = control_center._setup_guidance(
+        groups=groups,
+        readiness={"state": "blocked"},
+        processes={"daemon": {"state": "external"}},
+        ports={"daemon": {"host": "127.0.0.1", "selected_port": 9787}},
+        daemon_autostart={"state": "external", "message": "A daemon is already reachable."},
+        sse_probe={},
+    )
+
+    titles = [item["title"] for item in guidance]
+    assert "Daemon startup" not in titles
+    assert "Fix MCP stdio startup" in titles
+    stdio = next(item for item in guidance if item["title"] == "Fix MCP stdio startup")
+    assert stdio["status"] == "blocked"
+    assert stdio["action_path"] == "/api/refresh"
+    assert stdio["action_label"] == "Re-check"
+
+
 def test_setup_guidance_prioritizes_midi_manual_action(monkeypatch):
     findings = [
         _finding("Python Environment"),
@@ -553,6 +588,46 @@ def test_runtime_client_follows_selected_daemon_fallback_port(monkeypatch):
     assert created == [("127.0.0.1", 9788)]
     assert client is state.runtime_client
     assert client.port == 9788
+
+
+def test_project_health_prefers_local_reports_over_empty_runtime_health(monkeypatch):
+    now = control_center.datetime.now(control_center.timezone.utc)
+    local_store = ReportStore()
+    local_report = control_center.AnalysisReport(
+        workflow="mix_review",
+        title="Mix Review",
+        analysis_mode="static_snapshot",
+        evidence_mode="static_snapshot_only",
+        created_at=now.isoformat(),
+        freshness=control_center.Freshness(
+            status="fresh",
+            created_at=now.isoformat(),
+            valid_until=(now + control_center.timedelta(minutes=1)).isoformat(),
+        ),
+        coverage=control_center.Coverage(required=1, available=1),
+        risk_score=12,
+        health_score=88,
+        confidence_score=90,
+    )
+    local_store.add_report(local_report)
+    empty_runtime_health = control_center.aggregate_project_health(ReportStore())
+
+    class FakeRuntimeClient:
+        def project_health(self):  # noqa: ANN201
+            return empty_runtime_health
+
+    monkeypatch.setattr(control_center, "get_report_store", lambda: local_store)
+    monkeypatch.setattr(control_center, "_runtime_client", lambda state: FakeRuntimeClient())
+
+    payload = control_center._project_health_payload(_state())
+    mix_section = next(
+        row for row in payload["sections"] if row["workflow"] == "mix_review"
+    )
+
+    assert mix_section["report_id"] == local_report.report_id
+    assert mix_section["freshness"] == "fresh"
+    assert payload["ui_state"]["score_summary"]["coverage"]["available"] == 1
+    assert payload["ui_state"]["score_summary"]["coverage"]["required"] == 4
 
 
 def test_start_daemon_reports_non_daemon_port_conflict(monkeypatch):

@@ -89,7 +89,7 @@ class RuntimeReportStore:
         if client is not None:
             payload = client.latest_report(workflow)
             return AnalysisReport.from_dict(payload) if payload else None
-        return local_runtime().latest_report(workflow)
+        return local_runtime().report_store.get_latest_report(workflow)
 
     def clear(self) -> None:
         if _default_client() is not None:

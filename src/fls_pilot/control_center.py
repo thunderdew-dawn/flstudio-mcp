@@ -40,6 +40,8 @@ from .analysis import (
     StaticSnapshotPolicy,
     analysis_report_for_control_center,
     confidence_from_coverage,
+    get_analysis_broker,
+    get_report_store,
     heuristic_validation_metadata,
     low_end_evidence_metadata,
     low_end_health_score,
@@ -56,6 +58,7 @@ from .analysis import (
     weighted_low_end_risk,
     weighted_mix_review_risk,
 )
+from .analysis.health_aggregator import aggregate_project_health
 from .analysis.live import LiveMeterPolicy
 from .connection import DEFAULT_TCP_HOST, DEFAULT_TCP_PORT, TCPBridge, fetch_all_pages
 from .music import mix_doctor as mix_review
@@ -289,6 +292,7 @@ class ControlCenterState:
         self.daemon_fallback_port: int | None = None
         self.admin_enabled: bool = admin_enabled
         self.runtime_client = RuntimeClient(daemon_host, daemon_port)
+        self.broker = get_analysis_broker()
         self.workflow_registry = workflow_registry or build_effective_workflow_registry(
             DEFAULT_WORKFLOW_REGISTRY,
             (),
@@ -846,6 +850,128 @@ def _run_audio_analysis_action(
         return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
 
 
+def _project_health_payload(state: ControlCenterState) -> dict[str, Any]:
+    local_payload = aggregate_project_health(get_report_store())
+    try:
+        payload = _runtime_client(state).project_health()
+    except Exception as exc:
+        payload = local_payload
+        payload["error"] = f"{type(exc).__name__}: {exc}"
+        payload["overall_status"] = (
+            "unavailable" if not payload.get("sections") else payload.get("overall_status")
+        )
+    else:
+        if _stored_health_report_count(local_payload) > _stored_health_report_count(payload):
+            payload = local_payload
+    payload["ui_state"] = _project_health_ui_state(payload)
+    return payload
+
+
+def _stored_health_report_count(payload: dict[str, Any]) -> int:
+    return sum(
+        1
+        for row in payload.get("sections") or ()
+        if isinstance(row, dict) and row.get("report_id")
+    )
+
+
+def _project_health_ui_state(payload: dict[str, Any]) -> dict[str, Any]:
+    sections = [row for row in payload.get("sections") or [] if isinstance(row, dict)]
+    fresh_sections = [
+        row for row in sections if row.get("freshness") in {"fresh", "partial"}
+    ]
+    missing = [
+        row
+        for row in sections
+        if row.get("freshness") in {"missing", "unavailable"} or row.get("report_id") is None
+    ]
+    stale = [row for row in sections if row.get("freshness") == "stale"]
+    health = _clamped_score_or_none(payload.get("overall_health_score"))
+    risk = _clamped_score_or_none(payload.get("overall_risk_score"))
+    status = "succeeded"
+    phase = "complete"
+    if payload.get("error") and not fresh_sections:
+        status = "failed"
+        phase = "unavailable"
+    elif stale:
+        status = "stale"
+    elif missing:
+        status = "succeeded"
+        phase = "partial"
+    return {
+        "status": status,
+        "phase": phase,
+        "started_at": None,
+        "completed_at": _now_iso(),
+        "elapsed_ms": None,
+        "freshness": {
+            "status": payload.get("overall_status") or "unknown",
+            "fresh_sections": len(fresh_sections),
+            "stale_sections": len(stale),
+            "missing_sections": len(missing),
+        },
+        "score_summary": {
+            "status": _project_health_score_status(
+                health=health,
+                risk=risk,
+                sections=sections,
+                missing=missing,
+                stale=stale,
+            ),
+            "health_score": health,
+            "risk_score": risk if health is not None and not missing and not stale else None,
+            "coverage": {
+                "available": len(fresh_sections),
+                "required": len(sections),
+                "score": payload.get("overall_coverage_pct"),
+                "status": "fresh" if sections and not missing and not stale else "partial",
+            },
+            "confidence_score": _clamped_score_or_none(
+                payload.get("overall_confidence_score")
+            ),
+            "evidence_mode": "workflow_reports",
+            "score_status": "final" if health is not None and not missing and not stale else "partial",
+            "human_validation_required": any(
+                bool(row.get("human_validation_required"))
+                for row in sections
+            ),
+        },
+        "interaction_requests": [],
+    }
+
+
+def _project_health_score_status(
+    *,
+    health: int | None,
+    risk: int | None,
+    sections: list[dict[str, Any]],
+    missing: list[dict[str, Any]],
+    stale: list[dict[str, Any]],
+) -> str:
+    if not sections or all(row.get("report_id") is None for row in sections):
+        return "not_run"
+    if stale:
+        return "stale"
+    if missing or health is None:
+        return "needs_review"
+    if risk is None:
+        return "unavailable"
+    if risk >= 50:
+        return "blocked"
+    if risk >= 26:
+        return "at_risk"
+    if risk >= 11:
+        return "needs_review"
+    return "ok"
+
+
+def _clamped_score_or_none(value: Any) -> int | None:
+    try:
+        return max(0, min(100, round(float(value))))
+    except (TypeError, ValueError):
+        return None
+
+
 def _ui_service_detail(
     label: str,
     state_value: str,
@@ -1372,7 +1498,6 @@ def _run_mix_review(
             "mix_review",
             "Mix Review",
         )
-        analysis_report = state.report_store.add_report(analysis_report)
         return analysis_report_for_control_center(analysis_report, report_payload)
     except Exception as exc:
         report = _mix_review_unavailable_report(
@@ -1386,7 +1511,6 @@ def _run_mix_review(
             "mix_review",
             "Mix Review",
         )
-        analysis_report = state.report_store.add_report(analysis_report)
         return analysis_report_for_control_center(analysis_report, report)
     finally:
         if owns_bridge and bridge is not None:
@@ -2275,7 +2399,9 @@ def _build_low_end_analysis_report(report: dict[str, Any]) -> AnalysisReport:
                 report.get("genre_profile") or summary.get("genre_profile")
             ),
             "role_confirmation_state": (
-                "name_based_unconfirmed" if low_end_tracks else "none"
+                "user_confirmed"
+                if _user_decision_for_request(user_decisions, LOW_END_VALIDATION_REQUEST_ID)
+                else ("name_based_unconfirmed" if low_end_tracks else "none")
             ),
             "finding_state_values": ["unconfirmed", "accepted", "rejected", "ignored"],
             "evidence_level_4": {
@@ -3387,7 +3513,6 @@ def _run_project_organizer(
             "project_organizer",
             "Organizer",
         )
-        analysis_report = state.report_store.add_report(analysis_report)
         return analysis_report_for_control_center(analysis_report, report_payload)
     except Exception as exc:
         report = _project_organizer_unavailable_report(f"{type(exc).__name__}: {exc}")
@@ -3398,7 +3523,6 @@ def _run_project_organizer(
             "project_organizer",
             "Organizer",
         )
-        analysis_report = state.report_store.add_report(analysis_report)
         return analysis_report_for_control_center(analysis_report, report)
     finally:
         if owns_bridge and bridge is not None:
@@ -4742,7 +4866,6 @@ def _run_routing_audit(
             options=options,
             signal_flow=signal_flow,
         )
-        analysis_report = state.report_store.add_report(analysis_report)
         return legacy_report
     except Exception as exc:
         report = _routing_unavailable_report(f"{type(exc).__name__}: {exc}")
@@ -4754,7 +4877,6 @@ def _run_routing_audit(
             title="Routing Audit",
             created_at=report["generated_at"],
         )
-        analysis_report = state.report_store.add_report(analysis_report)
         return analysis_report_for_control_center(analysis_report, report)
     finally:
         if owns_bridge and bridge is not None:
@@ -5850,28 +5972,7 @@ def _handler_factory(state: ControlCenterState):
                     )
                 )
             elif self.path == "/api/workflows/project-health":
-                try:
-                    self._json(_runtime_client(state).project_health())
-                except Exception as exc:
-                    self._json(
-                        {
-                            "overall_status": "unavailable",
-                            "overall_health_score": None,
-                            "overall_risk_score": None,
-                            "overall_coverage_pct": 0,
-                            "overall_confidence_score": 0,
-                            "sections": [],
-                            "missing_workflows": [
-                                "project_organizer",
-                                "mix_review",
-                                "routing_audit",
-                                "low_end_analysis",
-                            ],
-                            "mixed_project_fingerprints": False,
-                            "next_suggested_workflows": [],
-                            "error": f"{type(exc).__name__}: {exc}",
-                        }
-                    )
+                self._json(_project_health_payload(state))
             # ------------------------------------------------------------------ #
             # Admin POST routes — all guarded by _require_admin()
             # ------------------------------------------------------------------ #
@@ -6402,20 +6503,21 @@ def _setup_guidance(
             daemon_action_path = "/api/process/daemon/start"
             daemon_action_label = "Start daemon"
             daemon_start_action_shown = True
-        guidance.append(
-            _guidance_item(
-                title="Daemon startup",
-                status=daemon_status,
-                text=_daemon_startup_text(
-                    daemon_autostart=daemon_autostart,
-                    daemon_process=daemon_process,
-                    groups=groups,
-                ),
-                groups=["daemon"],
-                action_label=daemon_action_label,
-                action_path=daemon_action_path,
+        if daemon_status != "OK":
+            guidance.append(
+                _guidance_item(
+                    title="Daemon startup",
+                    status=daemon_status,
+                    text=_daemon_startup_text(
+                        daemon_autostart=daemon_autostart,
+                        daemon_process=daemon_process,
+                        groups=groups,
+                    ),
+                    groups=["daemon"],
+                    action_label=daemon_action_label,
+                    action_path=daemon_action_path,
+                )
             )
-        )
 
     if (
         _group_needs_action(groups, "daemon")
@@ -6484,6 +6586,22 @@ def _setup_guidance(
                 groups=["controller"],
                 checkpoint="configured_fl_midi",
                 action_label="I did this",
+            )
+        )
+
+    if _group_needs_action(groups, "mcp_stdio"):
+        guidance.append(
+            _guidance_item(
+                title="Fix MCP stdio startup",
+                status=_group_status(groups, "mcp_stdio"),
+                text=_group_guidance_text(
+                    groups,
+                    "mcp_stdio",
+                    "Run fls-pilot in a terminal and fix the startup error, then re-check setup.",
+                ),
+                groups=["mcp_stdio"],
+                action_label="Re-check",
+                action_path="/api/refresh",
             )
         )
 

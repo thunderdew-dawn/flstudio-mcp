@@ -46,6 +46,12 @@ def test_v3_runtime_workflow_copy_exposes_evidence_limits() -> None:
     assert 'data-live-playback="preflight"' in html
     assert 'id="mix-review-interactions"' in html
     assert 'id="low-end-interactions"' in html
+    assert 'id="low-end-selection-list"' in html
+    assert 'id="low-end-add-track"' in html
+    assert "function renderLowEndSelection" in js
+    assert "role_changes" in js
+    assert "added_entities" in js
+    assert "removed_entities" in js
     assert 'id="routing-audit-interactions"' in html
     assert 'id="organizer-interactions"' in html
     assert "Routing Check Mode" in html
@@ -82,7 +88,103 @@ def test_initial_refresh_runs_full_status_before_quick_status() -> None:
     js = APP_JS.read_text("utf-8")
 
     assert 'const statusPath = state.status ? "/api/status/quick" : "/api/status";' in js
-    assert "state.status = await api(statusPath);" in js
+    assert "const API_REQUEST_TIMEOUT_MS = 20000;" in js
+    assert 'title: "AI Client stdio"' in js
+
+
+def test_control_center_static_status_failure_guides_setup_recheck() -> None:
+    _run_node_dom_check(
+        r"""
+const assert = require("assert");
+const fs = require("fs");
+const vm = require("vm");
+
+class Element {
+  constructor(tagName, id = "") {
+    this.tagName = tagName.toUpperCase();
+    this.id = id;
+    this.children = [];
+    this.style = {};
+    this.dataset = {};
+    this.disabled = false;
+    this.onclick = null;
+    this._textContent = "";
+    this._className = "";
+  }
+  set className(value) { this._className = String(value || ""); }
+  get className() { return this._className; }
+  set textContent(value) {
+    this._textContent = String(value ?? "");
+    this.children = [];
+  }
+  get textContent() {
+    return this._textContent + this.children.map((child) => child.textContent).join("");
+  }
+  append(...nodes) { for (const node of nodes) this.appendChild(node); }
+  appendChild(node) { this.children.push(node); return node; }
+}
+
+function textTree(node) {
+  if (!node) return "";
+  return [node._textContent || "", ...node.children.map(textTree)].join("");
+}
+
+const elements = new Map();
+function register(id, tagName = "div") {
+  const element = new Element(tagName, id);
+  elements.set(id, element);
+  return element;
+}
+
+register("bridge-pill");
+register("refresh-time");
+register("next-action-title");
+register("next-action-detail");
+register("next-action-button", "button");
+register("setup-steps");
+
+const document = {
+  createElement: (tagName) => new Element(tagName),
+  getElementById: (id) => elements.get(id) || null,
+  querySelectorAll: () => [],
+  querySelector: () => null
+};
+
+const context = {
+  Blob,
+  URL,
+  clearInterval,
+  clearTimeout,
+  console,
+  document,
+  fetch: async () => { throw new Error("status backend did not answer"); },
+  navigator: {},
+  setInterval,
+  setTimeout,
+  window: { __FLS_PILOT_TEST__: true }
+};
+context.window.document = document;
+
+vm.createContext(context);
+vm.runInContext(fs.readFileSync(process.argv[1], "utf8"), context);
+
+const controls = context.window.flsPilotControlCenter;
+
+(async () => {
+  await controls.refresh();
+
+  assert.match(controls.state.statusError, /status backend did not answer/);
+  assert.strictEqual(elements.get("next-action-title").textContent, "Status check did not finish");
+  assert.strictEqual(elements.get("next-action-button").textContent, "Re-check Status");
+  const setupText = textTree(elements.get("setup-steps"));
+  assert.match(setupText, /Status check did not finish/);
+  assert.match(setupText, /No FL Studio project changes were made/);
+})().catch((error) => {
+  console.error(error && error.stack ? error.stack : error);
+  process.exit(1);
+});
+"""
+    )
 
 
 def test_control_center_static_runtime_and_disconnect_behaviour() -> None:
@@ -810,16 +912,11 @@ controls.state.runtimeWorkflows.preflight = {
 };
 
 controls.renderRuntimeProductPanel("preflight");
-assert.match(textTree(content), /Workflow needs your input/);
-assert.match(textTree(content), /Confirm the export target is correct/);
+assert.match(textTree(content), /Decisions affecting this workflow/);
+assert.doesNotMatch(textTree(content), /Confirm the export target is correct/);
 assert.match(textTree(content), /Render a master WAV manually/);
 assert.match(textTree(content), /Pick a quality gate/);
 assert.match(textTree(content), /Pick manual checks/);
-
-collect(content, (node) => node.tagName === "BUTTON" && node.textContent === "Confirm")[0].listeners.click();
-let confirmDecision = controls.state.runtimeWorkflows.preflight.report.user_decisions.find((item) => item.interaction_id === "preflight.confirm_export");
-assert.strictEqual(confirmDecision.type, "confirm");
-assert.strictEqual(confirmDecision.confirmed, true);
 
 let release = collect(content, (node) => node.tagName === "INPUT" && node.value === "release")[0];
 release.checked = true;
@@ -849,12 +946,11 @@ assert.strictEqual(manualDecision.value, "/tmp/master.wav");
 assert.match(textTree(content), /Saved\. Re-run this workflow to apply your answer: completed/);
 
 const body = controls.workflowRunBody("preflight");
-assert.strictEqual(body.user_decisions.length, 4);
+assert.strictEqual(body.user_decisions.length, 3);
 assert.strictEqual(
   JSON.stringify(body.user_decisions.map((item) => item.interaction_id).sort()),
   JSON.stringify([
     "audio.render_master",
-    "preflight.confirm_export",
     "preflight.pick_checks",
     "preflight.pick_quality"
   ])
@@ -1190,7 +1286,7 @@ controls.state.mixReview.report = {
 controls.renderMixReview();
 
 assert.strictEqual(elements.get("run-mix-review").disabled, false);
-assert.strictEqual(elements.get("mix-score-value").textContent, "72%");
+assert.strictEqual(elements.get("mix-score-value").textContent, "72 / 100");
 assert.strictEqual(elements.get("mix-master-peak").textContent, "0.2 dB");
 assert.match(textTree(elements.get("mix-review-feedback")), /Last review/);
 assert.match(textTree(elements.get("mix-level-list")), /Lead Vox/);
@@ -1478,7 +1574,7 @@ controls.state.routingAudit.report = {
 controls.renderRoutingAudit();
 
 assert.strictEqual(elements.get("run-routing-audit").disabled, false);
-assert.strictEqual(elements.get("routing-score-value").textContent, "81%");
+assert.strictEqual(elements.get("routing-score-value").textContent, "81 / 100");
 assert.match(textTree(elements.get("routing-graph-sources")), /Kick/);
 assert.match(textTree(elements.get("routing-graph-buses")), /Vocal Bus/);
 assert.match(textTree(elements.get("routing-graph-master")), /Master/);
@@ -1771,7 +1867,7 @@ controls.state.projectOrganizer.report = {
 controls.renderProjectOrganizer();
 
 assert.strictEqual(elements.get("run-project-organizer").disabled, false);
-assert.strictEqual(elements.get("organizer-score-value").textContent, "76%");
+assert.strictEqual(elements.get("organizer-score-value").textContent, "76 / 100");
 assert.strictEqual(elements.get("organizer-routing-total").textContent, "1");
 assert.match(textTree(elements.get("organizer-feedback")), /Last scan/);
 assert.match(textTree(elements.get("organizer-map-grid")), /fl_analyze_project_organization/);
@@ -1901,7 +1997,10 @@ for (const id of [
   "health-risk-value",
   "health-risk-caption",
   "health-score-value",
+  "health-risk-stat-value",
   "health-coverage-value",
+  "health-confidence-value",
+  "health-freshness-value",
   "health-finding-total",
   "health-blocker-total",
   "health-section-count",
@@ -2102,9 +2201,12 @@ controls.state.projectHealth.backendData = {
 controls.renderProjectHealth();
 
 assert.strictEqual(elements.get("run-project-health").disabled, false);
-assert.strictEqual(elements.get("health-risk-value").textContent, "22%");
-assert.strictEqual(elements.get("health-score-value").textContent, "78%");
+assert.strictEqual(elements.get("health-risk-value").textContent, "78 / 100");
+assert.strictEqual(elements.get("health-score-value").textContent, "78 / 100");
+assert.strictEqual(elements.get("health-risk-stat-value").textContent, "22 / 100");
 assert.strictEqual(elements.get("health-coverage-value").textContent, "4/4");
+assert.strictEqual(elements.get("health-confidence-value").textContent, "82 / 100");
+assert.strictEqual(elements.get("health-freshness-value").textContent, "Fresh");
 assert.strictEqual(elements.get("health-ready-total").textContent, "4 ready");
 assert.match(textTree(elements.get("health-feedback")), /No project changes are made/);
 assert.match(textTree(elements.get("health-section-grid")), /Organizer/);

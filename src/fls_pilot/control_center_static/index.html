@@ -224,7 +224,7 @@
                   <dd id="song-position">Unavailable</dd>
                 </div>
                 <div>
-                  <dt>Record</dt>
+                  <dt>Recording armed</dt>
                   <dd id="record-state" class="small-pill">Unavailable</dd>
                 </div>
               </dl>
@@ -237,8 +237,6 @@
                 title="Pause at the current playhead position">Pause</button>
               <button class="transport-button" type="button" data-transport-action="stop" id="transport-stop"
                 title="Stop playback. FL Studio returns the playhead to the start cue.">Stop</button>
-              <button class="transport-button transport-record" type="button" data-transport-action="record"
-                id="transport-record" title="Toggle record arm. Start playback as well to record in FL Studio.">Record</button>
             </div>
             <p class="transport-feedback" id="transport-feedback" role="status"></p>
             <div class="playlist-marker-panel">
@@ -603,6 +601,30 @@
 
       <section class="low-end-layout" id="low-end-layout">
         <div class="workflow-interaction-mount" id="low-end-interactions"></div>
+
+        <article class="panel low-end-selection-panel">
+          <div class="panel-heading">
+            <h2>Channel Selection</h2>
+            <span class="badge badge-neutral" id="low-end-selection-state">Not Run</span>
+          </div>
+          <div class="low-end-selection-actions">
+            <label class="workflow-runtime-input">
+              <span>Add mixer track</span>
+              <select id="low-end-add-track"></select>
+            </label>
+            <label class="workflow-runtime-input">
+              <span>Role</span>
+              <select id="low-end-add-role">
+                <option value="kick">Kick</option>
+                <option value="sub">Sub / 808</option>
+                <option value="bass">Bass</option>
+                <option value="other">Other Low-End</option>
+              </select>
+            </label>
+            <button class="ghost-button" id="low-end-add-track-button" type="button">Add</button>
+          </div>
+          <div class="low-end-selection-list" id="low-end-selection-list"></div>
+        </article>
 
         <article class="panel low-end-focus-panel">
           <div class="panel-heading">
@@ -1200,20 +1222,24 @@
             </div>
             <dl class="health-score-stats">
               <div>
-                <dt>Score</dt>
+                <dt>Health</dt>
                 <dd id="health-score-value">--</dd>
+              </div>
+              <div>
+                <dt>Risk</dt>
+                <dd id="health-risk-stat-value">Not Run</dd>
               </div>
               <div>
                 <dt>Coverage</dt>
                 <dd id="health-coverage-value">0/4</dd>
               </div>
               <div>
-                <dt>Findings</dt>
-                <dd id="health-finding-total">--</dd>
+                <dt>Confidence</dt>
+                <dd id="health-confidence-value">--</dd>
               </div>
               <div>
-                <dt>Blockers</dt>
-                <dd id="health-blocker-total">--</dd>
+                <dt>Freshness</dt>
+                <dd id="health-freshness-value">Not Run</dd>
               </div>
             </dl>
           </div>

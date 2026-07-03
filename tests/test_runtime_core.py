@@ -127,6 +127,45 @@ def test_runtime_health_cannot_use_other_project_reports(tmp_path) -> None:
     assert "mix_review" in health["missing_workflows"]
 
 
+def test_runtime_health_uses_fingerprint_when_project_scope_is_unknown(tmp_path) -> None:
+    runtime = RuntimeCore(
+        session=RuntimeSession(id="runtime_test"),
+        job_store_path=tmp_path / "jobs.sqlite3",
+    )
+    bridge = FakeBridge()
+    bridge.project_state["title"] = ""
+    snapshot = runtime.get_static_project_snapshot(bridge)
+
+    stored = runtime.add_report(_report("mix_review", snapshot.project_fingerprint))
+    health = runtime.project_health()
+    mix_section = next(
+        section for section in health["sections"] if section["workflow"] == "mix_review"
+    )
+
+    assert runtime.project_context.project_scope_id == "unknown"
+    assert runtime.latest_report("mix_review") == stored
+    assert mix_section["report_id"] == stored.report_id
+    assert "mix_review" not in health["missing_workflows"]
+
+
+def test_direct_report_store_latest_report_is_unscoped_for_health_fallback(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    runtime = RuntimeCore(
+        session=RuntimeSession(id="runtime_test"),
+        job_store_path=tmp_path / "jobs.sqlite3",
+    )
+    monkeypatch.setenv("FLS_PILOT_TRANSPORT", "direct")
+    monkeypatch.setattr(runtime_access, "_LOCAL_RUNTIME", runtime)
+    store = runtime_access.RuntimeReportStore()
+
+    stored = store.add_report(_report("mix_review", "unscoped_fallback"))
+
+    assert store.get_latest_report("mix_review") == stored
+    assert runtime.latest_report("mix_review") is None
+
+
 def test_tcp_report_store_does_not_fall_back_to_process_local_state(
     monkeypatch,
 ) -> None:

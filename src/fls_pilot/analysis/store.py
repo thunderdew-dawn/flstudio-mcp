@@ -105,10 +105,19 @@ def _report_matches_context(
     *,
     allow_legacy_fingerprint: bool,
 ) -> bool:
-    if not context.is_known:
-        return False
     if report.runtime_session_id and report.runtime_session_id != context.runtime_session_id:
         return False
+    if not context.is_known:
+        if (
+            allow_legacy_fingerprint
+            and report.project_fingerprint not in {None, "unknown"}
+            and report.project_fingerprint == context.project_fingerprint
+        ):
+            return True
+        return (
+            report.snapshot_id not in {None, "unknown"}
+            and report.snapshot_id == context.snapshot_id
+        )
     if report.project_scope_id:
         return report.project_scope_id == context.project_scope_id
     if allow_legacy_fingerprint and report.project_fingerprint:
