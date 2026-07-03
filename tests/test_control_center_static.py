@@ -89,7 +89,6 @@ def test_initial_refresh_runs_full_status_before_quick_status() -> None:
 
     assert 'const statusPath = state.status ? "/api/status/quick" : "/api/status";' in js
     assert "const API_REQUEST_TIMEOUT_MS = 20000;" in js
-    assert 'title: "AI Client stdio"' in js
 
 
 def test_control_center_static_status_failure_guides_setup_recheck() -> None:

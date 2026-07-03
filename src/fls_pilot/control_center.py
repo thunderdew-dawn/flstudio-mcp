@@ -6439,8 +6439,11 @@ def _readiness(
     findings: list[doctor.Finding],
     checkpoints: dict[str, dict[str, Any]],
 ) -> dict[str, Any]:
-    blockers = [f for f in findings if f.severity == "blocker" and f.status != "ok"]
-    manual = [f for f in findings if f.status in {"manual_check", "probe_needed"}]
+    setup_findings = [
+        f for f in findings if _finding_group(f.component) not in {"mcp_stdio"}
+    ]
+    blockers = [f for f in setup_findings if f.severity == "blocker" and f.status != "ok"]
+    manual = [f for f in setup_findings if f.status in {"manual_check", "probe_needed"}]
     if blockers:
         state = "blocked"
     elif manual and not checkpoints:
@@ -6587,22 +6590,6 @@ def _setup_guidance(
                 groups=["controller"],
                 checkpoint="configured_fl_midi",
                 action_label="I did this",
-            )
-        )
-
-    if _group_needs_action(groups, "mcp_stdio"):
-        guidance.append(
-            _guidance_item(
-                title="Fix MCP stdio startup",
-                status=_group_status(groups, "mcp_stdio"),
-                text=_group_guidance_text(
-                    groups,
-                    "mcp_stdio",
-                    "Run fls-pilot in a terminal and fix the startup error, then re-check setup.",
-                ),
-                groups=["mcp_stdio"],
-                action_label="Re-check",
-                action_path="/api/refresh",
             )
         )
 

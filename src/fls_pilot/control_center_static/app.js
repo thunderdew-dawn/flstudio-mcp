@@ -209,7 +209,6 @@ const setupLayers = [
   { group: "daemon",       title: "FL Studio Bridge Service",   priority: "required" },
   { group: "midi",         title: "MIDI Loopback Ports",        priority: "required" },
   { group: "controller",  title: "FL Studio Controller",        priority: "required" },
-  { group: "mcp_stdio",   title: "AI Client stdio",             priority: "required" },
   { group: "mcp_sse",     title: "AI Client Server",            priority: "optional" },
   { group: "mcp_apply",   title: "Piano Roll Apply",            priority: "optional" }
 ];

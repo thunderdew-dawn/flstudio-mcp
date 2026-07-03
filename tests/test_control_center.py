@@ -432,7 +432,7 @@ def test_daemon_startup_guidance_is_not_ok_when_daemon_stopped():
     assert "not running" in daemon_items[0]["text"]
 
 
-def test_setup_guidance_surfaces_mcp_stdio_blocker_without_ok_daemon_card():
+def test_setup_guidance_ignores_mcp_stdio_when_fl_setup_is_ready():
     groups = {
         "environment": [],
         "fl_app": [],
@@ -459,11 +459,8 @@ def test_setup_guidance_surfaces_mcp_stdio_blocker_without_ok_daemon_card():
 
     titles = [item["title"] for item in guidance]
     assert "Daemon startup" not in titles
-    assert "Fix MCP stdio startup" in titles
-    stdio = next(item for item in guidance if item["title"] == "Fix MCP stdio startup")
-    assert stdio["status"] == "blocked"
-    assert stdio["action_path"] == "/api/refresh"
-    assert stdio["action_label"] == "Re-check"
+    assert "Fix MCP stdio startup" not in titles
+    assert titles == ["Setup is ready"]
 
 
 def test_setup_guidance_prioritizes_open_fl_when_bridge_failure_is_derivative():
@@ -501,7 +498,24 @@ def test_setup_guidance_prioritizes_open_fl_when_bridge_failure_is_derivative():
     assert titles[0] == "Open FL Studio"
     assert "Daemon startup" not in titles
     assert "Connect FL Studio to the controller" not in titles
-    assert "Fix MCP stdio startup" in titles
+    assert "Fix MCP stdio startup" not in titles
+
+
+def test_readiness_ignores_mcp_stdio_for_control_center_setup():
+    findings = [
+        _finding("Python Environment"),
+        _finding("Core Dependencies"),
+        _finding("TCP Daemon / Bridge"),
+        _finding("FL Studio Application"),
+        _finding("FL Studio Controller Script"),
+        _finding("MCP stdio Transport", "blocker", "failed"),
+    ]
+
+    readiness = control_center._readiness(findings, {})
+
+    assert readiness["state"] == "ready_for_review"
+    assert readiness["blocker_count"] == 0
+    assert readiness["read_only_review_ready"] is True
 
 
 def test_setup_guidance_prioritizes_midi_manual_action(monkeypatch):
