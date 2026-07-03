@@ -10,7 +10,7 @@ from typing import Any
 
 from .audio_schema import AUDIO_FEATURES_CONTRACT_VERSION
 
-FEATURE_EXTRACTOR_VERSION = "core-mix-features-1"
+FEATURE_EXTRACTOR_VERSION = "core-mix-features-2"
 
 
 @dataclass(frozen=True)
@@ -54,6 +54,7 @@ class FeatureExtractor:
             duration_seconds = total_frames / sample_rate
             activity_size = max(1, int(round(sample_rate * self.config.activity_hop_seconds)))
             fft_size = max(256, int(self.config.fft_size))
+            fft_hop = max(1, fft_size // 2)
             window = np.hanning(fft_size).astype(np.float64)
             frequencies = np.fft.rfftfreq(fft_size, 1.0 / sample_rate)
             band_masks = {
@@ -62,20 +63,70 @@ class FeatureExtractor:
                 "mid": (frequencies >= 250) & (frequencies < 4000),
                 "high": frequencies >= 4000,
             }
+            low_end_masks = {
+                "infrasonic_below_20": frequencies < 20,
+                "sub_20_40": (frequencies >= 20) & (frequencies < 40),
+                "sub_40_80": (frequencies >= 40) & (frequencies < 80),
+                "bass_80_120": (frequencies >= 80) & (frequencies < 120),
+                "low_mid_120_250": (frequencies >= 120) & (frequencies < 250),
+                "low_end_20_120": (frequencies >= 20) & (frequencies < 120),
+                "mud_120_250": (frequencies >= 120) & (frequencies < 250),
+            }
             band_energy = {name: 0.0 for name in band_masks}
+            low_end_energy = {name: 0.0 for name in low_end_masks}
             peak = 0.0
             sum_squares = 0.0
+            mono_sum_squares = 0.0
             sample_count = 0
             activity_mask: list[bool] = []
             activity_rms_dbfs: list[float | None] = []
             activity_carry = np.empty(0, dtype=np.float64)
+            fft_carry = np.empty(0, dtype=np.float64)
+            left_fft_carry = np.empty(0, dtype=np.float64)
+            right_fft_carry = np.empty(0, dtype=np.float64)
             stereo = channel_count >= 2
             left_squares = right_squares = cross = 0.0
             mid_squares = side_squares = 0.0
             low_left_squares = low_right_squares = low_cross = 0.0
+            band_mid_energy = {
+                "sub_20_40": 0.0,
+                "bass_80_120": 0.0,
+                "low_end_20_120": 0.0,
+            }
+            band_side_energy = dict(band_mid_energy)
             loudness_parts: list[Any] = []
             loudness_limit = int(sample_rate * self.config.loudness_max_seconds)
             loudness_frames = 0
+
+            def process_fft_frames(
+                mono_values,
+                left_values=None,
+                right_values=None,
+                *,
+                padded_tail: bool = False,
+            ) -> int:
+                processed = 0
+                for start in range(0, len(mono_values) - fft_size + 1, fft_hop):
+                    mono_frame = mono_values[start : start + fft_size]
+                    spectrum = np.fft.rfft(mono_frame * window)
+                    power = np.abs(spectrum) ** 2
+                    for name, mask in band_masks.items():
+                        band_energy[name] += float(power[mask].sum())
+                    for name, mask in low_end_masks.items():
+                        low_end_energy[name] += float(power[mask].sum())
+                    if left_values is not None and right_values is not None:
+                        left_frame = left_values[start : start + fft_size]
+                        right_frame = right_values[start : start + fft_size]
+                        mid_frame = (left_frame + right_frame) * 0.5
+                        side_frame = (left_frame - right_frame) * 0.5
+                        mid_power = np.abs(np.fft.rfft(mid_frame * window)) ** 2
+                        side_power = np.abs(np.fft.rfft(side_frame * window)) ** 2
+                        for name in band_mid_energy:
+                            mask = low_end_masks[name]
+                            band_mid_energy[name] += float(mid_power[mask].sum())
+                            band_side_energy[name] += float(side_power[mask].sum())
+                    processed = start + (fft_size if padded_tail else fft_hop)
+                return processed
 
             for block in audio.blocks(
                 blocksize=max(1024, int(self.config.block_frames)),
@@ -88,17 +139,28 @@ class FeatureExtractor:
                 peak = max(peak, float(np.max(np.abs(values), initial=0.0)))
                 sum_squares += float(np.sum(values * values))
                 sample_count += int(values.size)
+                mono_sum_squares += float(np.sum(mono * mono))
 
                 if loudness_frames < loudness_limit:
                     remaining = loudness_limit - loudness_frames
                     loudness_parts.append(values[:remaining].copy())
                     loudness_frames += min(len(values), remaining)
 
-                for start in range(0, len(mono) - fft_size + 1, fft_size):
-                    spectrum = np.fft.rfft(mono[start : start + fft_size] * window)
-                    power = np.abs(spectrum) ** 2
-                    for name, mask in band_masks.items():
-                        band_energy[name] += float(power[mask].sum())
+                fft_values = np.concatenate((fft_carry, mono))
+                if stereo:
+                    left_fft_values = np.concatenate((left_fft_carry, values[:, 0]))
+                    right_fft_values = np.concatenate((right_fft_carry, values[:, 1]))
+                    processed = process_fft_frames(
+                        fft_values,
+                        left_fft_values,
+                        right_fft_values,
+                    )
+                    fft_carry = fft_values[processed:]
+                    left_fft_carry = left_fft_values[processed:]
+                    right_fft_carry = right_fft_values[processed:]
+                else:
+                    processed = process_fft_frames(fft_values)
+                    fft_carry = fft_values[processed:]
 
                 activity_values = np.concatenate((activity_carry, mono))
                 complete = len(activity_values) // activity_size
@@ -135,6 +197,20 @@ class FeatureExtractor:
                     low_cross += float(np.sum(low_left * low_right))
 
             check()
+            if fft_carry.size:
+                pad = fft_size - min(fft_size, len(fft_carry))
+                tail = np.pad(fft_carry[:fft_size], (0, pad))
+                if stereo:
+                    left_tail = np.pad(left_fft_carry[:fft_size], (0, pad))
+                    right_tail = np.pad(right_fft_carry[:fft_size], (0, pad))
+                    process_fft_frames(
+                        tail,
+                        left_tail,
+                        right_tail,
+                        padded_tail=True,
+                    )
+                else:
+                    process_fft_frames(tail, padded_tail=True)
             if activity_carry.size:
                 rms = float(np.sqrt(np.mean(activity_carry * activity_carry)))
                 dbfs = _dbfs(rms)
@@ -149,6 +225,10 @@ class FeatureExtractor:
             name: round(value / total_band_energy, 8)
             for name, value in band_energy.items()
         }
+        normalized_low_end = {
+            name: round(value / total_band_energy, 8)
+            for name, value in low_end_energy.items()
+        }
         low_end_ratio = normalized_bands["sub"] + normalized_bands["low"]
         correlation = (
             _correlation(cross, left_squares, right_squares) if stereo else None
@@ -161,6 +241,15 @@ class FeatureExtractor:
         width = (
             math.sqrt(side_squares / max(mid_squares, 1e-20)) if stereo else 0.0
         )
+        low_band_side_ratio = _side_ratio(
+            band_side_energy["low_end_20_120"],
+            band_mid_energy["low_end_20_120"],
+        )
+        mono_folddown_loss_db = (
+            _power_ratio_db(mono_sum_squares, sum_squares / channel_count)
+            if stereo
+            else None
+        )
         integrated_lufs, loudness_warning = _integrated_loudness(
             loudness_parts,
             sample_rate,
@@ -168,6 +257,14 @@ class FeatureExtractor:
             maximum_seconds=self.config.loudness_max_seconds,
         )
         warnings = [loudness_warning] if loudness_warning else []
+        if total_frames < fft_size:
+            warnings.append("audio_shorter_than_fft_window_zero_padded")
+        if not stereo:
+            warnings.append("insufficient_stereo_evidence")
+        elif low_band_side_ratio is None:
+            warnings.append("insufficient_low_band_stereo_evidence")
+        if normalized_low_end["low_end_20_120"] <= 1e-8:
+            warnings.append("insufficient_low_band_evidence")
         return {
             "contract_version": AUDIO_FEATURES_CONTRACT_VERSION,
             "extractor_version": FEATURE_EXTRACTOR_VERSION,
@@ -189,9 +286,30 @@ class FeatureExtractor:
                 "crest_factor_db": _finite_round(peak_dbfs - rms_dbfs),
                 "band_energy": normalized_bands,
                 "low_end_energy_ratio": round(low_end_ratio, 8),
+                "infrasonic_ratio_below_20": normalized_low_end["infrasonic_below_20"],
+                "sub_20_40_ratio": normalized_low_end["sub_20_40"],
+                "sub_40_80_ratio": normalized_low_end["sub_40_80"],
+                "bass_80_120_ratio": normalized_low_end["bass_80_120"],
+                "low_mid_120_250_ratio": normalized_low_end["low_mid_120_250"],
+                "low_end_20_120_ratio": normalized_low_end["low_end_20_120"],
+                "mud_120_250_ratio": normalized_low_end["mud_120_250"],
                 "stereo_correlation_proxy": _optional_round(correlation),
                 "stereo_width_proxy": round(width, 6),
                 "low_band_stereo_proxy": _optional_round(low_correlation),
+                "sub_side_ratio_db": _optional_round(
+                    _power_ratio_db(
+                        band_side_energy["sub_20_40"],
+                        band_mid_energy["sub_20_40"],
+                    )
+                ),
+                "bass_side_ratio_db": _optional_round(
+                    _power_ratio_db(
+                        band_side_energy["bass_80_120"],
+                        band_mid_energy["bass_80_120"],
+                    )
+                ),
+                "low_band_side_ratio": _optional_round(low_band_side_ratio),
+                "mono_folddown_loss_db": _optional_round(mono_folddown_loss_db),
             },
             "activity": {
                 "frame_hop_seconds": self.config.activity_hop_seconds,
@@ -287,6 +405,21 @@ def _correlation(cross: float, left_squares: float, right_squares: float) -> flo
     if denominator <= 1e-20:
         return None
     return max(-1.0, min(1.0, cross / denominator))
+
+
+def _side_ratio(side_power: float, mid_power: float) -> float | None:
+    total = side_power + mid_power
+    if total <= 1e-20:
+        return None
+    return max(0.0, min(1.0, side_power / total))
+
+
+def _power_ratio_db(numerator: float, denominator: float) -> float | None:
+    if denominator <= 1e-20:
+        return None
+    if numerator <= 1e-20:
+        return -120.0
+    return 10.0 * math.log10(numerator / denominator)
 
 
 def _dbfs(value: float) -> float:

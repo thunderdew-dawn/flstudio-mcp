@@ -30,6 +30,7 @@ HEALTH_INCLUSION_POLICIES = {
     "excluded",
 }
 
+
 @dataclass(frozen=True)
 class WorkflowDeclaration:
     id: str
@@ -57,9 +58,7 @@ class WorkflowDeclaration:
         if self.status not in WORKFLOW_STATUSES:
             raise ValueError(f"invalid workflow status: {self.status!r}")
         if self.health_inclusion_policy not in HEALTH_INCLUSION_POLICIES:
-            raise ValueError(
-                f"invalid health inclusion policy: {self.health_inclusion_policy!r}"
-            )
+            raise ValueError(f"invalid health inclusion policy: {self.health_inclusion_policy!r}")
         if self.parent_workflow_id is not None:
             object.__setattr__(
                 self,
@@ -71,9 +70,7 @@ class WorkflowDeclaration:
                 f"requirement workflow id {self.requirements.workflow_id!r} "
                 f"does not match declaration {self.id!r}"
             )
-        object.__setattr__(
-            self, "supported_next_actions", tuple(self.supported_next_actions)
-        )
+        object.__setattr__(self, "supported_next_actions", tuple(self.supported_next_actions))
         object.__setattr__(self, "manual_only_actions", tuple(self.manual_only_actions))
         object.__setattr__(self, "forbidden_actions", tuple(self.forbidden_actions))
 
@@ -151,11 +148,7 @@ class WorkflowRegistry:
         return tuple(row for row in self._rows if row.enabled)
 
     def control_center_catalog(self) -> list[dict[str, Any]]:
-        return [
-            row.to_control_center_dict()
-            for row in self._rows
-            if row.panel_id is not None
-        ]
+        return [row.to_control_center_dict() for row in self._rows if row.panel_id is not None]
 
 
 def build_effective_workflow_registry(
@@ -180,8 +173,7 @@ def build_effective_workflow_registry(
                     selected_profiles.append(dict(profiles_by_id[profile_id]))
                 except KeyError as exc:
                     raise ValueError(
-                        f"unknown profile id {profile_id!r} in pack "
-                        f"{manifest.pack_id!r}"
+                        f"unknown profile id {profile_id!r} in pack {manifest.pack_id!r}"
                     ) from exc
             extensions_by_workflow.setdefault(workflow.id, []).append(
                 {
@@ -212,13 +204,9 @@ def _pack_profiles_by_id(manifest: Any) -> dict[str, dict[str, Any]]:
     for index, profile in enumerate(manifest.profiles):
         profile_id = str(profile.get("id") or "").strip()
         if not profile_id:
-            raise ValueError(
-                f"profiles[{index}].id is required in pack {manifest.pack_id!r}"
-            )
+            raise ValueError(f"profiles[{index}].id is required in pack {manifest.pack_id!r}")
         if profile_id in profiles:
-            raise ValueError(
-                f"duplicate profile id {profile_id!r} in pack {manifest.pack_id!r}"
-            )
+            raise ValueError(f"duplicate profile id {profile_id!r} in pack {manifest.pack_id!r}")
         profiles[profile_id] = dict(profile)
     return profiles
 
@@ -292,15 +280,92 @@ DEFAULT_WORKFLOW_REGISTRY = WorkflowRegistry(
                         ttl_seconds=2,
                         evidence_mode="live_runtime",
                     ),
+                    requirement(
+                        "rendered_stem_features",
+                        required=False,
+                        evidence_mode="rendered_audio",
+                        invalidates_on=(
+                            "project_identity_change",
+                            "audio_source_hash_changed",
+                        ),
+                    ),
                 ),
             ),
             panel_id="producer_mix_review",
             endpoint="/api/workflows/mix-review",
             action_label="Run Mix Review",
             safety_note=(
-                "Read-only mixer review. Static execution remains available; "
-                "audio-backed conclusions require a linked rendered master."
+                "Read-only mixer review. Level 1 is static with opportunistic "
+                "current playback peaks when already playing; Level 2 uses optional "
+                "transient playback/watch evidence; Level 3 uses linked rendered "
+                "master proxy evidence; Level 4 uses role-confirmed stem/bus evidence."
             ),
+            supported_next_actions=(
+                "run_static_review",
+                "start_level_2_watch",
+                "link_rendered_master_evidence",
+                "link_stem_bus_evidence",
+                "confirm_mix_review_finding",
+                "accept_mix_review_finding",
+                "reject_mix_review_finding",
+                "ignore_mix_review_finding",
+            ),
+            manual_only_actions=(
+                "choose_loudest_section",
+                "manual_audio_render",
+                "manual_stem_export",
+                "confirm_track_roles",
+                "approve_fix_plan",
+            ),
+            forbidden_actions=("automatic_render", "plugin_loading", "playlist_clip_editing"),
+            metadata={
+                "mix_review_levels": [
+                    "level_1_static_project_metadata",
+                    "level_2_live_meter_window",
+                    "level_3_rendered_master_audio_proxy",
+                    "level_4_role_confirmed_stem_bus_audio",
+                ],
+                "finding_states": [
+                    "static_heuristic",
+                    "name_based_unconfirmed",
+                    "metadata_suspected",
+                    "live_meter_supported",
+                    "rendered_master_proxy",
+                    "stem_audio_confirmed",
+                    "accepted_by_user",
+                    "rejected_by_user",
+                    "ignored_by_user",
+                    "requires_more_evidence",
+                ],
+                "score_fields": [
+                    "legacy_score",
+                    "risk_score_v2",
+                    "score_status",
+                    "score_inputs",
+                    "evidence_weight",
+                    "decision_adjusted_score",
+                    "blocked_findings_count",
+                    "provisional_findings_count",
+                    "confirmed_findings_count",
+                ],
+                "fix_plan_statuses": [
+                    "blocked",
+                    "draft",
+                    "requires_user_approval",
+                    "approved",
+                    "not_applicable",
+                ],
+                "genre_profiles": [
+                    "default",
+                    "psytrance",
+                    "techno",
+                    "hiphop",
+                    "ambient",
+                    "rock",
+                    "cinematic",
+                ],
+                "target_contexts": ["streaming", "club", "festival", "demo", "unknown"],
+            },
         ),
         _declaration(
             "routing_audit",
@@ -309,10 +374,71 @@ DEFAULT_WORKFLOW_REGISTRY = WorkflowRegistry(
             "active",
             "included_when_current_report_available",
             True,
+            requirements=WorkflowRequirementSet(
+                "routing_audit",
+                (
+                    requirement("fl_session_alive", ttl_seconds=2),
+                    requirement("static_project_snapshot", ttl_seconds=60),
+                    requirement("channel_routing_snapshot", ttl_seconds=60),
+                    requirement("routing_snapshot", ttl_seconds=60),
+                    requirement(
+                        "live_meter_window",
+                        required=False,
+                        ttl_seconds=2,
+                        evidence_mode="live_runtime",
+                    ),
+                ),
+            ),
             panel_id="producer_routing",
             endpoint="/api/workflows/routing-audit",
             action_label="Run Routing Audit",
-            safety_note="Read-only routing audit. Cleanup remains proposal-first.",
+            safety_note=(
+                "Read-only routing audit. Static and meter findings remain evidence-labeled; "
+                "cleanup remains proposal-first and confirmation-gated."
+            ),
+            supported_next_actions=(
+                "run_static_routing_snapshot",
+                "run_meter_snapshot_proxy",
+                "confirm_template_profile",
+                "confirm_track_roles",
+                "plan_cleanup_after_confirmation",
+            ),
+            manual_only_actions=(
+                "confirm_direct_to_master_intent",
+                "confirm_reference_monitor_only",
+                "confirm_sidechain_control_not_audible",
+                "approve_cleanup_plan",
+            ),
+            forbidden_actions=(
+                "automatic_routing_cleanup",
+                "playlist_clip_editing",
+                "plugin_loading",
+                "automatic_render",
+            ),
+            metadata={
+                "routing_evidence_levels": [
+                    "static_routing_snapshot",
+                    "meter_snapshot_proxy",
+                    "user_confirmed_routing_intent",
+                    "verified_cleanup_readback",
+                ],
+                "plan_gating_statuses": [
+                    "blocked_requires_confirmation",
+                    "draft_proxy_evidence",
+                    "ready_for_user_approval",
+                    "no_actionable_findings",
+                ],
+                "intent_profiles": [
+                    "default",
+                    "psytrance_stem_bus_template",
+                    "mixdown_premaster_template",
+                    "recording_session",
+                    "sound_design_session",
+                    "live_performance",
+                    "minimal_sketch",
+                    "reference_monitoring",
+                ],
+            },
         ),
         _declaration(
             "low_end_analysis",
@@ -348,8 +474,58 @@ DEFAULT_WORKFLOW_REGISTRY = WorkflowRegistry(
             action_label="Run Low-End Safety Check",
             safety_note=(
                 "Read-only low-end review. Metadata raises suspicions; rendered "
-                "audio is required for audio-backed energy and stereo proxy claims."
+                "master audio creates proxy claims only; stem-specific conclusions "
+                "require role-confirmed stem or bus evidence."
             ),
+            supported_next_actions=(
+                "low_end.confirm_detected_tracks",
+                "low_end.assign_track_roles:*",
+                "low_end.choose_genre_profile",
+                "low_end.confirm_finding:*",
+                "audio.render_master",
+                "audio.render_low_end_stems",
+                "low_end.approve_fix_plan",
+                "low_end.after_fix_render",
+            ),
+            manual_only_actions=(
+                "audio.render_master",
+                "audio.render_low_end_stems",
+                "low_end.confirm_detected_tracks",
+                "low_end.assign_track_roles:*",
+                "low_end.choose_genre_profile",
+                "low_end.confirm_finding:*",
+                "low_end.approve_fix_plan",
+                "low_end.after_fix_render",
+            ),
+            forbidden_actions=(
+                "automatic_fl_studio_render",
+                "automatic_project_writes",
+                "plugin_loading",
+                "unsafe_fix_application",
+                "stem_specific_claims_from_master_only_audio",
+                "final_fix_plan_from_unconfirmed_static_metadata",
+            ),
+            metadata={
+                "evidence_levels": {
+                    "1": "static_metadata",
+                    "2": "live_playback_data",
+                    "3": "rendered_master_audio",
+                    "4": "role_confirmed_bus_or_stem_evidence",
+                    "5": "deeper_batch_or_multi_source_evidence",
+                },
+                "genre_profiles": ["default", "psytrance"],
+                "future_genre_profiles": [
+                    "techno",
+                    "drum_and_bass",
+                    "hip_hop",
+                    "cinematic",
+                ],
+                "automatic_fl_render": False,
+                "master_audio_limit": (
+                    "Rendered master audio may create proxy low-end findings but "
+                    "must not create kick, bass, sub, or stem-specific causal claims."
+                ),
+            },
         ),
         _declaration(
             "project_organizer",
@@ -361,7 +537,41 @@ DEFAULT_WORKFLOW_REGISTRY = WorkflowRegistry(
             panel_id="producer_organizer",
             endpoint="/api/workflows/project-organizer",
             action_label="Run Organizer",
-            safety_note="Read-only scan. Cleanup requires an approved safe-write tool.",
+            safety_note=(
+                "Read-only scan and template-aware planning. Cleanup requires a stored "
+                "plan, explicit step approval, and an approved safe-write tool."
+            ),
+            supported_next_actions=(
+                "scan_project_organization",
+                "plan_template_organization",
+                "update_organization_plan_decisions",
+                "approve_organization_steps",
+                "get_organization_status",
+                "rollback_organization_change",
+                "review_safe_proposals",
+            ),
+            manual_only_actions=(
+                "choose_target_template",
+                "confirm_detected_roles",
+                "approve_step_selection",
+            ),
+            forbidden_actions=(
+                "playlist_clip_editing",
+                "pattern_or_clip_deletion",
+                "plugin_loading",
+                "automatic_render",
+                "automatic_save_as",
+            ),
+            metadata={
+                "scan_tool": "fl_scan_project_organization",
+                "plan_tool": "fl_plan_project_organization",
+                "decision_tool": "fl_update_organization_plan_decision",
+                "apply_tool": "fl_apply_organization_plan",
+                "status_tool": "fl_get_organization_status",
+                "rollback_tool": "fl_rollback_organization_change",
+                "plan_store_required": True,
+                "step_selection_required": True,
+            },
         ),
         _declaration(
             "preflight",
@@ -421,9 +631,7 @@ DEFAULT_WORKFLOW_REGISTRY = WorkflowRegistry(
             parent_workflow_id="project_organizer",
             panel_id="producer_jam_2_project",
             group="Roadmap",
-            safety_note=(
-                "Planned for v3.1+. No Control Center action is available in v3.0."
-            ),
+            safety_note=("Planned for v3.1+. No Control Center action is available in v3.0."),
             supported_next_actions=("run_project_organizer", "review_safe_proposals"),
             manual_only_actions=("confirm_sections", "confirm_musical_roles"),
             forbidden_actions=(
@@ -448,9 +656,7 @@ DEFAULT_WORKFLOW_REGISTRY = WorkflowRegistry(
             ),
             panel_id="producer_sidechaining",
             group="Roadmap",
-            safety_note=(
-                "Planned after v3.0. Plugin detector settings remain a manual check."
-            ),
+            safety_note=("Planned after v3.0. Plugin detector settings remain a manual check."),
             supported_next_actions=("inspect_loaded_plugin",),
             manual_only_actions=("verify_plugin_sidechain_input",),
             forbidden_actions=("plugin_loading", "unknown_parameter_writes"),
@@ -476,8 +682,7 @@ DEFAULT_WORKFLOW_REGISTRY = WorkflowRegistry(
             panel_id="producer_plugin_assistant",
             group="Roadmap",
             safety_note=(
-                "Planned after v3.0. Plugin loading and unknown parameter writes "
-                "remain manual."
+                "Planned after v3.0. Plugin loading and unknown parameter writes remain manual."
             ),
             supported_next_actions=("list_loaded_plugins", "inspect_named_parameters"),
             manual_only_actions=("choose_mixer_track", "load_plugin"),
@@ -496,9 +701,7 @@ DEFAULT_WORKFLOW_REGISTRY = WorkflowRegistry(
             ),
             panel_id="producer_preset_assistant",
             group="Roadmap",
-            safety_note=(
-                "Planned after v3.0. Preset loading remains manual."
-            ),
+            safety_note=("Planned after v3.0. Preset loading remains manual."),
             supported_next_actions=("list_preset_names", "suggest_by_name"),
             manual_only_actions=("load_preset", "audition_preset"),
             forbidden_actions=("automatic_preset_loading",),

@@ -224,7 +224,7 @@
                   <dd id="song-position">Unavailable</dd>
                 </div>
                 <div>
-                  <dt>Record</dt>
+                  <dt>Recording armed</dt>
                   <dd id="record-state" class="small-pill">Unavailable</dd>
                 </div>
               </dl>
@@ -237,8 +237,6 @@
                 title="Pause at the current playhead position">Pause</button>
               <button class="transport-button" type="button" data-transport-action="stop" id="transport-stop"
                 title="Stop playback. FL Studio returns the playhead to the start cue.">Stop</button>
-              <button class="transport-button transport-record" type="button" data-transport-action="record"
-                id="transport-record" title="Toggle record arm. Start playback as well to record in FL Studio.">Record</button>
             </div>
             <p class="transport-feedback" id="transport-feedback" role="status"></p>
             <div class="playlist-marker-panel">
@@ -360,6 +358,88 @@
       <div class="live-playback-mount" data-live-playback="mix_review"></div>
 
       <div id="mix-review-feedback" class="mix-review-feedback" role="status"></div>
+
+      <section class="panel mix-review-options-panel">
+        <div class="panel-heading">
+          <h2>Evidence Level</h2>
+          <span class="badge badge-neutral" id="mix-review-level-badge">Level 1</span>
+        </div>
+        <div class="mix-review-level-grid" id="mix-review-level-grid">
+          <label class="mix-review-level-card">
+            <input type="radio" name="mix-review-level" value="1" checked />
+            <strong>Level 1 - Static</strong>
+            <span>Mixer, routing and plugin metadata.</span>
+          </label>
+          <label class="mix-review-level-card">
+            <input type="radio" name="mix-review-level" value="2" />
+            <strong>Level 2 - Live Peak Watch</strong>
+            <span>8-60 seconds of peak evidence at the loudest section.</span>
+          </label>
+          <label class="mix-review-level-card">
+            <input type="radio" name="mix-review-level" value="3" />
+            <strong>Level 3 - Rendered Master</strong>
+            <span>Prepare a manually bounced master for later analyzer support.</span>
+          </label>
+          <label class="mix-review-level-card">
+            <input type="radio" name="mix-review-level" value="4" />
+            <strong>Level 4 - Stem/Bus Evidence</strong>
+            <span>Prepare stem or bus files by role for later analyzer support.</span>
+          </label>
+        </div>
+        <div class="mix-review-profile-row">
+          <label>
+            <span>Profile</span>
+            <select id="mix-review-genre-profile">
+              <option value="">Default</option>
+              <option value="psytrance">Psytrance</option>
+            </select>
+          </label>
+        </div>
+        <div class="mix-level2-flow" id="mix-level2-flow">
+          <div class="mix-evidence-controls">
+            <label>
+              <span>Capture length</span>
+              <input id="mix-level2-loop-seconds" type="number" min="8" max="60" step="1" value="16" />
+            </label>
+            <label>
+              <span>Playback</span>
+              <select id="mix-level2-playback-mode">
+                <option value="user_starts">I start playback</option>
+                <option value="gui_starts">Start playback from here</option>
+              </select>
+            </label>
+            <label>
+              <span>Marker</span>
+              <select id="mix-level2-marker">
+                <option value="">Loudest section / drop</option>
+              </select>
+            </label>
+          </div>
+          <div class="mix-evidence-actions">
+            <button class="ghost-button primary-action" id="mix-level2-start-watch" type="button">Start Watch</button>
+            <button class="ghost-button" id="mix-level2-stop-watch" type="button">Stop Watch</button>
+            <span class="mix-watch-status" id="mix-level2-watch-status">No watch evidence yet.</span>
+          </div>
+        </div>
+        <div class="mix-rendered-evidence" id="mix-level3-evidence">
+          <div class="mix-evidence-controls">
+            <label>
+              <span>Rendered master path</span>
+              <input id="mix-level3-master-path" type="text" placeholder="/path/to/rendered-master.wav" />
+            </label>
+            <button class="ghost-button" id="mix-level3-submit-master" type="button">Prepare Master Evidence</button>
+          </div>
+          <div class="mix-expected-checks" id="mix-level3-checks"></div>
+        </div>
+        <div class="mix-rendered-evidence" id="mix-level4-evidence">
+          <div class="mix-stem-role-table" id="mix-stem-role-table"></div>
+          <div class="mix-evidence-actions">
+            <button class="ghost-button" id="mix-add-stem-row" type="button">Add Stem</button>
+            <button class="ghost-button" id="mix-submit-stem-evidence" type="button">Prepare Stem Evidence</button>
+          </div>
+          <div class="mix-expected-checks" id="mix-level4-checks"></div>
+        </div>
+      </section>
 
       <section class="mix-review-layout" id="mix-review-layout">
         <div class="workflow-interaction-mount" id="mix-review-interactions"></div>
@@ -521,6 +601,30 @@
 
       <section class="low-end-layout" id="low-end-layout">
         <div class="workflow-interaction-mount" id="low-end-interactions"></div>
+
+        <article class="panel low-end-selection-panel">
+          <div class="panel-heading">
+            <h2>Channel Selection</h2>
+            <span class="badge badge-neutral" id="low-end-selection-state">Not Run</span>
+          </div>
+          <div class="low-end-selection-actions">
+            <label class="workflow-runtime-input">
+              <span>Add mixer track</span>
+              <select id="low-end-add-track"></select>
+            </label>
+            <label class="workflow-runtime-input">
+              <span>Role</span>
+              <select id="low-end-add-role">
+                <option value="kick">Kick</option>
+                <option value="sub">Sub / 808</option>
+                <option value="bass">Bass</option>
+                <option value="other">Other Low-End</option>
+              </select>
+            </label>
+            <button class="ghost-button" id="low-end-add-track-button" type="button">Add</button>
+          </div>
+          <div class="low-end-selection-list" id="low-end-selection-list"></div>
+        </article>
 
         <article class="panel low-end-focus-panel">
           <div class="panel-heading">
@@ -726,6 +830,32 @@
       </section>
 
       <div id="routing-audit-feedback" class="routing-audit-feedback" role="status"></div>
+
+      <section class="panel routing-controls-panel" aria-label="Routing audit controls">
+        <div class="routing-control-grid">
+          <label class="workflow-runtime-input" for="routing-check-mode">
+            <span>Routing Check Mode</span>
+            <select id="routing-check-mode">
+              <option value="level_1_static">Static Routing &amp; Settings Audit (Lvl 1)</option>
+              <option value="level_2_signal_flow">Signal Flow Assisted Routing Audit (Lvl 2)</option>
+            </select>
+          </label>
+          <label class="workflow-runtime-input" for="routing-template-compliance">
+            <span>Template Compliance</span>
+            <select id="routing-template-compliance">
+              <option value="auto_detect">Auto-detect Template Compliance</option>
+              <option value="manual_select">Select Template Profile</option>
+              <option value="off">Template Compliance Off</option>
+            </select>
+          </label>
+          <label class="workflow-runtime-input" for="routing-template-profile" id="routing-template-profile-wrap">
+            <span>Template Profile</span>
+            <select id="routing-template-profile"></select>
+          </label>
+        </div>
+        <div class="routing-template-status" id="routing-template-status">Template Compliance: Auto-detect</div>
+        <div class="routing-level2-flow" id="routing-level2-flow"></div>
+      </section>
 
       <section class="routing-audit-layout" id="routing-audit-layout">
         <div class="workflow-interaction-mount" id="routing-audit-interactions"></div>
@@ -1092,20 +1222,24 @@
             </div>
             <dl class="health-score-stats">
               <div>
-                <dt>Score</dt>
+                <dt>Health</dt>
                 <dd id="health-score-value">--</dd>
+              </div>
+              <div>
+                <dt>Risk</dt>
+                <dd id="health-risk-stat-value">Not Run</dd>
               </div>
               <div>
                 <dt>Coverage</dt>
                 <dd id="health-coverage-value">0/4</dd>
               </div>
               <div>
-                <dt>Findings</dt>
-                <dd id="health-finding-total">--</dd>
+                <dt>Confidence</dt>
+                <dd id="health-confidence-value">--</dd>
               </div>
               <div>
-                <dt>Blockers</dt>
-                <dd id="health-blocker-total">--</dd>
+                <dt>Freshness</dt>
+                <dd id="health-freshness-value">Not Run</dd>
               </div>
             </dl>
           </div>

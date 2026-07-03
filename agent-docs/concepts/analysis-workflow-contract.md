@@ -15,7 +15,7 @@ producer workflow may introduce a private report shape, private score meaning,
 or hidden FL Studio call sequence when the shared analysis/report structure can
 represent it.
 
-For v3.0.0-rc1, `fls-pilot.analysis-report.v1` is exclusive. Compatibility
+For v3.0.0-beta.3, `fls-pilot.analysis-report.v1` is exclusive. Compatibility
 adapters and legacy report envelopes are not accepted. See
 [Analysis Report Versioning Contract](../contracts/report-versioning.md).
 

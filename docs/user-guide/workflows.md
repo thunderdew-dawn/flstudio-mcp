@@ -20,6 +20,7 @@ Evidence modes are shown explicitly:
 |---|---|
 | Static snapshot | Current FL Studio metadata such as names, mixer controls, routing, plugins, patterns, and playlist track metadata. |
 | Live runtime | Current playback or meter data, such as peaks captured while the project plays. |
+| Watch window | A recent bounded meter watch, usually 8-60 seconds of a selected loud section. |
 | Rendered audio | User-provided or manually bounced audio files analyzed outside FL Studio. |
 | Manual check | A human step is required because the FL API cannot prove the fact. |
 | Hybrid | The report intentionally combines more than one evidence mode. |
@@ -71,8 +72,14 @@ FL Studio's Python API is useful but has strict boundaries. This project combine
 ### Phase 7: Mixing & Dynamics
 
 **Mix Doctor (`fl_review_mix`, `fl_mix_watch_start`)**
-- **The Limitation:** A static "snapshot" of a song is useless because audio is dynamic.
-- **How it works:** During peak watch, the user plays the song while the tool polls live API peak meters and keeps running peak evidence for each track.
+- **The Limitation:** Static project metadata can find routing, plugin, naming,
+  and rough gain risks, but it cannot prove dynamic loudness, masking, phase, or
+  spectrum facts.
+- **How it works:** `fl_review_mix()` defaults to Level 1 static review and
+  may use current mixer peaks if FL Studio is already playing. Level 2 uses an
+  explicit peak watch while the user plays a loud section. Level 3 and Level 4
+  prepare rendered-master and stem/bus evidence requests for the external
+  analyzer path; they list expected checks but do not invent audio conclusions.
 
 **Knowledgebase & Intents (`fl_apply_eq_intent`)**
 - **The Problem:** AI notoriously "hallucinates" plugin parameter values (e.g. setting a knob to 150% when the limit is 100%).
@@ -110,12 +117,34 @@ Use prompts like:
 Scan my mix first. Do not change anything yet. Tell me the safest next action.
 ```
 
+Mix Review evidence levels:
+
+| Level | Name | What it can support |
+|---|---|---|
+| 1 | Static Mix Review | Default. Uses names, routing, mixer controls, plugins, template context, and other project metadata. If FL Studio is already playing, current mixer peaks may support clipping/headroom checks as momentary live evidence. Findings without audio evidence are marked heuristic, provisional, or low confidence. |
+| 2 | Live Peak Watch | Uses a fresh 8-60 second meter watch for peak, clipping risk, headroom, and hot-track evidence. Playback is user-guided or explicitly triggered from the GUI as a transient action. |
+| 3 | Rendered Master Evidence | Prepared contract for linked rendered-master evidence and expected checks such as LUFS, true peak, clipping count, crest factor, stereo correlation, mono loss, and band energy. This beta does not calculate or claim those facts in Mix Review without external analyzer results. |
+| 4 | Stem/Bus Evidence | Prepared contract for stem roles and expected checks such as kick/bass masking, low-end phase, bus balance, stem headroom, and mono compatibility. This beta does not claim masking, phase, or spectrum conclusions without external analyzer results. |
+
+Every finding includes confidence and evidence metadata. Static HPF,
+compression, EQ-overlap, and genre-profile hints are guidance, not proof.
+
 ## Low-End Analysis
 
 Low-End Analysis focuses on bass/sub structure, mono compatibility, suspicious
 stereo width, and master headroom.
 
 ![Low-end analysis details](../assets/control-center-low-end-analysis-2.png)
+
+Low-End Analysis evidence levels:
+
+| Level | Name | What it can support |
+|---|---|---|
+| 1 | Static metadata / project structure | Name, routing, plugin, color, group, and mixer-control evidence. Findings are provisional/static suspicions and cannot prove audio behavior. |
+| 2 | Live playback data | Playback telemetry such as peaks, meters, channel activity, and clipping indicators. This can strengthen level/risk findings but remains limited without explicit role evidence. |
+| 3 | Rendered master audio | User-rendered or user-provided master/mixdown audio. Findings are proxy-labeled low-end findings and must not claim kick, bass, sub, or stem-specific causes. |
+| 4 | Role-confirmed bus/stem evidence | Rendered stems or buses with roles confirmed by explicit metadata or user decision. This is the first level that can support stem-specific low-end conclusions. |
+| 5 | Deeper batch / multi-source evidence | Planned deeper diagnosis across multiple rendered channels, stems, buses, playback captures, or future evidence sources. |
 
 ## Routing Audit
 
@@ -130,6 +159,17 @@ and fragile send/return layouts. Cleanup remains proposal-first.
 
 Project Organizer finds naming, color, grouping, and routing cleanup
 candidates. It can propose one reversible cleanup step at a time.
+Use `fl_scan_project_organization` or `fl_analyze_project_organization` for a
+read-only scan. For template-aware organization,
+`fl_plan_project_organization` creates a stored plan with a plan hash, project
+fingerprint, contract fields, blocked steps, manual checks, and required user
+decisions. Store exact producer decisions with
+`fl_update_organization_plan_decision`, then use
+`fl_apply_organization_plan` to apply only selected approved steps from that
+stored plan. Stale, rejected, ignored, blocked, expired, or unapproved plan
+steps are refused. `fl_get_organization_status` shows verified/applied steps
+and rollback ids, and `fl_rollback_organization_change` delegates to the MCP
+changelog rollback path.
 
 ![Project Organizer scan](../assets/control-center-project-organizer.png)
 

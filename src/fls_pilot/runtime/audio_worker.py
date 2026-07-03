@@ -15,6 +15,7 @@ from ..analysis.audio_features import (
 from .artifacts import AudioArtifactStore
 from .core import RuntimeCore
 from .jobs import JobContext
+from ..profile import profile
 
 AUDIO_FEATURE_JOB_KIND = "audio.features"
 
@@ -34,30 +35,36 @@ class AudioAnalysisWorker:
 
     def handle(self, payload: dict[str, Any], context: JobContext) -> dict[str, Any]:
         source = validate_audio_source(payload.get("path"))
-        expected_sha256 = str(payload.get("source_sha256") or "")
+        with profile("audio.features.validate_source", source=str(source)):
+            _validate_audio_source_identity(source, payload)
         context.set_progress(0.05)
-        actual_sha256 = sha256_file(source, cancellation_check=context.raise_if_cancelled)
-        if expected_sha256 and actual_sha256 != expected_sha256:
-            raise ValueError("source audio changed after job submission")
+        with profile(
+            "audio.features.hash",
+            source=str(source),
+            extractor=FEATURE_EXTRACTOR_VERSION,
+        ):
+            actual_sha256 = sha256_file(source, cancellation_check=context.raise_if_cancelled)
         context.set_progress(0.15)
-        features = self.extractor.extract(
-            source,
-            cancellation_check=context.raise_if_cancelled,
-        )
+        with profile("audio.features.extract", extractor=FEATURE_EXTRACTOR_VERSION):
+            features = self.extractor.extract(
+                source,
+                cancellation_check=context.raise_if_cancelled,
+            )
         context.set_progress(0.85)
         configuration_fingerprint = str(
             payload.get("configuration_fingerprint")
             or feature_configuration_fingerprint(self.extractor.config)
         )
-        manifest = self.artifact_store.publish(
-            features=features,
-            source_sha256=actual_sha256,
-            source_size_bytes=source.stat().st_size,
-            source_basename=source.name,
-            extractor_version=FEATURE_EXTRACTOR_VERSION,
-            configuration_fingerprint=configuration_fingerprint,
-            warnings=tuple(features.get("warnings") or ()),
-        )
+        with profile("audio.features.publish", source=str(source)):
+            manifest = self.artifact_store.publish(
+                features=features,
+                source_sha256=actual_sha256,
+                source_size_bytes=source.stat().st_size,
+                source_basename=source.name,
+                extractor_version=FEATURE_EXTRACTOR_VERSION,
+                configuration_fingerprint=configuration_fingerprint,
+                warnings=tuple(features.get("warnings") or ()),
+            )
         context.set_progress(0.98)
         result = self.artifact_store.result_ref(manifest.artifact_id)
         result["summary"] = compact_feature_summary(features)
@@ -88,13 +95,15 @@ def build_audio_job_request(
     extractor_config: FeatureExtractorConfig | None = None,
 ) -> dict[str, Any]:
     source = validate_audio_source(path)
-    source_sha256 = sha256_file(source)
+    stat = source.stat()
     config = extractor_config or FeatureExtractorConfig()
     configuration_fingerprint = feature_configuration_fingerprint(config)
     idempotency_key = ":".join(
         (
             AUDIO_FEATURE_JOB_KIND,
-            source_sha256,
+            str(source),
+            str(stat.st_size),
+            str(stat.st_mtime_ns),
             FEATURE_EXTRACTOR_VERSION,
             configuration_fingerprint,
         )
@@ -103,13 +112,14 @@ def build_audio_job_request(
         "kind": AUDIO_FEATURE_JOB_KIND,
         "input": {
             "path": str(source),
-            "source_sha256": source_sha256,
+            "source_size_bytes": stat.st_size,
+            "source_mtime_ns": stat.st_mtime_ns,
             "configuration_fingerprint": configuration_fingerprint,
         },
         "input_summary": {
             "source_basename": source.name,
-            "source_size_bytes": source.stat().st_size,
-            "source_sha256_prefix": source_sha256[:12],
+            "source_size_bytes": stat.st_size,
+            "source_mtime_ns": stat.st_mtime_ns,
         },
         "idempotency_key": idempotency_key,
     }
@@ -122,6 +132,30 @@ def validate_audio_source(path: Any) -> Path:
     if not source.is_file():
         raise FileNotFoundError(f"audio source file not found: {source}")
     return source
+
+
+def _validate_audio_source_identity(
+    source: Path,
+    payload: dict[str, Any],
+) -> None:
+    expected_size = _safe_int(payload.get("source_size_bytes"))
+    expected_mtime_ns = _safe_int(payload.get("source_mtime_ns"))
+    if expected_size is None and expected_mtime_ns is None:
+        return
+    stat = source.stat()
+    if expected_size is not None and stat.st_size != expected_size:
+        raise ValueError("audio source changed after job submission (size)")
+    if expected_mtime_ns is not None and stat.st_mtime_ns != expected_mtime_ns:
+        raise ValueError("audio source changed after job submission (mtime)")
+
+
+def _safe_int(value: Any) -> int | None:
+    try:
+        if value is None or value == "":
+            return None
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def sha256_file(

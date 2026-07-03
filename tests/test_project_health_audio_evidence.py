@@ -48,11 +48,11 @@ def test_project_health_aggregates_audio_observations_without_recomputing(tmp_pa
         health = runtime.project_health()
 
         assert health["observation_summary"]["rendered_audio_features"] == 1
-        assert health["observation_summary"]["audio_evidence_levels"] == [2]
+        assert health["observation_summary"]["audio_evidence_levels"] == [3]
         mix = next(
             row for row in health["sections"] if row["workflow"] == "mix_review"
         )
-        assert any(
+        assert not any(
             finding["rule_id"] == "mix.rendered_master_features"
             for finding in mix["findings"]
         )

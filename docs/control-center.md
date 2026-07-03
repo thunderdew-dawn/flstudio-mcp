@@ -67,9 +67,18 @@ names, colors, and cleanup candidates.
 Project review panels show Runtime reports with their available evidence,
 freshness, coverage, assumptions, and limitations. Static project metadata can
 flag suspicious mix or routing conditions, but audio-backed claims require live
-meter capture or a linked rendered audio artifact. The Audio Evidence workflow
-uses `/api/audio-analysis` to run offline analysis of user-selected files
-without modifying FL Studio projects or source audio.
+meter capture or a linked rendered audio artifact.
+
+Mix Review exposes four evidence levels in the panel. Level 1 is the default
+static review and does not start playback. Level 2 starts or reads a bounded
+8-60 second peak watch for peak/headroom/clipping evidence. Level 3 and Level 4
+let the user prepare rendered-master and stem/bus evidence requests, show linked
+evidence status, and list the checks expected from the external analyzer path;
+they do not claim LUFS, true peak, masking, phase, or spectrum facts in this
+beta without analyzer results.
+
+The Audio Evidence workflow uses `/api/audio-analysis` to run offline analysis
+of user-selected files without modifying FL Studio projects or source audio.
 
 Workflow actions remain safety-gated. Cleanup or write-capable follow-ups must
 start with a read-only scan, propose one reversible action, wait for explicit

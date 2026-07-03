@@ -7,6 +7,7 @@ import contextlib
 import ipaddress
 import json
 import os
+from copy import deepcopy
 import platform
 import socket
 import subprocess
@@ -39,20 +40,36 @@ from .analysis import (
     StaticSnapshotPolicy,
     analysis_report_for_control_center,
     confidence_from_coverage,
+    get_analysis_broker,
+    get_report_store,
     heuristic_validation_metadata,
+    low_end_evidence_metadata,
     low_end_health_score,
     mix_health_score,
     mixer_entity_id,
+    normalize_low_end_genre_profile,
     organizer_score,
     pending_human_validation_ids,
     provisional_score_metadata,
     risk_from_severities,
     routing_analysis_report_from_legacy_payload,
+    routing_checks,
     routing_health_score,
+    weighted_low_end_risk,
+    weighted_mix_review_risk,
 )
+from .analysis.health_aggregator import aggregate_project_health
 from .analysis.live import LiveMeterPolicy
 from .connection import DEFAULT_TCP_HOST, DEFAULT_TCP_PORT, TCPBridge, fetch_all_pages
 from .music import mix_doctor as mix_review
+from .music.mix_review_levels import (
+    RENDERED_MASTER_EXPECTED_CHECKS,
+    RENDERED_STEM_EXPECTED_CHECKS,
+    STEM_ROLES,
+    MixReviewLevel,
+    allow_inline_live_meter,
+    normalize_mix_review_options,
+)
 from .rules import RuleCondition, RuleDefinition, evaluate_rules
 from .runtime.audio_worker import AUDIO_FEATURE_JOB_KIND, build_audio_job_request
 from .runtime.client import RuntimeClient
@@ -93,6 +110,13 @@ MIX_REVIEW_HEURISTIC_RULES = {
     "ungrouped",
     "eq_clash",
 }
+MIX_REVIEW_FINDING_DECISION_REQUEST_IDS = {
+    "mix_review.confirm_finding",
+    "mix_review.accept_finding",
+    "mix_review.reject_finding",
+    "mix_review.ignore_finding",
+}
+MIX_REVIEW_FIX_PLAN_APPROVAL_REQUEST_ID = "mix_review.approve_fix_plan"
 CONTROL_CENTER_TRANSPORT_ACTIONS = {
     "get_play_state",
     "get_song_position",
@@ -153,10 +177,7 @@ def _normalize_user_decision(row: Any) -> dict[str, Any] | None:
 
 def _user_decision_request_id(row: dict[str, Any]) -> str:
     return str(
-        row.get("interaction_request_id")
-        or row.get("interaction_id")
-        or row.get("id")
-        or ""
+        row.get("interaction_request_id") or row.get("interaction_id") or row.get("id") or ""
     ).strip()
 
 
@@ -236,6 +257,20 @@ class ManagedProcess:
         }
 
 
+def _initial_status_report() -> dict[str, Any]:
+    try:
+        return collect_status_report(offline=True, mode="quick")
+    except Exception as exc:
+        return {
+            "bridge": {
+                "state": "unknown",
+                "error": f"{type(exc).__name__}: {exc}",
+            },
+            "project": {},
+            "status_mode": "quick",
+        }
+
+
 class ControlCenterState:
     def __init__(
         self,
@@ -257,6 +292,7 @@ class ControlCenterState:
         self.daemon_fallback_port: int | None = None
         self.admin_enabled: bool = admin_enabled
         self.runtime_client = RuntimeClient(daemon_host, daemon_port)
+        self.broker = get_analysis_broker()
         self.workflow_registry = workflow_registry or build_effective_workflow_registry(
             DEFAULT_WORKFLOW_REGISTRY,
             (),
@@ -264,6 +300,9 @@ class ControlCenterState:
         self.checkpoints: dict[str, dict[str, Any]] = {}
         self.processes: dict[str, ManagedProcess] = {}
         self.last_findings: list[doctor.Finding] = []
+        self.last_diagnostic_at: str | None = None
+        self.diagnostics_available: bool = False
+        self.last_status_report: dict[str, Any] = _initial_status_report()
         self.daemon_autostart_attempted = False
         self.daemon_autostart: dict[str, Any] = {
             "state": "pending",
@@ -285,68 +324,130 @@ class ControlCenterState:
             self.processes.clear()
 
 
-def collect_status(state: ControlCenterState, *, refresh: bool = True) -> dict[str, Any]:
+def collect_status(
+    state: ControlCenterState,
+    *,
+    refresh: bool = True,
+    status_mode: str = "full",
+) -> dict[str, Any]:
     """Collect Control Center status without mutating FL Studio project state."""
+    if status_mode not in {"full", "quick", "diagnose"}:
+        status_mode = "full"
+    perform_diagnostics = refresh or status_mode == "diagnose"
+    cached_status_report: dict[str, Any] | None = None
+
     with state.lock:
         daemon_host, daemon_port = _selected_daemon_endpoint(state)
-        if refresh or not state.last_findings:
-            state.last_findings = _run_doctor_checks(state, daemon_host, daemon_port)
-            autostart = _auto_start_daemon_if_ready(state, state.last_findings)
-            if autostart.get("rerun_checks"):
-                daemon_host, daemon_port = _selected_daemon_endpoint(state)
-                state.last_findings = _run_doctor_checks(state, daemon_host, daemon_port)
-        findings = [finding.to_dict() for finding in state.last_findings]
-        groups = _group_findings(state.last_findings)
-        readiness = _readiness(state.last_findings, state.checkpoints)
-        _sync_sse_probe_state(state, refresh=refresh)
-        process_state = _process_status(state)
-        ports = _port_state(state)
+        findings = list(state.last_findings)
+        last_diagnostic_at = state.last_diagnostic_at
+        diagnostics_available = state.diagnostics_available
+        workflow_registry = state.workflow_registry
+        if status_mode == "quick" and not refresh:
+            cached_status_report = state.last_status_report
+            if not isinstance(cached_status_report, dict):
+                cached_status_report = None
+            else:
+                cached_status_report = deepcopy(cached_status_report)
+
+    if perform_diagnostics:
+        findings = _run_doctor_checks(state, daemon_host, daemon_port)
+        autostart = _auto_start_daemon_if_ready(state, findings)
+        if autostart.get("rerun_checks"):
+            daemon_host, daemon_port = _selected_daemon_endpoint(state)
+            findings = _run_doctor_checks(state, daemon_host, daemon_port)
+            _auto_start_daemon_if_ready(state, findings)
+        with state.lock:
+            state.last_findings = findings
+            state.last_diagnostic_at = _now_iso()
+            state.diagnostics_available = bool(findings or state.last_findings is not None)
+            last_diagnostic_at = state.last_diagnostic_at
+            diagnostics_available = state.diagnostics_available
+
+    _sync_sse_probe_state(state, refresh=refresh)
+
+    if status_mode == "quick" and not refresh:
+        if cached_status_report is not None:
+            status_report_data = cached_status_report
+        else:
+            status_report_data = collect_status_report(
+                offline=True,
+                mode="quick",
+            )
+    else:
+        report_mode = "full" if status_mode in {"full", "diagnose"} else "quick"
         status_report_data = collect_status_report(
             offline=False,
             bridge_factory=lambda: TCPBridge(daemon_host, daemon_port),
+            mode=report_mode,
         )
+        with state.lock:
+            state.last_status_report = deepcopy(status_report_data)
+
+    status_report_data["status_mode"] = status_mode
+    status_report_data["diagnostics_available"] = diagnostics_available
+    status_report_data["last_diagnostic_at"] = last_diagnostic_at
+
+    with state.lock:
+        process_state = _process_status(state)
+        ports = _port_state(state)
+        automation = {"daemon_autostart": dict(state.daemon_autostart)}
+        mcp = {"sse_probe": dict(state.sse_probe)}
+        if last_diagnostic_at is None:
+            last_diagnostic_at = state.last_diagnostic_at
+            diagnostics_available = state.diagnostics_available
+        if last_diagnostic_at is None:
+            diagnostics_available = False
+        findings_payload = [finding.to_dict() for finding in findings]
+        checkpoints_payload = dict(state.checkpoints)
+        readiness = _readiness(findings, checkpoints_payload)
+        groups = _group_findings(findings)
         ui = _ui_payload(
             status_report=status_report_data,
             readiness=readiness,
             processes=process_state,
             ports=ports,
-            workflow_registry=state.workflow_registry,
+            workflow_registry=workflow_registry,
         )
-        return {
-            "version": PROJECT_VERSION,
-            "generated_at": _now_iso(),
-            "platform": {
-                "system": platform.system(),
-                "release": platform.release(),
-                "python": sys.version.split()[0],
-                "executable": sys.executable,
-            },
-            "control_center": {
-                "host": state.host,
-                "port": state.port,
-                "url": f"http://{state.host}:{state.port}/",
-                "started_at": state.started_at,
-            },
-            "ports": ports,
-            "readiness": readiness,
-            "groups": groups,
-            "findings": findings,
-            "checkpoints": dict(state.checkpoints),
-            "processes": process_state,
-            "automation": {"daemon_autostart": dict(state.daemon_autostart)},
-            "mcp": {"sse_probe": dict(state.sse_probe)},
-            "setup_guidance": _setup_guidance(
-                groups=groups,
-                readiness=readiness,
-                processes=process_state,
-                ports=ports,
-                daemon_autostart=state.daemon_autostart,
-                sse_probe=state.sse_probe,
-            ),
-            "snippets": client_snippets(state),
-            "status_report": status_report_data,
-            "ui": ui,
-        }
+        setup_guidance = _setup_guidance(
+            groups=groups,
+            readiness=readiness,
+            processes=process_state,
+            ports=ports,
+            daemon_autostart=state.daemon_autostart,
+            sse_probe=state.sse_probe,
+        )
+
+    return {
+        "version": PROJECT_VERSION,
+        "generated_at": _now_iso(),
+        "platform": {
+            "system": platform.system(),
+            "release": platform.release(),
+            "python": sys.version.split()[0],
+            "executable": sys.executable,
+        },
+        "control_center": {
+            "host": state.host,
+            "port": state.port,
+            "url": f"http://{state.host}:{state.port}/",
+            "started_at": state.started_at,
+        },
+        "ports": ports,
+        "readiness": readiness,
+        "groups": groups,
+        "findings": findings_payload,
+        "checkpoints": checkpoints_payload,
+        "processes": process_state,
+        "automation": automation,
+        "mcp": mcp,
+        "setup_guidance": setup_guidance,
+        "status_mode": status_mode,
+        "diagnostics_available": diagnostics_available,
+        "last_diagnostic_at": last_diagnostic_at,
+        "snippets": client_snippets(state),
+        "status_report": status_report_data,
+        "ui": ui,
+    }
 
 
 def _ui_payload(
@@ -358,9 +459,8 @@ def _ui_payload(
     workflow_registry: WorkflowRegistry = DEFAULT_WORKFLOW_REGISTRY,
 ) -> dict[str, Any]:
     return {
-        "workflow_catalog": [
-            dict(item) for item in workflow_registry.control_center_catalog()
-        ],
+        "workflow_catalog": [dict(item) for item in workflow_registry.control_center_catalog()],
+        "template_profile_catalog": routing_checks.template_profile_catalog(),
         "next_action": _ui_next_action(
             status_report=status_report,
             readiness=readiness,
@@ -500,7 +600,11 @@ def _control_transport(state: ControlCenterState, body: dict[str, Any]) -> dict[
                 "transport": {"state": "unavailable"},
             }
         if action == "get_status":
-            return {"ok": True, "action": action, "transport": _transport_snapshot_from_bridge(bridge)}
+            return {
+                "ok": True,
+                "action": action,
+                "transport": _transport_snapshot_from_bridge(bridge),
+            }
         if action not in CONTROL_CENTER_TRANSPORT_ACTIONS:
             return {"ok": False, "error": f"Unsupported transport action: {action}"}
         try:
@@ -529,6 +633,71 @@ def _control_transport(state: ControlCenterState, body: dict[str, Any]) -> dict[
     finally:
         with contextlib.suppress(Exception):
             bridge.close()
+
+
+def _control_mix_watch(state: ControlCenterState, body: dict[str, Any]) -> dict[str, Any]:
+    """Run one read-only Mix Review peak-watch action for the local GUI."""
+
+    action = str(body.get("action") or "status").strip().lower()
+    params = dict(body.get("params") or {}) if isinstance(body.get("params"), dict) else {}
+    if action == "status":
+        return {"ok": True, "watch": mix_review.get_watcher().status()}
+    if action not in {"start", "stop"}:
+        return {"ok": False, "error": "action must be start, status, or stop"}
+
+    daemon_host, daemon_port = _selected_daemon_endpoint(state)
+    bridge = TCPBridge(daemon_host, daemon_port)
+    keep_bridge_open = False
+    try:
+        wait = getattr(bridge, "wait_for_heartbeat", None)
+        if callable(wait):
+            wait(timeout=1.0)
+        if not bool(getattr(bridge, "is_alive", lambda: False)()):
+            return {
+                "ok": False,
+                "state": "unavailable",
+                "error": "No fresh FL Studio controller heartbeat.",
+                "watch": mix_review.get_watcher().status(),
+            }
+        if action == "start":
+            interval_ms = max(50, min(int(params.get("interval_ms") or 150), 1000))
+            loop_seconds = max(8, min(int(params.get("loop_seconds") or 16), 60))
+            tracks = fetch_all_pages(bridge, protocol.CMD_MIXER_LIST_TRACKS, "tracks").get(
+                "tracks", []
+            )
+            indices = [row.get("i", row.get("index")) for row in tracks]
+            result = mix_review.get_watcher().start(
+                bridge,
+                indices,
+                interval_ms=interval_ms,
+                max_seconds=loop_seconds + 5,
+                close_on_finish=True,
+            )
+            keep_bridge_open = bool(result.get("ok"))
+            return {
+                "ok": bool(result.get("ok")),
+                "result": result,
+                "watch": mix_review.get_watcher().status(),
+                "loop_seconds": loop_seconds,
+            }
+        peaks, reads, elapsed = mix_review.get_watcher().stop()
+        return {
+            "ok": True,
+            "watch": mix_review.get_watcher().status(),
+            "peaks_captured": sum(1 for value in peaks.values() if value and value > 0),
+            "reads": reads,
+            "elapsed_s": round(elapsed, 1),
+        }
+    except Exception as exc:
+        return {
+            "ok": False,
+            "error": f"{type(exc).__name__}: {exc}",
+            "watch": mix_review.get_watcher().status(),
+        }
+    finally:
+        if not keep_bridge_open:
+            with contextlib.suppress(Exception):
+                bridge.close()
 
 
 def _ui_service_action(
@@ -662,21 +831,15 @@ def _run_audio_analysis_action(
         link_requested = bool(payload.get("link_evidence"))
         if artifact_id and link_requested:
             targets = payload.get("workflow_targets") or []
-            if not isinstance(targets, list) or not all(
-                isinstance(item, str) for item in targets
-            ):
+            if not isinstance(targets, list) or not all(isinstance(item, str) for item in targets):
                 raise ValueError("workflow_targets must be a list of workflow ids")
             response["report"] = client.run_workflow(
                 "audio_evidence",
                 inputs={
                     "artifact_id": artifact_id,
-                    "evidence_kind": str(
-                        payload.get("evidence_kind") or "rendered_master"
-                    ),
+                    "evidence_kind": str(payload.get("evidence_kind") or "rendered_master"),
                     "stem_role": (
-                        str(payload["stem_role"]).strip()
-                        if payload.get("stem_role")
-                        else None
+                        str(payload["stem_role"]).strip() if payload.get("stem_role") else None
                     ),
                     "workflow_links": [item.strip() for item in targets if item.strip()],
                     "confirmed_by_user": bool(payload.get("confirmed_by_user")),
@@ -685,6 +848,128 @@ def _run_audio_analysis_action(
         return response
     except Exception as exc:
         return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+
+
+def _project_health_payload(state: ControlCenterState) -> dict[str, Any]:
+    local_payload = aggregate_project_health(get_report_store())
+    try:
+        payload = _runtime_client(state).project_health()
+    except Exception as exc:
+        payload = local_payload
+        payload["error"] = f"{type(exc).__name__}: {exc}"
+        payload["overall_status"] = (
+            "unavailable" if not payload.get("sections") else payload.get("overall_status")
+        )
+    else:
+        if _stored_health_report_count(local_payload) > _stored_health_report_count(payload):
+            payload = local_payload
+    payload["ui_state"] = _project_health_ui_state(payload)
+    return payload
+
+
+def _stored_health_report_count(payload: dict[str, Any]) -> int:
+    return sum(
+        1
+        for row in payload.get("sections") or ()
+        if isinstance(row, dict) and row.get("report_id")
+    )
+
+
+def _project_health_ui_state(payload: dict[str, Any]) -> dict[str, Any]:
+    sections = [row for row in payload.get("sections") or [] if isinstance(row, dict)]
+    fresh_sections = [
+        row for row in sections if row.get("freshness") in {"fresh", "partial"}
+    ]
+    missing = [
+        row
+        for row in sections
+        if row.get("freshness") in {"missing", "unavailable"} or row.get("report_id") is None
+    ]
+    stale = [row for row in sections if row.get("freshness") == "stale"]
+    health = _clamped_score_or_none(payload.get("overall_health_score"))
+    risk = _clamped_score_or_none(payload.get("overall_risk_score"))
+    status = "succeeded"
+    phase = "complete"
+    if payload.get("error") and not fresh_sections:
+        status = "failed"
+        phase = "unavailable"
+    elif stale:
+        status = "stale"
+    elif missing:
+        status = "succeeded"
+        phase = "partial"
+    return {
+        "status": status,
+        "phase": phase,
+        "started_at": None,
+        "completed_at": _now_iso(),
+        "elapsed_ms": None,
+        "freshness": {
+            "status": payload.get("overall_status") or "unknown",
+            "fresh_sections": len(fresh_sections),
+            "stale_sections": len(stale),
+            "missing_sections": len(missing),
+        },
+        "score_summary": {
+            "status": _project_health_score_status(
+                health=health,
+                risk=risk,
+                sections=sections,
+                missing=missing,
+                stale=stale,
+            ),
+            "health_score": health,
+            "risk_score": risk if health is not None and not missing and not stale else None,
+            "coverage": {
+                "available": len(fresh_sections),
+                "required": len(sections),
+                "score": payload.get("overall_coverage_pct"),
+                "status": "fresh" if sections and not missing and not stale else "partial",
+            },
+            "confidence_score": _clamped_score_or_none(
+                payload.get("overall_confidence_score")
+            ),
+            "evidence_mode": "workflow_reports",
+            "score_status": "final" if health is not None and not missing and not stale else "partial",
+            "human_validation_required": any(
+                bool(row.get("human_validation_required"))
+                for row in sections
+            ),
+        },
+        "interaction_requests": [],
+    }
+
+
+def _project_health_score_status(
+    *,
+    health: int | None,
+    risk: int | None,
+    sections: list[dict[str, Any]],
+    missing: list[dict[str, Any]],
+    stale: list[dict[str, Any]],
+) -> str:
+    if not sections or all(row.get("report_id") is None for row in sections):
+        return "not_run"
+    if stale:
+        return "stale"
+    if missing or health is None:
+        return "needs_review"
+    if risk is None:
+        return "unavailable"
+    if risk >= 50:
+        return "blocked"
+    if risk >= 26:
+        return "at_risk"
+    if risk >= 11:
+        return "needs_review"
+    return "ok"
+
+
+def _clamped_score_or_none(value: Any) -> int | None:
+    try:
+        return max(0, min(100, round(float(value))))
+    except (TypeError, ValueError):
+        return None
 
 
 def _ui_service_detail(
@@ -1022,7 +1307,7 @@ def client_snippets(state: ControlCenterState) -> dict[str, Any]:
 
 
 def setup_report(state: ControlCenterState) -> str:
-    status = collect_status(state, refresh=False)
+    status = collect_status(state, refresh=True, status_mode="diagnose")
     lines = [
         "# fls-pilot setup report",
         "",
@@ -1116,29 +1401,48 @@ LOW_END_METADATA_RULES = (
 def _collect_mix_snapshot(
     state: ControlCenterState,
     bridge: TCPBridge,
+    *,
+    options: Any | None = None,
 ) -> dict[str, Any]:
+    mix_options = normalize_mix_review_options(options) if options is not None else None
     static_snapshot = state.broker.get_static_project_snapshot(
         bridge,
         StaticSnapshotPolicy(),
     )
     watcher = mix_review.get_watcher()
-    live_window = state.broker.get_live_meter_window(
-        bridge,
-        policy=LiveMeterPolicy(require_playing=False, min_capture_seconds=30.0),
-        watcher_provider=watcher,
-        static_snapshot=static_snapshot,
-    )
+    live_window = None
+    if mix_options is None:
+        live_window = state.broker.get_live_meter_window(
+            bridge,
+            policy=LiveMeterPolicy(require_playing=False, min_capture_seconds=30.0),
+            watcher_provider=watcher,
+            static_snapshot=static_snapshot,
+        )
+    elif mix_options.level == MixReviewLevel.LIVE_WATCH:
+        live_window = state.broker.get_live_meter_window(
+            bridge,
+            policy=LiveMeterPolicy(
+                require_playing=False,
+                min_capture_seconds=float(mix_options.capture.loop_seconds),
+            ),
+            watcher_provider=watcher,
+            static_snapshot=static_snapshot,
+        )
     watch_peaks = (
         {int(track): peak for track, peak in live_window.track_meter_summaries.items()}
-        if live_window.freshness == "fresh"
+        if live_window and live_window.freshness == "fresh"
         else None
     )
-    return mix_review.gather_snapshot(
+    snapshot = mix_review.gather_snapshot(
         bridge,
         peaks_override=watch_peaks or None,
         live_window=live_window,
         static_snapshot=static_snapshot,
+        allow_live_meter=allow_inline_live_meter(mix_options),
     )
+    if mix_options is not None:
+        snapshot["mix_review_options"] = mix_options.to_dict()
+    return snapshot
 
 
 def _run_mix_review(
@@ -1148,17 +1452,19 @@ def _run_mix_review(
     inputs: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Run the read-only Mix Review workflow for the Control Center UI."""
+    options = normalize_mix_review_options(inputs or {})
     user_decisions = _extract_user_decisions(inputs or {})
     if bridge_override is None and hasattr(state, "runtime_client"):
         try:
             return _runtime_client(state).run_workflow("mix_review", inputs=inputs or {})
         except Exception as exc:
-            report = _mix_review_unavailable_report(f"{type(exc).__name__}: {exc}")
+            report = _mix_review_unavailable_report(
+                f"{type(exc).__name__}: {exc}",
+                options=options,
+            )
             if user_decisions:
                 report["user_decisions"] = [dict(row) for row in user_decisions]
-            analysis = _generic_analysis_report_from_legacy(
-                report, "mix_review", "Mix Review"
-            )
+            analysis = _generic_analysis_report_from_legacy(report, "mix_review", "Mix Review")
             return analysis_report_for_control_center(analysis, report)
     bridge = bridge_override
     owns_bridge = bridge is None
@@ -1177,13 +1483,14 @@ def _run_mix_review(
                 "the connection."
             )
 
-        snapshot = _collect_mix_snapshot(state, bridge)
+        snapshot = _collect_mix_snapshot(state, bridge, options=options)
         snapshot["template_context"] = _resolve_template_context_for_snapshot(
             snapshot,
             user_decisions=user_decisions,
         )
         report_payload = _build_mix_review_report(
             snapshot,
+            options=options,
             user_decisions=user_decisions,
         )
         analysis_report = _generic_analysis_report_from_legacy(
@@ -1191,10 +1498,12 @@ def _run_mix_review(
             "mix_review",
             "Mix Review",
         )
-        analysis_report = state.report_store.add_report(analysis_report)
         return analysis_report_for_control_center(analysis_report, report_payload)
     except Exception as exc:
-        report = _mix_review_unavailable_report(f"{type(exc).__name__}: {exc}")
+        report = _mix_review_unavailable_report(
+            f"{type(exc).__name__}: {exc}",
+            options=options,
+        )
         if user_decisions:
             report["user_decisions"] = [dict(row) for row in user_decisions]
         analysis_report = _generic_analysis_report_from_legacy(
@@ -1202,7 +1511,6 @@ def _run_mix_review(
             "mix_review",
             "Mix Review",
         )
-        analysis_report = state.report_store.add_report(analysis_report)
         return analysis_report_for_control_center(analysis_report, report)
     finally:
         if owns_bridge and bridge is not None:
@@ -1396,9 +1704,7 @@ def _low_end_validation_request(low_end_tracks: list[dict[str, Any]]) -> dict[st
         options.append(
             {
                 "id": (
-                    mixer_entity_id(track)
-                    if track is not None
-                    else f"low_end:candidate:{offset}"
+                    mixer_entity_id(track) if track is not None else f"low_end:candidate:{offset}"
                 ),
                 "label": name,
                 "track": track,
@@ -1488,6 +1794,7 @@ def _mark_validated_findings(
             "provisional": False,
             "validated_by_user": True,
             "validation_source": "user_decision",
+            "finding_state": "accepted",
         }
         out.append(Finding(**{**finding.__dict__, "metadata": metadata}))
     return tuple(out)
@@ -1516,11 +1823,14 @@ def _apply_group_user_decisions(
             "provisional": False,
             "validated_by_user": True,
             "validation_source": "user_decision",
+            "finding_state": "accepted",
         }
         if row_id in intentional_ids:
             updated["user_intent"] = "intentional"
             row["severity"] = "info"
-            row["detail"] = f"{row.get('detail', '').rstrip()} Confirmed intentional by user.".strip()
+            row["detail"] = (
+                f"{row.get('detail', '').rstrip()} Confirmed intentional by user.".strip()
+            )
         row["metadata"] = updated
 
 
@@ -1594,7 +1904,7 @@ def _track_from_entity_id(
     prefix = "mixer:"
     if not entity_id.startswith(prefix):
         return None
-    track = _as_int(entity_id[len(prefix):])
+    track = _as_int(entity_id[len(prefix) :])
     if track is None:
         return None
     for row in tracks:
@@ -1636,6 +1946,283 @@ def _apply_mix_user_decisions(
                 metadata["user_intent"] = "intentional"
                 row["severity"] = "info"
         row["metadata"] = {**dict(row.get("metadata") or {}), **metadata}
+
+
+def _finalize_mix_review_findings(
+    findings: list[dict[str, Any]],
+    *,
+    mix_level: MixReviewLevel,
+    evidence_mode: str,
+    user_decisions: tuple[dict[str, Any], ...],
+) -> None:
+    decisions = _mix_finding_decisions(user_decisions)
+    for row in findings:
+        row_id = str(row.get("id") or "")
+        rule = str(row.get("rule") or "")
+        metadata = dict(row.get("metadata") or {})
+        evidence_level = _mix_finding_evidence_level(mix_level, evidence_mode, rule)
+        finding_state = str(metadata.get("finding_state") or "").strip()
+        if not finding_state:
+            finding_state = _default_mix_finding_state(rule, evidence_level, metadata)
+        decision = decisions.get(row_id)
+        if decision:
+            metadata["user_decision"] = decision
+            metadata["decision_source"] = "user_decision"
+            metadata["human_validation_required"] = False
+            metadata["provisional"] = False
+            if decision == "accepted":
+                finding_state = "accepted_by_user"
+                metadata["validated_by_user"] = True
+            elif decision == "rejected":
+                finding_state = "rejected_by_user"
+            elif decision == "ignored":
+                finding_state = "ignored_by_user"
+        metadata.update(
+            {
+                "evidence_level": evidence_level,
+                "evidence_level_label": _mix_review_level_label(evidence_level),
+                "finding_state": finding_state,
+                "fix_plan_status": _mix_finding_fix_plan_status(rule, finding_state),
+            }
+        )
+        row["metadata"] = metadata
+        row["evidence_level"] = evidence_level
+        row["finding_state"] = finding_state
+        row["fix_plan_status"] = metadata["fix_plan_status"]
+
+
+def _mix_finding_decisions(
+    user_decisions: tuple[dict[str, Any], ...],
+) -> dict[str, str]:
+    out: dict[str, str] = {}
+    for row in user_decisions:
+        request_id = _user_decision_request_id(row)
+        decision = _normalize_mix_finding_decision(row, request_id)
+        if decision is None:
+            continue
+        ids = list(_user_decision_selected_values(row))
+        for key in ("finding_id", "finding"):
+            value = str(row.get(key) or "").strip()
+            if value and value not in ids:
+                ids.append(value)
+        raw_ids = row.get("finding_ids")
+        if isinstance(raw_ids, (list, tuple, set)):
+            ids.extend(str(value).strip() for value in raw_ids if str(value).strip())
+        for finding_id in dict.fromkeys(ids):
+            out[finding_id] = decision
+    return out
+
+
+def _normalize_mix_finding_decision(
+    row: dict[str, Any],
+    request_id: str,
+) -> str | None:
+    decision = str(row.get("decision") or "").strip().lower()
+    if decision in {"accept", "accepted", "confirm", "confirmed", "selected"}:
+        return "accepted"
+    if decision in {"reject", "rejected"}:
+        return "rejected"
+    if decision in {"ignore", "ignored"}:
+        return "ignored"
+    if request_id not in MIX_REVIEW_FINDING_DECISION_REQUEST_IDS:
+        if request_id == MIX_REVIEW_VALIDATION_REQUEST_ID and _user_decision_selected_values(row):
+            return "accepted"
+        return None
+    if request_id in {"mix_review.accept_finding", "mix_review.confirm_finding"}:
+        return "accepted"
+    if request_id == "mix_review.reject_finding":
+        return "rejected"
+    if request_id == "mix_review.ignore_finding":
+        return "ignored"
+    return None
+
+
+def _mix_finding_evidence_level(
+    mix_level: MixReviewLevel,
+    evidence_mode: str,
+    rule: str,
+) -> int:
+    if rule.startswith("rendered_master") or rule.startswith("mix_review.rendered_master"):
+        return 3
+    if "stem" in rule or "kick_bass" in rule:
+        return 4
+    if evidence_mode in {
+        "short_live_snapshot",
+        "recent_live_meter_window",
+        "sufficient_watch_window",
+    }:
+        return max(2, int(mix_level))
+    return int(mix_level) if mix_level >= MixReviewLevel.RENDERED_MASTER else 1
+
+
+def _default_mix_finding_state(
+    rule: str,
+    evidence_level: int,
+    metadata: dict[str, Any],
+) -> str:
+    if bool(metadata.get("human_validation_required")):
+        evidence_type = str(metadata.get("evidence_type") or "")
+        if evidence_type == EVIDENCE_TYPE_NAME_BASED_DETECTION:
+            return "name_based_unconfirmed"
+        return "static_heuristic"
+    if evidence_level >= 4:
+        return "stem_audio_confirmed"
+    if evidence_level == 3:
+        return "rendered_master_proxy"
+    if evidence_level == 2 and rule in {"clipping", "headroom", "master_headroom_risk"}:
+        return "live_meter_supported"
+    if rule in MIX_REVIEW_HEURISTIC_RULES:
+        return "static_heuristic"
+    if str(metadata.get("proof_status") or "").lower() == "provisional":
+        return "metadata_suspected"
+    return "requires_more_evidence" if evidence_level <= 1 else "metadata_suspected"
+
+
+def _mix_review_level_label(level: int) -> str:
+    return {
+        1: "static_project_metadata",
+        2: "live_meter_window",
+        3: "rendered_master_audio",
+        4: "stem_or_bus_audio",
+    }.get(level, "static_project_metadata")
+
+
+def _mix_finding_fix_plan_status(rule: str, finding_state: str) -> str:
+    if finding_state in {"rejected_by_user", "ignored_by_user"}:
+        return "blocked"
+    if rule in {"missing_hpf", "missing_compressor", "eq_clash"}:
+        return "blocked"
+    if finding_state in {"static_heuristic", "name_based_unconfirmed", "metadata_suspected"}:
+        return "blocked"
+    return "draft"
+
+
+def _scored_mix_findings(findings: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        row
+        for row in findings
+        if str((row.get("metadata") or {}).get("finding_state") or row.get("finding_state") or "")
+        not in {"rejected_by_user", "ignored_by_user"}
+    ]
+
+
+def _mix_review_score_metadata(
+    findings: list[dict[str, Any]],
+    *,
+    legacy_health_score: int,
+    pending_validation: tuple[str, ...],
+    mix_options: Any,
+    levels_valid: bool,
+) -> dict[str, Any]:
+    risk_score_v2, score_inputs = weighted_mix_review_risk(
+        tuple(findings),
+        genre_profile=getattr(mix_options, "genre_profile", None),
+        levels_valid=levels_valid,
+    )
+    states = [
+        str((row.get("metadata") or {}).get("finding_state") or row.get("finding_state") or "")
+        for row in findings
+    ]
+    provisional = bool(pending_validation) or (
+        int(mix_options.level) <= 1 and not levels_valid
+    )
+    score_status = "provisional" if provisional else "final"
+    if int(mix_options.level) >= 3 and any(
+        state in {"rendered_master_proxy", "requires_more_evidence"} for state in states
+    ):
+        score_status = "partial" if not pending_validation else "provisional"
+    evidence_weights = [
+        float(row.get("evidence_weight") or 0.0)
+        for row in score_inputs
+        if isinstance(row.get("evidence_weight"), (int, float))
+    ]
+    return {
+        "legacy_score": legacy_health_score,
+        "risk_score_v2": risk_score_v2,
+        "score_status": score_status,
+        "score_inputs": score_inputs,
+        "evidence_weight": round(sum(evidence_weights) / len(evidence_weights), 3)
+        if evidence_weights
+        else 0.0,
+        "decision_adjusted_score": risk_score_v2,
+        "blocked_findings_count": sum(
+            1
+            for row in findings
+            if (row.get("metadata") or {}).get("fix_plan_status") == "blocked"
+        ),
+        "provisional_findings_count": sum(
+            1
+            for state in states
+            if state
+            in {
+                "static_heuristic",
+                "name_based_unconfirmed",
+                "metadata_suspected",
+                "requires_more_evidence",
+                "rendered_master_proxy",
+            }
+        ),
+        "confirmed_findings_count": sum(
+            1
+            for state in states
+            if state
+            in {
+                "live_meter_supported",
+                "stem_audio_confirmed",
+                "user_confirmed",
+                "accepted_by_user",
+            }
+        ),
+    }
+
+
+def _apply_mix_fix_plan_gating(
+    proposals: list[dict[str, Any]],
+    *,
+    findings: list[dict[str, Any]],
+    pending_validation: tuple[str, ...],
+    mix_options: Any,
+    user_decisions: tuple[dict[str, Any], ...],
+) -> list[dict[str, Any]]:
+    approved = _approved_mix_proposal_ids(user_decisions)
+    blocked_tracks = {
+        row.get("track")
+        for row in findings
+        if str((row.get("metadata") or {}).get("finding_state") or "")
+        in {"rejected_by_user", "ignored_by_user"}
+    }
+    out = []
+    for row in proposals:
+        item = dict(row)
+        status = "requires_user_approval" if item.get("actionable") else "draft"
+        blocked_reason = None
+        if str(item.get("id")) in approved:
+            status = "approved"
+        elif item.get("track") in blocked_tracks:
+            status = "blocked"
+            blocked_reason = "user_rejected"
+        elif pending_validation:
+            status = "blocked"
+            blocked_reason = "insufficient_evidence"
+        elif item.get("kind") == "group":
+            status = "blocked"
+            blocked_reason = "role_unconfirmed"
+        elif int(mix_options.level) <= 1 and item.get("kind") == "trim_volume":
+            status = "draft"
+            blocked_reason = "insufficient_evidence"
+        item["fix_plan_status"] = status
+        if blocked_reason:
+            item["blocked_reason"] = blocked_reason
+        item["requires_user_approval"] = status == "requires_user_approval"
+        out.append(item)
+    return out
+
+
+def _approved_mix_proposal_ids(user_decisions: tuple[dict[str, Any], ...]) -> set[str]:
+    decision = _user_decision_for_request(user_decisions, MIX_REVIEW_FIX_PLAN_APPROVAL_REQUEST_ID)
+    if decision is None:
+        return set()
+    return set(_user_decision_selected_values(decision))
 
 
 def _mix_validation_requests(findings: list[dict[str, Any]]) -> tuple[dict[str, Any], ...]:
@@ -1709,13 +2296,10 @@ def _template_profile_validation_request(
         id=TEMPLATE_PROFILE_VALIDATION_REQUEST_ID,
         type="single_select",
         title="Confirm template profile",
-        prompt=(
-            "Multiple template profiles match similarly. Which template is correct?"
-        ),
+        prompt=("Multiple template profiles match similarly. Which template is correct?"),
         options=tuple(options),
         metadata={
-            "reason": template_context.get("ambiguity_reason")
-            or "profile_scores_too_close",
+            "reason": template_context.get("ambiguity_reason") or "profile_scores_too_close",
             "evidence_type": EVIDENCE_TYPE_TEMPLATE_PROFILE_DETECTION,
         },
     ).to_dict()
@@ -1799,14 +2383,41 @@ def _build_low_end_analysis_report(report: dict[str, Any]) -> AnalysisReport:
         user_decisions=user_decisions,
     )
     interaction_requests = tuple(
-        row
-        for row in (_low_end_validation_request(low_end_tracks),)
-        if row is not None
+        row for row in (_low_end_validation_request(low_end_tracks),) if row is not None
     )
     pending_validation = _validation_request_ids(
         findings=findings,
         interaction_requests=interaction_requests,
         user_decisions=user_decisions,
+    )
+    low_end_metadata = low_end_evidence_metadata(2 if levels_valid else 1)
+    low_end_metadata.update(
+        {
+            "audio_evidence_status": "missing",
+            "requires_manual_audio_export": True,
+            "genre_profile": normalize_low_end_genre_profile(
+                report.get("genre_profile") or summary.get("genre_profile")
+            ),
+            "role_confirmation_state": (
+                "user_confirmed"
+                if _user_decision_for_request(user_decisions, LOW_END_VALIDATION_REQUEST_ID)
+                else ("name_based_unconfirmed" if low_end_tracks else "none")
+            ),
+            "finding_state_values": ["unconfirmed", "accepted", "rejected", "ignored"],
+            "evidence_level_4": {
+                "evidence_level": 4,
+                "evidence_level_label": "role_confirmed_bus_or_stem_evidence",
+                "status": "planned",
+                "requires_manual_stem_export": True,
+                "automatic_fl_render": False,
+            },
+            "evidence_level_5": {
+                "evidence_level": 5,
+                "evidence_level_label": "deeper_batch_or_multi_source_evidence",
+                "status": "planned",
+                "automatic_fl_render": False,
+            },
+        }
     )
     limits = _unique_strings(
         [
@@ -1816,10 +2427,7 @@ def _build_low_end_analysis_report(report: dict[str, Any]) -> AnalysisReport:
                 "Low-end detection is based on names plus mixer pan, stereo separation, "
                 "and peak metadata; it is not true phase-correlation analysis."
             ),
-            *[
-                f"Declarative low-end rules were skipped: {error}"
-                for error in rule_errors
-            ],
+            *[f"Declarative low-end rules were skipped: {error}" for error in rule_errors],
         ]
     )
     assumptions = _unique_strings(
@@ -1851,11 +2459,7 @@ def _build_low_end_analysis_report(report: dict[str, Any]) -> AnalysisReport:
             for row in low_end_findings
             if str(row.get("severity", "")).lower() in ("medium", "warning")
         ),
-        low=sum(
-            1
-            for row in low_end_findings
-            if str(row.get("severity", "")).lower() == "low"
-        ),
+        low=sum(1 for row in low_end_findings if str(row.get("severity", "")).lower() == "low"),
         stereo_risks=stereo_risks,
         levels_valid=levels_valid,
     )
@@ -1888,7 +2492,7 @@ def _build_low_end_analysis_report(report: dict[str, Any]) -> AnalysisReport:
             Prerequisite("static_project_snapshot", "ok" if ok else "unavailable"),
             Prerequisite("live_meter_window", "ok" if levels_valid else "missing"),
         ),
-        risk_score=risk,
+        risk_score=weighted_low_end_risk(findings) if findings else risk,
         health_score=health_score,
         confidence_score=confidence,
         findings=findings,
@@ -1914,6 +2518,7 @@ def _build_low_end_analysis_report(report: dict[str, Any]) -> AnalysisReport:
             "low_end_summary": low_end.get("summary") or {},
             "low_end_track_count": len(low_end_tracks),
             "rule_evaluation_errors": rule_errors,
+            **low_end_metadata,
             **provisional_score_metadata(pending_validation),
         },
     )
@@ -1954,6 +2559,7 @@ def _low_end_analysis_finding(
             heuristic_validation_metadata(
                 evidence_type=EVIDENCE_TYPE_NAME_BASED_DETECTION,
                 interaction_request_id=LOW_END_VALIDATION_REQUEST_ID,
+                finding_state="unconfirmed",
             )
         )
     return Finding(
@@ -1992,9 +2598,7 @@ def _low_end_rule_findings(
         stereo_sep = _as_float(track.get("stereo_sep"))
         observation = {
             "track": {
-                "low_end_role": str(
-                    track.get("low_end_role") or _low_end_role(track.get("name"))
-                ),
+                "low_end_role": str(track.get("low_end_role") or _low_end_role(track.get("name"))),
                 "stereo_risk": (
                     pan is not None
                     and abs(pan) >= 0.2
@@ -2017,10 +2621,7 @@ def _low_end_rule_findings(
                     EntityRef(
                         "mixer_track",
                         mixer_entity_id(track_index),
-                        str(
-                            track.get("name")
-                            or _display_track_name(track_index, None)
-                        ),
+                        str(track.get("name") or _display_track_name(track_index, None)),
                     ),
                 )
             findings.append(
@@ -2044,9 +2645,7 @@ def _low_end_rule_findings(
                             "name_based_role": observation["track"]["low_end_role"],
                         },
                     ),
-                    assumptions=(
-                        "The low-end role is inferred from the mixer track name.",
-                    ),
+                    assumptions=("The low-end role is inferred from the mixer track name.",),
                     limitations=(
                         "Mixer metadata cannot prove low-band phase or mono compatibility.",
                     ),
@@ -2055,6 +2654,7 @@ def _low_end_rule_findings(
                         **heuristic_validation_metadata(
                             evidence_type=EVIDENCE_TYPE_NAME_BASED_DETECTION,
                             interaction_request_id=LOW_END_VALIDATION_REQUEST_ID,
+                            finding_state="unconfirmed",
                         ),
                         "declarative_rule": True,
                     },
@@ -2095,7 +2695,147 @@ def _low_end_finding_track_index(
     return track_index_by_name.get(str(track or "").strip().lower())
 
 
-def _mix_review_unavailable_report(message: str) -> dict[str, Any]:
+def _mix_review_level_payload(
+    options: Any,
+    *,
+    peak_source: str | None,
+    live_window: dict[str, Any] | None,
+    linked_master: dict[str, Any] | None = None,
+    linked_stems: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    mix_options = normalize_mix_review_options(options)
+    linked_stems = list(linked_stems or [])
+    requested = mix_options.requested_evidence_summary()
+    watch_status = _mix_watch_status_from_window(peak_source, live_window)
+    master_status = (
+        "available"
+        if linked_master
+        else str(requested["rendered_master"].get("status") or "missing")
+    )
+    stem_status = "available" if linked_stems else requested["rendered_stem_status"]
+    evidence_summary = {
+        "static_snapshot": "available",
+        "live_meter": "available" if peak_source not in {None, "", "none"} else "missing",
+        "watch_window": watch_status,
+        "rendered_master": master_status,
+        "rendered_stems": stem_status,
+    }
+    notes = []
+    limits = []
+    next_actions = []
+    if mix_options.level == MixReviewLevel.STATIC:
+        if evidence_summary["live_meter"] == "available":
+            notes.append(
+                "Current mixer peaks were collected because FL Studio playback was "
+                "running during this Mix Review."
+            )
+            limits.append(
+                "Level 1 remains primarily structural. Current mixer peaks are "
+                "momentary live evidence, not a loud-section or full-song watch window."
+            )
+        else:
+            limits.append(
+                "This is a static project/mixer review. Audio-dependent checks require "
+                "playback, Level 2 watch, Level 3, or Level 4 evidence."
+            )
+    if mix_options.level == MixReviewLevel.LIVE_WATCH and watch_status != "available":
+        if evidence_summary["live_meter"] == "available":
+            notes.append(
+                "Current mixer peaks were collected for this run, but Level 2 Watch "
+                "still needs a fresh bounded capture for loud-section evidence."
+            )
+        next_actions.append(
+            {
+                "type": "level_2_watch",
+                "action": "start_watch",
+                "label": (
+                    "Start Level 2 Watch at the loudest section for 8-60 seconds, "
+                    "then run Mix Review again."
+                ),
+            }
+        )
+        notes.append(
+            "No fresh watch evidence found. Start Level 2 Watch at the loudest "
+            "section, then run Mix Review again."
+        )
+    if mix_options.level >= MixReviewLevel.RENDERED_MASTER:
+        notes.append(
+            "Rendered master evidence is prepared, but audio feature analysis is "
+            "pending the external analyzer integration."
+        )
+        if master_status != "available":
+            next_actions.append(
+                {
+                    "type": "audio_evidence",
+                    "action": "submit_rendered_master",
+                    "label": "Prepare or link a manually bounced rendered master.",
+                    "workflow_target": "mix_review",
+                }
+            )
+    if mix_options.level >= MixReviewLevel.RENDERED_STEMS:
+        notes.append(
+            "Stem/bus evidence is prepared, but stem feature analysis is pending "
+            "the external analyzer integration."
+        )
+        if stem_status != "available":
+            next_actions.append(
+                {
+                    "type": "audio_evidence",
+                    "action": "submit_rendered_stems",
+                    "label": "Prepare or link stem/bus files by role.",
+                    "workflow_target": "mix_review",
+                }
+            )
+    return {
+        "mix_review": {
+            "level": int(mix_options.level),
+            "level_label": mix_options.level_label,
+            "genre_profile": mix_options.genre_profile,
+            "capture": mix_options.capture.to_dict(),
+            "evidence_summary": evidence_summary,
+            "audio_evidence_requests": requested,
+            "linked_rendered_master": linked_master,
+            "linked_rendered_stems": linked_stems,
+            "expected_checks": mix_options.expected_checks(),
+            "level_3_expected_checks": list(RENDERED_MASTER_EXPECTED_CHECKS),
+            "level_4_expected_checks": list(RENDERED_STEM_EXPECTED_CHECKS),
+            "stem_roles": list(STEM_ROLES),
+            "external_audio_analyzer": {
+                "required_for_level_3_4": mix_options.level >= MixReviewLevel.RENDERED_MASTER,
+                "available": False,
+                "status": "not_merged_yet",
+            },
+        },
+        "notes": notes,
+        "limits": limits,
+        "next_actions": next_actions,
+    }
+
+
+def _mix_watch_status_from_window(
+    peak_source: str | None,
+    live_window: dict[str, Any] | None,
+) -> str:
+    if peak_source == "watch":
+        return "available"
+    if isinstance(live_window, dict):
+        freshness = str(live_window.get("freshness") or "").strip().lower()
+        if freshness in {"fresh", "stale", "partial", "unavailable"}:
+            return "available" if freshness == "fresh" else freshness
+    return "missing"
+
+
+def _mix_review_unavailable_report(
+    message: str,
+    *,
+    options: Any | None = None,
+) -> dict[str, Any]:
+    mix_options = normalize_mix_review_options(options)
+    level_metadata = _mix_review_level_payload(
+        mix_options,
+        peak_source="none",
+        live_window=None,
+    )
     return {
         "ok": False,
         "state": "unavailable",
@@ -2125,6 +2865,8 @@ def _mix_review_unavailable_report(message: str) -> dict[str, Any]:
             "eq_coverage_pct": 0,
             "compressor_coverage_pct": 0,
             "low_end_findings": 0,
+            "mix_review_level": int(mix_options.level),
+            "level_label": mix_options.level_label,
         },
         "findings": [
             {
@@ -2148,8 +2890,14 @@ def _mix_review_unavailable_report(message: str) -> dict[str, Any]:
         },
         "details": {
             "tracks": [],
-            "notes": ["Mix Review is read-only and does not modify FL Studio project state."],
-            "limits": ["Level findings require playback or a recent Mix Review watch capture."],
+            "notes": [
+                "Mix Review is read-only and does not modify FL Studio project state.",
+                *level_metadata["notes"],
+            ],
+            "limits": [
+                "Level findings require playback or a recent Mix Review watch capture.",
+                *level_metadata["limits"],
+            ],
             "gather_errors": [],
             "low_end": {
                 "summary": {},
@@ -2159,6 +2907,14 @@ def _mix_review_unavailable_report(message: str) -> dict[str, Any]:
             },
             "kb_policy_refs": kb_policy.rule_refs(MIX_POLICY_RULE_IDS),
         },
+        "mix_review": level_metadata["mix_review"],
+        "next_actions": level_metadata["next_actions"],
+        "metadata": {
+            "mix_review_level": int(mix_options.level),
+            "level_label": mix_options.level_label,
+            "evidence_summary": level_metadata["mix_review"]["evidence_summary"],
+            "external_audio_analyzer": level_metadata["mix_review"]["external_audio_analyzer"],
+        },
         "safety": {"read_only": True, "project_changes": False},
     }
 
@@ -2166,9 +2922,11 @@ def _mix_review_unavailable_report(message: str) -> dict[str, Any]:
 def _build_mix_review_report(
     snapshot: dict[str, Any],
     *,
+    options: Any | None = None,
     user_decisions: tuple[dict[str, Any], ...] = (),
 ) -> dict[str, Any]:
-    diagnosis = mix_review.diagnose(snapshot)
+    mix_options = normalize_mix_review_options(options or snapshot.get("mix_review_options"))
+    diagnosis = mix_review.diagnose(snapshot, mix_review_level=mix_options.level)
     fix_plan = mix_review.plan_fixes(snapshot)
     gain_plan = mix_review.gain_stage_plan(snapshot)
     band_balance = mix_review.mix_band_balance(snapshot)
@@ -2182,6 +2940,23 @@ def _build_mix_review_report(
         for index, finding in enumerate(diagnosis.get("findings") or [], start=1)
     ]
     _apply_mix_user_decisions(findings, user_decisions)
+    evidence_mode = diagnosis.get("evidence_mode", "static_snapshot_only")
+    _finalize_mix_review_findings(
+        findings,
+        mix_level=mix_options.level,
+        evidence_mode=evidence_mode,
+        user_decisions=user_decisions,
+    )
+    low_end_findings = [
+        _mix_finding_summary(finding, index=index)
+        for index, finding in enumerate(low_end.get("findings") or [], start=1)
+    ]
+    _finalize_mix_review_findings(
+        low_end_findings,
+        mix_level=mix_options.level,
+        evidence_mode=evidence_mode,
+        user_decisions=user_decisions,
+    )
     proposals = _mix_proposal_summaries(
         list(fix_plan.get("plans") or []),
         list(gain_plan.get("plans") or []),
@@ -2209,17 +2984,41 @@ def _build_mix_review_report(
         user_decisions=user_decisions,
     )
     proposals = _blocked_until_validation(proposals, pending_validation)
-    high = sum(1 for row in findings if row["severity"] == "high")
-    medium = sum(1 for row in findings if row["severity"] == "medium")
-    low = sum(1 for row in findings if row["severity"] == "low")
+    proposals = _apply_mix_fix_plan_gating(
+        proposals,
+        findings=findings,
+        pending_validation=pending_validation,
+        mix_options=mix_options,
+        user_decisions=user_decisions,
+    )
+    scored_findings = _scored_mix_findings(findings)
+    high = sum(1 for row in scored_findings if row["severity"] == "high")
+    medium = sum(1 for row in scored_findings if row["severity"] == "medium")
+    low = sum(1 for row in scored_findings if row["severity"] == "low")
     levels_valid = bool(snapshot.get("levels_valid"))
     master_peak = _as_float(master.get("peak_db")) if master else None
+    peak_source = (snapshot.get("peak_window") or {}).get("source")
+    live_window = (
+        snapshot.get("live_window") if isinstance(snapshot.get("live_window"), dict) else None
+    )
+    level_payload = _mix_review_level_payload(
+        mix_options,
+        peak_source=peak_source,
+        live_window=live_window,
+    )
     health_score = mix_health_score(
         high=high,
         medium=medium,
         low=low,
         levels_valid=levels_valid,
         master_peak=master_peak,
+    )
+    score_metadata = _mix_review_score_metadata(
+        [*findings, *low_end_findings],
+        legacy_health_score=health_score,
+        pending_validation=pending_validation,
+        mix_options=mix_options,
+        levels_valid=levels_valid,
     )
     audible = [row for row in used_tracks if _as_int(row.get("index")) != 0 and not row.get("mute")]
     eq_count = sum(1 for row in audible if _mix_has_plugin_keyword(row, ("eq",)))
@@ -2239,12 +3038,13 @@ def _build_mix_review_report(
     master_headroom = -master_peak if master_peak is not None else None
 
     notes = [
+        *level_payload["notes"],
         *list(diagnosis.get("notes") or []),
         *list(fix_plan.get("notes") or []),
         *list(gain_plan.get("notes") or []),
         *list(low_end.get("notes") or []),
     ]
-    limits = []
+    limits = [*level_payload["limits"]]
     if not levels_valid:
         limits.append("Level findings require playback or a recent full-song watch capture.")
     limits.append("Tone balance is a rough name-and-peak estimate, not an output spectrum.")
@@ -2279,6 +3079,8 @@ def _build_mix_review_report(
             "eq_coverage_pct": _coverage_pct(eq_count, len(audible)),
             "compressor_coverage_pct": _coverage_pct(comp_count, len(audible)),
             "low_end_findings": len(low_end.get("findings") or []),
+            "mix_review_level": int(mix_options.level),
+            "level_label": mix_options.level_label,
         },
         "findings": findings,
         "proposals": proposals,
@@ -2300,23 +3102,43 @@ def _build_mix_review_report(
             "low_end": {
                 "summary": low_end.get("summary") or {},
                 "tracks": list(low_end.get("low_end_tracks") or []),
-                "findings": [
-                    _mix_finding_summary(finding, index=index)
-                    for index, finding in enumerate(low_end.get("findings") or [], start=1)
-                ],
+                "findings": low_end_findings,
                 "manual_checks": list(low_end.get("manual_checks") or []),
             },
             "kb_policy_refs": kb_policy.rule_refs(MIX_POLICY_RULE_IDS),
         },
+        "mix_review": level_payload["mix_review"],
+        "next_actions": level_payload["next_actions"],
         "interaction_requests": list(interaction_requests),
         "user_decisions": [dict(row) for row in user_decisions],
-        "metadata": provisional_score_metadata(pending_validation),
+        "metadata": {
+            **provisional_score_metadata(pending_validation),
+            **score_metadata,
+            "mix_review_level": int(mix_options.level),
+            "level_label": mix_options.level_label,
+            "genre_profile": mix_options.genre_profile,
+            "capture": mix_options.capture.to_dict(),
+            "evidence_summary": level_payload["mix_review"]["evidence_summary"],
+            "external_audio_analyzer": level_payload["mix_review"]["external_audio_analyzer"],
+            "expected_checks": level_payload["mix_review"]["expected_checks"],
+        },
         "safety": {"read_only": True, "project_changes": False},
     }
 
 
 def _mix_finding_summary(finding: dict[str, Any], *, index: int) -> dict[str, Any]:
     rule = str(finding.get("rule") or "finding")
+    metadata = {
+        key: finding[key]
+        for key in (
+            "evidence_type",
+            "proof_status",
+            "confidence",
+            "requires_audio_evidence_for_confirmation",
+            "mix_review_level",
+        )
+        if key in finding
+    }
     return {
         "id": f"{rule}_{index}",
         "severity": str(finding.get("severity") or "info"),
@@ -2327,6 +3149,13 @@ def _mix_finding_summary(finding: dict[str, Any], *, index: int) -> dict[str, An
         "evidence": finding.get("evidence"),
         "proposed_fix": finding.get("proposed_fix") or {},
         "kb_rule_ids": list(finding.get("kb_rule_ids") or []),
+        "evidence_type": metadata.get("evidence_type", "static_snapshot"),
+        "proof_status": metadata.get("proof_status", "provisional"),
+        "confidence": metadata.get("confidence", "unknown"),
+        "requires_audio_evidence_for_confirmation": bool(
+            metadata.get("requires_audio_evidence_for_confirmation")
+        ),
+        "metadata": metadata,
     }
 
 
@@ -2618,9 +3447,7 @@ def _run_project_organizer(
                 inputs=inputs or {},
             )
         except Exception as exc:
-            report = _project_organizer_unavailable_report(
-                f"{type(exc).__name__}: {exc}"
-            )
+            report = _project_organizer_unavailable_report(f"{type(exc).__name__}: {exc}")
             if user_decisions:
                 report["user_decisions"] = [dict(row) for row in user_decisions]
             analysis = _generic_analysis_report_from_legacy(
@@ -2686,7 +3513,6 @@ def _run_project_organizer(
             "project_organizer",
             "Organizer",
         )
-        analysis_report = state.report_store.add_report(analysis_report)
         return analysis_report_for_control_center(analysis_report, report_payload)
     except Exception as exc:
         report = _project_organizer_unavailable_report(f"{type(exc).__name__}: {exc}")
@@ -2697,7 +3523,6 @@ def _run_project_organizer(
             "project_organizer",
             "Organizer",
         )
-        analysis_report = state.report_store.add_report(analysis_report)
         return analysis_report_for_control_center(analysis_report, report)
     finally:
         if owns_bridge and bridge is not None:
@@ -2727,15 +3552,19 @@ def _generic_analysis_report_from_legacy(
         prereqs.append(Prerequisite("fl_session_alive", "missing"))
 
     if workflow == "mix_review":
+        metadata = dict(report.get("metadata") or {})
+        mix_level = _as_int(metadata.get("mix_review_level", summary.get("mix_review_level"))) or 1
+        evidence_summary = (
+            metadata.get("evidence_summary")
+            if isinstance(metadata.get("evidence_summary"), dict)
+            else {}
+        )
         has_level_evidence = evidence_mode in {
             "short_live_snapshot",
             "recent_live_meter_window",
             "sufficient_watch_window",
         }
-        if has_level_evidence:
-            available += 1
-        else:
-            missing.append("live_meter_window")
+        required = 1
         playback_status = (
             "ok"
             if evidence_mode == "short_live_snapshot"
@@ -2743,12 +3572,24 @@ def _generic_analysis_report_from_legacy(
             if evidence_mode in {"recent_live_meter_window", "sufficient_watch_window"}
             else "missing"
         )
+        if mix_level >= 2:
+            required += 1
+            if has_level_evidence:
+                available += 1
+            else:
+                missing.append("live_meter_window")
+        else:
+            playback_status = "skipped"
         prereqs.extend(
             (
                 Prerequisite("requires_playback", playback_status),
                 Prerequisite(
                     "requires_meter_window",
-                    "ok" if has_level_evidence else "missing",
+                    "ok"
+                    if has_level_evidence
+                    else "missing"
+                    if mix_level >= 2
+                    else "skipped",
                 ),
                 Prerequisite(
                     "requires_recent_watch",
@@ -2756,11 +3597,48 @@ def _generic_analysis_report_from_legacy(
                         "ok"
                         if evidence_mode in {"recent_live_meter_window", "sufficient_watch_window"}
                         else "missing"
+                        if mix_level >= 2
+                        else "skipped"
                     ),
                 ),
             )
         )
-        required = 2
+        if mix_level >= 3:
+            required += 1
+            rendered_master_status = str(evidence_summary.get("rendered_master") or "missing")
+            if rendered_master_status == "available":
+                available += 1
+            else:
+                missing.append("rendered_audio_features")
+            prereqs.append(
+                Prerequisite(
+                    "rendered_audio_features",
+                    "ok" if rendered_master_status == "available" else "missing",
+                    (
+                        "Rendered master analysis is pending the external analyzer integration."
+                        if rendered_master_status != "available"
+                        else None
+                    ),
+                )
+            )
+        if mix_level >= 4:
+            required += 1
+            rendered_stems_status = str(evidence_summary.get("rendered_stems") or "missing")
+            if rendered_stems_status == "available":
+                available += 1
+            else:
+                missing.append("rendered_stem_features")
+            prereqs.append(
+                Prerequisite(
+                    "rendered_stem_features",
+                    "ok" if rendered_stems_status == "available" else "missing",
+                    (
+                        "Stem/bus analysis is pending the external analyzer integration."
+                        if rendered_stems_status != "available"
+                        else None
+                    ),
+                )
+            )
     else:
         required = 1
 
@@ -2792,14 +3670,10 @@ def _generic_analysis_report_from_legacy(
         for index, row in enumerate(legacy_findings, start=1)
     )
     interaction_requests = tuple(
-        dict(row)
-        for row in report.get("interaction_requests") or ()
-        if isinstance(row, dict)
+        dict(row) for row in report.get("interaction_requests") or () if isinstance(row, dict)
     )
     user_decisions = tuple(
-        dict(row)
-        for row in report.get("user_decisions") or ()
-        if isinstance(row, dict)
+        dict(row) for row in report.get("user_decisions") or () if isinstance(row, dict)
     )
     findings = _mark_validated_findings(
         findings,
@@ -2810,8 +3684,15 @@ def _generic_analysis_report_from_legacy(
         interaction_requests=interaction_requests,
         user_decisions=user_decisions,
     )
-    metadata = dict(report.get("metadata") or {})
+    report_metadata = dict(report.get("metadata") or {})
+    metadata = dict(report_metadata)
     metadata.update(provisional_score_metadata(pending_validation))
+    if report_metadata.get("score_status") and not pending_validation:
+        metadata["score_status"] = report_metadata["score_status"]
+    if workflow == "mix_review" and metadata.get("risk_score_v2") is not None:
+        risk_v2 = _as_int(metadata.get("risk_score_v2"))
+        if risk_v2 is not None:
+            risk = risk_v2
 
     return AnalysisReport(
         workflow=workflow,
@@ -2834,6 +3715,9 @@ def _generic_analysis_report_from_legacy(
         findings=findings,
         limitations=tuple(limitations),
         source_observations=tuple(details.get("source_observation_ids") or ()),
+        next_actions=tuple(
+            dict(row) for row in report.get("next_actions") or () if isinstance(row, dict)
+        ),
         interaction_requests=interaction_requests,
         user_decisions=user_decisions,
         safety=report.get("safety") or {"read_only": True},
@@ -2999,7 +3883,8 @@ def _build_project_organizer_report(
     unnamed_playlist_tracks = [
         _organizer_named_item(row, "playlist_track")
         for row in playlist_tracks
-        if _looks_default_named_item(row, "playlist_track")
+        if _playlist_track_has_content_evidence(row)
+        and _looks_default_named_item(row, "playlist_track")
     ]
     duplicate_mixer = _duplicate_name_rows(mixer_tracks, "mixer")
     duplicate_patterns = _duplicate_name_rows(patterns, "pattern")
@@ -3021,7 +3906,6 @@ def _build_project_organizer_report(
         unnamed_playlist_tracks=unnamed_playlist_tracks,
         duplicate_mixer=duplicate_mixer,
         duplicate_patterns=duplicate_patterns,
-        color_readback_missing=color_readback_missing,
         candidate_groups=candidate_groups,
         template_context=template_context,
     )
@@ -3029,7 +3913,6 @@ def _build_project_organizer_report(
         unnamed_channels=unnamed_channels,
         routing_cleanup=routing_cleanup,
         duplicate_mixer=duplicate_mixer,
-        unnamed_patterns=unnamed_patterns,
         candidate_groups=candidate_groups,
     )
     _apply_group_user_decisions(
@@ -3062,6 +3945,7 @@ def _build_project_organizer_report(
         if step.get("kind") in {"channel_naming", "mixer_naming", "pattern_naming"}
     ]
     color_rules = _organizer_color_standard_rules(channels, mixer_tracks)
+    diagnostic_findings = [row for row in findings if row.get("severity") != "ok"]
     score = organizer_score(
         unnamed_channels=len(unnamed_channels),
         routing_cleanup=len(routing_cleanup),
@@ -3085,11 +3969,16 @@ def _build_project_organizer_report(
             "mixer_tracks": len(mixer_tracks),
             "patterns": len(patterns),
             "playlist_tracks": len(playlist_tracks),
-            "diagnostics": len(findings),
+            "diagnostics": len(diagnostic_findings),
             "proposed_changes": len(cleanup_steps),
             "unnamed_channels": len(unnamed_channels),
+            "unnamed_patterns": len(unnamed_patterns),
+            "unnamed_playlist_tracks": len(unnamed_playlist_tracks),
+            "duplicate_mixer_names": len(duplicate_mixer),
+            "duplicate_pattern_names": len(duplicate_patterns),
             "routing_cleanup": len(routing_cleanup),
             "naming_cleanup": len(naming_rules),
+            "color_cleanup": len(color_rules),
             "color_readback_missing": color_readback_missing,
             "grouping_candidates": len(candidate_groups),
         },
@@ -3098,7 +3987,31 @@ def _build_project_organizer_report(
             "steps": cleanup_steps,
             "mode": "proposal",
             "apply_tool": "fl_apply_project_cleanup_step",
+            "scan_tool": "fl_scan_project_organization",
+            "template_plan_tool": "fl_plan_project_organization",
+            "decision_tool": "fl_update_organization_plan_decision",
+            "template_apply_tool": "fl_apply_organization_plan",
+            "status_tool": "fl_get_organization_status",
+            "rollback_tool": "fl_rollback_organization_change",
             "blocked_until_human_validation": bool(pending_validation),
+        },
+        "organization_plan": {
+            "mode": "template_aware_proposal",
+            "scan_tool": "fl_scan_project_organization",
+            "plan_tool": "fl_plan_project_organization",
+            "decision_tool": "fl_update_organization_plan_decision",
+            "apply_tool": "fl_apply_organization_plan",
+            "status_tool": "fl_get_organization_status",
+            "rollback_tool": "fl_rollback_organization_change",
+            "step_selection_required": True,
+            "plan_store_required": True,
+            "supported_scopes": ["naming", "color", "channel_routing", "bus_layout"],
+            "blocked_statuses": ["blocked", "rejected", "ignored"],
+            "status": (
+                "requires_template_or_step_approval"
+                if cleanup_steps or templates.compact_context(template_context)
+                else "no_template_plan_generated"
+            ),
         },
         "guided": _organizer_guided_context(findings, cleanup_steps),
         "standards": _organizer_standards(naming_rules, color_rules),
@@ -3115,13 +4028,22 @@ def _build_project_organizer_report(
                 playlist_tracks=playlist_tracks,
             ),
             "routing_rows": len(routing),
+            "playlist_tracks_with_content_evidence": sum(
+                1 for row in playlist_tracks if _playlist_track_has_content_evidence(row)
+            ),
+            "color_readback_missing": color_readback_missing,
             "template_context": templates.compact_context(template_context),
             "notes": [
                 "Project Organizer is read-only in Control Center.",
+                "Use fl_plan_project_organization for a stored template-aware plan with step ids.",
                 "Apply only one approved cleanup step or one named rollback unit at a time.",
                 (
-                    "Color counts only flag missing readback fields; default FL colors "
-                    "are not guessed."
+                    f"Color readback is unavailable for {color_readback_missing} rows; "
+                    "this is a snapshot limitation, not cleanup work."
+                ),
+                (
+                    "Playlist track names are only flagged when the read-only snapshot includes "
+                    "clip or occupancy evidence for that slot."
                 ),
                 (
                     "Playlist clip editing, pattern deletion, plugin loading, save, "
@@ -3137,7 +4059,10 @@ def _build_project_organizer_report(
             "read_only": True,
             "project_changes": False,
             "requires_explicit_approval": True,
-            "apply_path": "Use MCP write-safe tools after reviewing an exact proposal.",
+            "apply_path": (
+                "Use MCP write-safe tools after reviewing an exact proposal; "
+                "template-aware batches apply through fl_apply_organization_plan."
+            ),
         },
     }
 
@@ -3187,6 +4112,48 @@ def _looks_default_named_item(row: dict[str, Any], kind: str) -> bool:
         return idx is not None and name == f"Pattern {idx}"
     if kind == "playlist_track":
         return idx is not None and name in {f"Track {idx}", f"Playlist Track {idx}"}
+    return False
+
+
+def _playlist_track_has_content_evidence(row: dict[str, Any]) -> bool:
+    """Return true only when the snapshot proves the playlist slot is in use."""
+
+    content_keys = (
+        "clip_count",
+        "clips_count",
+        "item_count",
+        "items_count",
+        "pattern_clip_count",
+        "audio_clip_count",
+        "automation_clip_count",
+        "event_count",
+        "clips",
+        "items",
+        "used",
+        "occupied",
+        "has_clips",
+        "has_content",
+    )
+    for key in content_keys:
+        if key not in row:
+            continue
+        value = row.get(key)
+        if isinstance(value, bool):
+            if value:
+                return True
+            continue
+        if isinstance(value, (int, float)):
+            if value > 0:
+                return True
+            continue
+        if isinstance(value, (list, tuple, set, dict)):
+            if len(value) > 0:
+                return True
+            continue
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized and normalized not in {"0", "false", "no", "none", "unknown", "n/a"}:
+                return True
     return False
 
 
@@ -3348,7 +4315,6 @@ def _organizer_findings(
     unnamed_playlist_tracks: list[dict[str, Any]],
     duplicate_mixer: list[dict[str, Any]],
     duplicate_patterns: list[dict[str, Any]],
-    color_readback_missing: int,
     candidate_groups: list[dict[str, Any]],
     template_context: dict[str, Any],
 ) -> list[dict[str, Any]]:
@@ -3417,17 +4383,6 @@ def _organizer_findings(
         "Patterns sharing the same visible name.",
         duplicate_patterns,
     )
-    if color_readback_missing:
-        findings.append(
-            {
-                "id": "color_readback_missing",
-                "severity": "info",
-                "title": "Color Readback Limited",
-                "detail": "Some rows did not include color data in the read-only snapshot.",
-                "count": color_readback_missing,
-                "items": [],
-            }
-        )
     if candidate_groups:
         findings.append(
             {
@@ -3539,7 +4494,6 @@ def _organizer_cleanup_steps(
     unnamed_channels: list[dict[str, Any]],
     routing_cleanup: list[dict[str, Any]],
     duplicate_mixer: list[dict[str, Any]],
-    unnamed_patterns: list[dict[str, Any]],
     candidate_groups: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     steps = []
@@ -3556,7 +4510,12 @@ def _organizer_cleanup_steps(
                 detail="Creates a one-step routing proposal using an existing free mixer track.",
                 tool="fl_apply_project_cleanup_step",
                 params={"routing": [{"channel": channel, "mode": "free"}], "approved": True},
-                risk="low",
+                risk="medium",
+                observed_state={
+                    "target_mixer_track": item.get("target"),
+                    "target_name": item.get("target_name"),
+                },
+                proposed_state={"target_mixer_track": "next_free"},
             )
         )
     for item in unnamed_channels[:6]:
@@ -3577,6 +4536,8 @@ def _organizer_cleanup_steps(
                     "approved": True,
                 },
                 risk="low",
+                observed_state={"name": item.get("name")},
+                proposed_state={"name": suggested},
             )
         )
     for item in duplicate_mixer[:4]:
@@ -3602,22 +4563,8 @@ def _organizer_cleanup_steps(
                     "approved": True,
                 },
                 risk="low",
-            )
-        )
-    for item in unnamed_patterns[:4]:
-        pattern = item.get("index")
-        if pattern is None:
-            continue
-        steps.append(
-            _organizer_step(
-                step_id=f"rename_pattern_{pattern}",
-                kind="pattern_naming",
-                priority="low",
-                title=f"Rename pattern {pattern}",
-                detail="Pattern names use the pattern domain tool and need the same approval flow.",
-                tool="fl_pattern",
-                params={"action": "set_name", "index": pattern, "name": f"Pattern {pattern}"},
-                risk="low",
+                observed_state={"name": item.get("name")},
+                proposed_state={"name": item.get("suggested_name")},
             )
         )
     for group in candidate_groups[:2]:
@@ -3636,6 +4583,12 @@ def _organizer_cleanup_steps(
                     "approved": True,
                 },
                 risk="medium",
+                observed_state={"sources": group.get("sources", []), "bus": None},
+                proposed_state={
+                    "sources": group.get("sources", []),
+                    "bus": "select_existing_bus",
+                    "name": group.get("name"),
+                },
             )
         )
     return steps[:12]
@@ -3651,7 +4604,11 @@ def _organizer_step(
     tool: str,
     params: dict[str, Any],
     risk: str,
+    observed_state: dict[str, Any] | None = None,
+    proposed_state: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    before_state = dict(observed_state or {})
+    after_state = dict(proposed_state or params)
     return {
         "id": step_id,
         "kind": kind,
@@ -3661,9 +4618,20 @@ def _organizer_step(
         "tool": tool,
         "params": params,
         "risk": risk,
+        "status": "requires_user_approval",
+        "observed_state": before_state,
+        "before_state": before_state,
+        "proposed_state": after_state,
+        "proposed_after_state": after_state,
+        "rollback_scope": "one_named_rollback_unit",
+        "decision_values": ["approved_for_apply", "rejected", "ignored"],
         "requires_explicit_approval": True,
         "readback": "Read back the affected channel, mixer, pattern, or route after applying.",
+        "readback_expectation": (
+            "Read back the affected channel, mixer, pattern, or route after applying."
+        ),
         "rollback": "Rollback through the MCP changelog if the result is not intended.",
+        "rollback_tool": "fl_rollback_organization_change",
     }
 
 
@@ -3762,7 +4730,11 @@ def _organizer_guided_context(
     return {
         "state": "clear",
         "priority": "Review",
-        "next_issue": ok_finding.get("title") if ok_finding else "No cleanup step is queued.",
+        "next_issue": (
+            ok_finding.get("title")
+            if ok_finding
+            else "Review findings manually; no write-safe cleanup step is queued."
+        ),
         "next_tool": None,
         "next_step_id": None,
         "steps": _organizer_guided_steps(active_index=0),
@@ -3831,15 +4803,17 @@ def _organizer_detail_rows(
             }
         )
     for row in playlist_tracks[:8]:
+        has_content = _playlist_track_has_content_evidence(row)
+        needs_name = has_content and _looks_default_named_item(row, "playlist_track")
         rows.append(
             {
                 "area": "Playlist",
                 "index": _organizer_item_index(row),
                 "name": str(row.get("name") or "").strip() or "Unnamed playlist track",
-                "status": "Needs name"
-                if _looks_default_named_item(row, "playlist_track")
-                else "Named",
-                "detail": "Muted" if row.get("mute") else "Visible",
+                "status": "Needs name" if needs_name else ("Used" if has_content else "Slot"),
+                "detail": (
+                    "Content evidence" if has_content else "No clip evidence in snapshot"
+                ),
             }
         )
     return rows[:48]
@@ -3874,6 +4848,7 @@ def _run_routing_audit(
     inputs: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Run the read-only Routing Audit workflow for the Control Center UI."""
+    options = routing_checks.routing_audit_options_from_inputs(inputs)
     user_decisions = _extract_user_decisions(inputs or {})
     if bridge_override is None and hasattr(state, "runtime_client"):
         try:
@@ -3909,16 +4884,38 @@ def _run_routing_audit(
                 "the connection."
             )
 
-        static_snapshot = state.broker.get_static_project_snapshot(bridge)
-        channels = list(static_snapshot.channels)
+        static_snapshot = state.broker.get_static_project_snapshot(
+            bridge,
+            StaticSnapshotPolicy(include_patterns=False, include_playlist=False),
+        )
+        channel_controls = _read_channel_control_rows(bridge)
+        channels = routing_checks.merge_channel_control_rows(
+            list(static_snapshot.channels),
+            channel_controls,
+        )
+        mixer_tracks = list(static_snapshot.mixer_tracks)
         routing = list(static_snapshot.routing)
         template_context = templates.resolve_with_user_decisions(
             static_snapshot.template_context,
             user_decisions,
-            mixer_tracks=static_snapshot.mixer_tracks,
+            mixer_tracks=mixer_tracks,
             routing_rows=routing,
             channel_rows=channels,
         )
+        signal_flow = None
+        if options.level == 2:
+            signal_flow = routing_checks.capture_signal_flow_evidence(
+                bridge,
+                tracks=[
+                    track
+                    for row in (*mixer_tracks, *routing)
+                    if (track := _as_int(row.get("i", row.get("index")))) is not None
+                ],
+                playback_used=options.playback_decision
+                in {"start_playback_automatically", "manual_playback", "manual_playback_running"},
+                marker_name=options.marker_name,
+                loop_duration_seconds=options.loop_duration_seconds,
+            )
         unused_probe = _probe_unused_mixer_tracks(
             bridge,
             tracks=routing,
@@ -3928,6 +4925,7 @@ def _run_routing_audit(
         analysis_report, legacy_report = _build_routing_audit_report(
             channels=channels,
             routing=routing,
+            mixer_tracks=mixer_tracks,
             template_context=template_context,
             unused_mixer_tracks=unused_probe["tracks"],
             unused_mixer_track_truncated=unused_probe["truncated"],
@@ -3935,8 +4933,9 @@ def _run_routing_audit(
             project_fingerprint=static_snapshot.project_fingerprint,
             source_observation_ids=static_snapshot.source_observation_ids,
             user_decisions=user_decisions,
+            options=options,
+            signal_flow=signal_flow,
         )
-        analysis_report = state.report_store.add_report(analysis_report)
         return legacy_report
     except Exception as exc:
         report = _routing_unavailable_report(f"{type(exc).__name__}: {exc}")
@@ -3948,7 +4947,6 @@ def _run_routing_audit(
             title="Routing Audit",
             created_at=report["generated_at"],
         )
-        analysis_report = state.report_store.add_report(analysis_report)
         return analysis_report_for_control_center(analysis_report, report)
     finally:
         if owns_bridge and bridge is not None:
@@ -4004,6 +5002,7 @@ def _build_routing_audit_report(
     *,
     channels: list[dict[str, Any]],
     routing: list[dict[str, Any]],
+    mixer_tracks: list[dict[str, Any]] | None = None,
     template_context: dict[str, Any] | None = None,
     unused_mixer_tracks: list[dict[str, Any]] | None = None,
     unused_mixer_track_truncated: bool = False,
@@ -4011,7 +5010,10 @@ def _build_routing_audit_report(
     project_fingerprint: str | None = None,
     source_observation_ids: tuple[str, ...] = (),
     user_decisions: tuple[dict[str, Any], ...] = (),
+    options: routing_checks.RoutingAuditOptions | None = None,
+    signal_flow: dict[str, Any] | None = None,
 ) -> tuple[AnalysisReport, dict[str, Any]]:
+    options = options or routing_checks.RoutingAuditOptions()
     unrouted_automation_clips = 0
     filtered_channels = []
     for c in channels:
@@ -4023,12 +5025,20 @@ def _build_routing_audit_report(
             filtered_channels.append(c)
     channels = filtered_channels
 
-    template_context = template_context or templates.classify_topology(routing, routing, channels)
+    mixer_tracks = list(mixer_tracks or ())
+    template_context = template_context or templates.classify_topology(
+        mixer_tracks or routing,
+        routing,
+        channels,
+    )
     track_by_index = {
         idx: dict(row)
-        for row in routing
+        for row in mixer_tracks
         if (idx := _as_int(row.get("i", row.get("index")))) is not None
     }
+    for row in routing:
+        if (idx := _as_int(row.get("i", row.get("index")))) is not None:
+            track_by_index[idx] = {**track_by_index.get(idx, {}), **dict(row)}
     routes_by_src: dict[int, list[dict[str, Any]]] = {
         idx: _normalise_routes(row.get("routes_to") or []) for idx, row in track_by_index.items()
     }
@@ -4117,6 +5127,28 @@ def _build_routing_audit_report(
         unused_count=len(unused_mixer_tracks),
     )
 
+    discrepancy_findings = routing_checks.channel_mixer_discrepancy_findings(
+        channels=channels,
+        mixer_tracks=list(track_by_index.values()),
+    )
+    template_compliance = routing_checks.template_compliance_result(
+        channels=channels,
+        routing=routing,
+        mixer_tracks=list(track_by_index.values()),
+        template_context=template_context,
+        options=options,
+        signal_flow=signal_flow,
+    )
+    level_2_findings = (
+        routing_checks.level_2_signal_findings(
+            channels=channels,
+            routing=routing,
+            mixer_tracks=list(track_by_index.values()),
+            signal_flow=signal_flow,
+        )
+        if options.level == 2
+        else []
+    )
     findings = _routing_findings(
         direct_to_master=direct_to_master,
         unrouted_channels=unrouted_channels,
@@ -4125,9 +5157,23 @@ def _build_routing_audit_report(
         template_context=template_context,
         unused_probe_failed=unused_mixer_track_probe_failed,
     )
+    additional_findings = [
+        *discrepancy_findings,
+        *template_compliance["findings"],
+        *level_2_findings,
+    ]
+    if additional_findings:
+        findings = [row for row in findings if row.get("id") != "routing_clear"]
+        findings.extend(additional_findings)
     _apply_group_user_decisions(
         findings,
         request_id=ROUTING_VALIDATION_REQUEST_ID,
+        user_decisions=user_decisions,
+    )
+    findings = routing_checks.enrich_routing_findings(
+        findings,
+        options=options,
+        template_summary=template_compliance["summary"],
         user_decisions=user_decisions,
     )
     interaction_requests = _routing_validation_requests(findings)
@@ -4140,13 +5186,17 @@ def _build_routing_audit_report(
                 row,
                 workflow="routing_audit",
                 index=index,
-                evidence_mode="static_snapshot",
+                evidence_mode="hybrid" if options.level == 2 else "static_snapshot",
                 confidence_score=80,
             )
             for index, row in enumerate(findings, start=1)
         ),
         interaction_requests=interaction_requests,
         user_decisions=user_decisions,
+    )
+    plan_gating = routing_checks.routing_cleanup_plan_gating(
+        findings,
+        required_decision_ids=pending_validation,
     )
 
     track_details = []
@@ -4169,6 +5219,34 @@ def _build_routing_audit_report(
         "workflow": "routing_audit",
         "title": "Routing Audit",
         "generated_at": _now_iso(),
+        "analysis_mode": "hybrid" if options.level == 2 else "static_snapshot",
+        "evidence_mode": options.static_evidence_mode,
+        "routing_evidence_level": (
+            routing_checks.ROUTING_EVIDENCE_LEVEL_METER_PROXY
+            if options.level == 2
+            else routing_checks.ROUTING_EVIDENCE_LEVEL_STATIC
+        ),
+        "routing_evidence_levels": routing_checks.routing_evidence_levels(),
+        "routing_check_level": options.level,
+        "display_name": options.display_name,
+        "template_compliance_enabled": template_compliance["enabled"],
+        "template_compliance_mode": options.template_compliance,
+        "template_profile_source": template_compliance["summary"].get("profile_source"),
+        "detected_template_profile": (templates.compact_context(template_context) or {}).get(
+            "template_slug"
+        ),
+        "selected_template_profile": options.selected_template_profile,
+        "template_detection_confidence": template_compliance["summary"].get("confidence"),
+        "playback_required": options.playback_required,
+        "playback_used": bool(signal_flow and signal_flow.get("playback_used")),
+        "loop_duration_seconds_if_known": options.loop_duration_seconds,
+        "marker_name_if_used": options.marker_name,
+        "template_compliance_summary": template_compliance["summary"],
+        "limitations": list((signal_flow or {}).get("limitations") or []),
+        "plan_gating_status": plan_gating["plan_gating_status"],
+        "cleanup_plan_allowed": plan_gating["cleanup_plan_allowed"],
+        "cleanup_plan_block_reason": plan_gating["cleanup_plan_block_reason"],
+        "required_user_decisions": plan_gating["required_user_decisions"],
         "summary": {
             "health_score": health_score,
             "health_label": _routing_health_label(health_score),
@@ -4181,8 +5259,22 @@ def _build_routing_audit_report(
             "dead_end_tracks": len(dead_end_tracks),
             "unused_mixer_tracks": len(unused_mixer_tracks),
             "unused_mixer_track_truncated": unused_mixer_track_truncated,
+            "channel_mixer_discrepancies": sum(
+                int(row.get("count") or 0) for row in discrepancy_findings
+            ),
+            "template_compliance_findings": sum(
+                int(row.get("count") or 0) for row in template_compliance["findings"]
+            ),
+            "plan_gating_status": plan_gating["plan_gating_status"],
+            "cleanup_plan_allowed": plan_gating["cleanup_plan_allowed"],
         },
         "findings": findings,
+        "cleanup_plan": {
+            "steps": [],
+            "mode": "dry_run",
+            "apply_tool": "fl_apply_routing_cleanup",
+            **plan_gating,
+        },
         "graph": graph,
         "details": {
             "channels": [
@@ -4196,6 +5288,10 @@ def _build_routing_audit_report(
             "routes": route_rows,
             "template_context": templates.compact_context(template_context),
             "policy_notes": [
+                (
+                    "Routing decisions are project- and template-dependent; static "
+                    "evidence can flag possible risks but does not prove musical intent."
+                ),
                 "Preserve recognizable existing routing structure before proposing cleanup.",
                 "Infer Channel Rack to Mixer relationships from channel target tracks.",
                 (
@@ -4207,10 +5303,32 @@ def _build_routing_audit_report(
             "kb_policy_refs": kb_policy.rule_refs(ROUTING_POLICY_RULE_IDS),
             "project_fingerprint": project_fingerprint,
             "source_observation_ids": list(source_observation_ids),
+            "template_status": routing_checks.template_status_payload(
+                template_context=template_context,
+                options=options,
+                compliance_summary=template_compliance["summary"],
+            ),
+            "template_profile_catalog": routing_checks.template_profile_catalog(),
+            "plan_gating": plan_gating,
+            "signal_flow": signal_flow
+            or {
+                "available": False,
+                "playback_used": False,
+                "track_peaks": {},
+            },
         },
         "interaction_requests": list(interaction_requests),
         "user_decisions": [dict(row) for row in user_decisions],
-        "metadata": provisional_score_metadata(pending_validation),
+        "metadata": {
+            **provisional_score_metadata(pending_validation),
+            "plan_gating": plan_gating,
+            "routing_evidence_level": (
+                routing_checks.ROUTING_EVIDENCE_LEVEL_METER_PROXY
+                if options.level == 2
+                else routing_checks.ROUTING_EVIDENCE_LEVEL_STATIC
+            ),
+            "routing_evidence_levels": routing_checks.routing_evidence_levels(),
+        },
         "safety": {"read_only": True, "project_changes": False},
     }
     analysis_report = routing_analysis_report_from_legacy_payload(
@@ -4232,6 +5350,14 @@ def _payload_rows(payload: Any, key: str) -> list[dict[str, Any]]:
     if not isinstance(rows, list):
         return []
     return [dict(row) for row in rows if isinstance(row, dict)]
+
+
+def _read_channel_control_rows(bridge: Any) -> list[dict[str, Any]]:
+    try:
+        payload = fetch_all_pages(bridge, protocol.CMD_CHANNEL_LIST, "channels")
+    except Exception:
+        return []
+    return _payload_rows(payload, "channels")
 
 
 def _probe_unused_mixer_tracks(
@@ -4436,12 +5562,13 @@ def _routing_findings(
                 "id": "generators_direct_to_master",
                 "severity": "warning",
                 "title": "Generators Direct to Master",
-                "detail": "Generator channels route through inserts that feed Master directly.",
+                "detail": (
+                    "Generator channels appear to route through inserts that feed Master "
+                    "directly. This may be intentional and requires confirmation before cleanup."
+                ),
                 "count": len(direct_to_master),
                 "items": direct_to_master[:8],
-                "metadata": _routing_heuristic_metadata(
-                    reason="master_routed_or_ungrouped"
-                ),
+                "metadata": _routing_heuristic_metadata(reason="master_routed_or_ungrouped"),
             }
         )
     if unrouted_channels:
@@ -4451,7 +5578,7 @@ def _routing_findings(
                 "severity": "critical",
                 "title": "Unrouted Channels",
                 "detail": (
-                    "Channels without a usable mixer target may be silent or bypass bus processing."
+                    "Channels without a usable mixer target may bypass expected bus processing."
                 ),
                 "count": len(unrouted_channels),
                 "items": unrouted_channels[:8],
@@ -4463,7 +5590,10 @@ def _routing_findings(
                 "id": "dead_end_tracks",
                 "severity": "critical",
                 "title": "Mixer Paths Without Output",
-                "detail": "Targeted mixer inserts have no outgoing route in the routing matrix.",
+                "detail": (
+                    "Targeted mixer inserts appear to have no outgoing route in the routing "
+                    "matrix. Confirm the intended monitoring or hardware-output path."
+                ),
                 "count": len(dead_end_tracks),
                 "items": dead_end_tracks[:8],
             }
@@ -4546,9 +5676,7 @@ def _routing_validation_requests(findings: list[dict[str, Any]]) -> tuple[dict[s
             id=ROUTING_VALIDATION_REQUEST_ID,
             type="multi_select",
             title="Confirm routing cleanup candidates",
-            prompt=(
-                "Which routing findings are intentional before cleanup planning is final?"
-            ),
+            prompt=("Which routing findings are intentional before cleanup planning is final?"),
             options=tuple(options),
             allow_remove=True,
             metadata={
@@ -4817,7 +5945,9 @@ def _handler_factory(state: ControlCenterState):
             elif self.path.startswith("/assets/") and self.path.endswith(".svg"):
                 self._serve_static(self.path.lstrip("/"), "image/svg+xml")
             elif self.path == "/api/status":
-                self._json(collect_status(state))
+                self._json(collect_status(state, status_mode="full", refresh=True))
+            elif self.path == "/api/status/quick":
+                self._json(collect_status(state, refresh=False, status_mode="quick"))
             elif self.path == "/api/client-snippets":
                 self._json(client_snippets(state))
             elif self.path == "/api/setup/report":
@@ -4838,7 +5968,7 @@ def _handler_factory(state: ControlCenterState):
                     return
                 self._json(_admin_list_workflows(state))
             elif self.path.startswith("/api/admin/workflows/") and not self.path.endswith("/run"):
-                workflow_id = self.path[len("/api/admin/workflows/"):]
+                workflow_id = self.path[len("/api/admin/workflows/") :]
                 if not workflow_id or "/" in workflow_id:
                     self._json({"ok": False, "error": "not found"}, status=HTTPStatus.NOT_FOUND)
                     return
@@ -4852,7 +5982,7 @@ def _handler_factory(state: ControlCenterState):
             elif self.path.startswith("/api/admin/workflow-runs/") and not self.path.endswith(
                 "/cancel"
             ):
-                run_id = self.path[len("/api/admin/workflow-runs/"):]
+                run_id = self.path[len("/api/admin/workflow-runs/") :]
                 if not run_id or "/" in run_id:
                     self._json({"ok": False, "error": "not found"}, status=HTTPStatus.NOT_FOUND)
                     return
@@ -4873,7 +6003,9 @@ def _handler_factory(state: ControlCenterState):
         def do_POST(self) -> None:  # noqa: N802
             body = self._read_json()
             if self.path == "/api/refresh":
-                self._json(collect_status(state, refresh=True))
+                self._json(collect_status(state, refresh=True, status_mode="full"))
+            elif self.path == "/api/diagnose":
+                self._json(collect_status(state, refresh=True, status_mode="diagnose"))
             elif self.path == "/api/process/daemon/start":
                 self._json(_start_daemon(state))
             elif self.path == "/api/process/daemon/stop":
@@ -4889,22 +6021,18 @@ def _handler_factory(state: ControlCenterState):
                 self._json(_confirm_step(state, step))
             elif self.path == "/api/audio-analysis":
                 self._json(_run_audio_analysis_action(state, body))
+            elif self.path == "/api/mix-watch":
+                self._json(_control_mix_watch(state, body))
             elif self.path == "/api/transport":
                 self._json(_control_transport(state, body))
             elif self.path == "/api/workflows/mix-review":
                 self._json(_run_mix_review(state, inputs=_workflow_inputs_from_body(body)))
             elif self.path == "/api/workflows/low-end-analysis":
-                self._json(
-                    _run_low_end_analysis(state, inputs=_workflow_inputs_from_body(body))
-                )
+                self._json(_run_low_end_analysis(state, inputs=_workflow_inputs_from_body(body)))
             elif self.path == "/api/workflows/project-organizer":
-                self._json(
-                    _run_project_organizer(state, inputs=_workflow_inputs_from_body(body))
-                )
+                self._json(_run_project_organizer(state, inputs=_workflow_inputs_from_body(body)))
             elif self.path == "/api/workflows/routing-audit":
-                self._json(
-                    _run_routing_audit(state, inputs=_workflow_inputs_from_body(body))
-                )
+                self._json(_run_routing_audit(state, inputs=_workflow_inputs_from_body(body)))
             elif self.path == "/api/workflows/preflight":
                 self._json(
                     _run_runtime_product_workflow(
@@ -4914,28 +6042,7 @@ def _handler_factory(state: ControlCenterState):
                     )
                 )
             elif self.path == "/api/workflows/project-health":
-                try:
-                    self._json(_runtime_client(state).project_health())
-                except Exception as exc:
-                    self._json(
-                        {
-                            "overall_status": "unavailable",
-                            "overall_health_score": None,
-                            "overall_risk_score": None,
-                            "overall_coverage_pct": 0,
-                            "overall_confidence_score": 0,
-                            "sections": [],
-                            "missing_workflows": [
-                                "project_organizer",
-                                "mix_review",
-                                "routing_audit",
-                                "low_end_analysis",
-                            ],
-                            "mixed_project_fingerprints": False,
-                            "next_suggested_workflows": [],
-                            "error": f"{type(exc).__name__}: {exc}",
-                        }
-                    )
+                self._json(_project_health_payload(state))
             # ------------------------------------------------------------------ #
             # Admin POST routes — all guarded by _require_admin()
             # ------------------------------------------------------------------ #
@@ -4944,7 +6051,7 @@ def _handler_factory(state: ControlCenterState):
                     return
                 self._json(_admin_create_workflow(state, body))
             elif self.path.endswith("/run") and self.path.startswith("/api/admin/workflows/"):
-                workflow_id = self.path[len("/api/admin/workflows/"):-len("/run")]
+                workflow_id = self.path[len("/api/admin/workflows/") : -len("/run")]
                 if not workflow_id:
                     self._json({"ok": False, "error": "not found"}, status=HTTPStatus.NOT_FOUND)
                     return
@@ -4954,7 +6061,7 @@ def _handler_factory(state: ControlCenterState):
             elif self.path.endswith("/cancel") and self.path.startswith(
                 "/api/admin/workflow-runs/"
             ):
-                run_id = self.path[len("/api/admin/workflow-runs/"):-len("/cancel")]
+                run_id = self.path[len("/api/admin/workflow-runs/") : -len("/cancel")]
                 if not run_id:
                     self._json({"ok": False, "error": "not found"}, status=HTTPStatus.NOT_FOUND)
                     return
@@ -4962,7 +6069,7 @@ def _handler_factory(state: ControlCenterState):
                     return
                 self._json(_admin_cancel_workflow_run(state, run_id))
             elif self.path.endswith("/cancel") and self.path.startswith("/api/admin/jobs/"):
-                job_id = self.path[len("/api/admin/jobs/"):-len("/cancel")]
+                job_id = self.path[len("/api/admin/jobs/") : -len("/cancel")]
                 if not job_id:
                     self._json({"ok": False, "error": "not found"}, status=HTTPStatus.NOT_FOUND)
                     return
@@ -4975,7 +6082,7 @@ def _handler_factory(state: ControlCenterState):
         def do_PUT(self) -> None:  # noqa: N802
             body = self._read_json()
             if self.path.startswith("/api/admin/workflows/"):
-                workflow_id = self.path[len("/api/admin/workflows/"):]
+                workflow_id = self.path[len("/api/admin/workflows/") :]
                 if not workflow_id or "/" in workflow_id:
                     self._json({"ok": False, "error": "not found"}, status=HTTPStatus.NOT_FOUND)
                     return
@@ -4987,7 +6094,7 @@ def _handler_factory(state: ControlCenterState):
 
         def do_DELETE(self) -> None:  # noqa: N802
             if self.path.startswith("/api/admin/workflows/"):
-                workflow_id = self.path[len("/api/admin/workflows/"):]
+                workflow_id = self.path[len("/api/admin/workflows/") :]
                 if not workflow_id or "/" in workflow_id:
                     self._json({"ok": False, "error": "not found"}, status=HTTPStatus.NOT_FOUND)
                     return
@@ -5402,8 +6509,11 @@ def _readiness(
     findings: list[doctor.Finding],
     checkpoints: dict[str, dict[str, Any]],
 ) -> dict[str, Any]:
-    blockers = [f for f in findings if f.severity == "blocker" and f.status != "ok"]
-    manual = [f for f in findings if f.status in {"manual_check", "probe_needed"}]
+    setup_findings = [
+        f for f in findings if _finding_group(f.component) not in {"mcp_stdio"}
+    ]
+    blockers = [f for f in setup_findings if f.severity == "blocker" and f.status != "ok"]
+    manual = [f for f in setup_findings if f.status in {"manual_check", "probe_needed"}]
     if blockers:
         state = "blocked"
     elif manual and not checkpoints:
@@ -5453,6 +6563,7 @@ def _setup_guidance(
     daemon_process = processes.get("daemon", {})
     daemon_running = _process_running(daemon_process)
     daemon_start_action_shown = False
+    fl_app_needs_action = _group_needs_action(groups, "fl_app")
     autostart_state = str(daemon_autostart.get("state") or "")
     if autostart_state in {"started", "starting", "external", "failed"}:
         daemon_status = _daemon_startup_status(
@@ -5466,20 +6577,21 @@ def _setup_guidance(
             daemon_action_path = "/api/process/daemon/start"
             daemon_action_label = "Start daemon"
             daemon_start_action_shown = True
-        guidance.append(
-            _guidance_item(
-                title="Daemon startup",
-                status=daemon_status,
-                text=_daemon_startup_text(
-                    daemon_autostart=daemon_autostart,
-                    daemon_process=daemon_process,
-                    groups=groups,
-                ),
-                groups=["daemon"],
-                action_label=daemon_action_label,
-                action_path=daemon_action_path,
+        if daemon_status != "OK" and not (fl_app_needs_action and daemon_running):
+            guidance.append(
+                _guidance_item(
+                    title="Daemon startup",
+                    status=daemon_status,
+                    text=_daemon_startup_text(
+                        daemon_autostart=daemon_autostart,
+                        daemon_process=daemon_process,
+                        groups=groups,
+                    ),
+                    groups=["daemon"],
+                    action_label=daemon_action_label,
+                    action_path=daemon_action_path,
+                )
             )
-        )
 
     if (
         _group_needs_action(groups, "daemon")
@@ -5517,7 +6629,7 @@ def _setup_guidance(
             )
         )
 
-    if _group_needs_action(groups, "fl_app"):
+    if fl_app_needs_action:
         guidance.append(
             _guidance_item(
                 title="Open FL Studio",
@@ -5532,7 +6644,7 @@ def _setup_guidance(
             )
         )
 
-    if _group_needs_action(groups, "controller"):
+    if _group_needs_action(groups, "controller") and not fl_app_needs_action:
         guidance.append(
             _guidance_item(
                 title="Connect FL Studio to the controller",

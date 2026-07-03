@@ -16,7 +16,7 @@ from fls_pilot.runtime.core import RuntimeCore
 
 
 @pytest.fixture(autouse=True)
-def _isolate_daemon_runtime(tmp_path):
+def _isolate_daemon_runtime(tmp_path, monkeypatch):
     """Replace daemon._runtime and runtime_access._LOCAL_RUNTIME with a
     tmp_path-backed RuntimeCore.
 
@@ -24,11 +24,14 @@ def _isolate_daemon_runtime(tmp_path):
     - daemon._handle_request() / _get_runtime() uses an isolated SQLite store.
     - local_runtime() / get_report_store() uses the same isolated store instead
       of creating its own RuntimeCore() against the default ~/.fls-pilot path.
+    - offline tests default to direct Runtime access even when the surrounding
+      environment has FLS_PILOT_TRANSPORT=tcp for live/manual workflows.
 
     The runtime_server fixture in test_runtime_rpc.py saves and restores
     daemon._runtime directly; the conftest try/finally restores the module
     globals cleanly after each test.
     """
+    monkeypatch.setenv("FLS_PILOT_TRANSPORT", "direct")
     prev_daemon = daemon._runtime
     prev_local = runtime_access._LOCAL_RUNTIME
     isolated = RuntimeCore(

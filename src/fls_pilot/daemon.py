@@ -61,7 +61,7 @@ from .connection import (
 from .runtime.artifacts import AudioArtifactStore
 from .runtime.audio_worker import AudioAnalysisWorker
 from .runtime.contracts import RuntimeResponse
-from .runtime.core import RuntimeCore
+from .runtime.core import RuntimeCore, resolve_job_worker_concurrency
 from .runtime.protocol import validate_runtime_request
 from .runtime.workflow_runner import run_workflow
 from .runtime.workflow_jobs import (
@@ -165,6 +165,7 @@ def _get_runtime() -> RuntimeCore:
             _runtime = RuntimeCore(
                 artifact_store=_audio_artifact_store,
                 job_result_validator=_audio_artifact_store.validate_result_ref,
+                job_worker_concurrency=resolve_job_worker_concurrency(),
             )
             AudioAnalysisWorker(_audio_artifact_store).register(_runtime)
             _register_custom_workflow_jobs(_runtime)

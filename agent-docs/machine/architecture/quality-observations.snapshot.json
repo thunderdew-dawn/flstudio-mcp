@@ -21,7 +21,7 @@
     "notable_risk_findings": [],
     "analysis_scope": {
       "root": ".",
-      "mode": "repository static analysis refreshed for v3.0.0-rc1",
+      "mode": "repository static analysis refreshed for v3.0.0-beta.3",
       "validation_performed": [
         "AST-based MCP safety audit",
         "Runtime operation registry import",

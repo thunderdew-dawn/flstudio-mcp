@@ -1,21 +1,49 @@
 // ─── State ───────────────────────────────────────────────────────────────────
 const state = {
   status: null,
+  statusError: null,
   report: "",
   mixReview: {
     loading: false,
     report: null,
-    error: null
+    error: null,
+    options: {
+      level: 1,
+      genreProfile: "",
+      loopSeconds: 16,
+      playbackMode: "user_starts",
+      markerName: "",
+      masterPath: "",
+      stems: [
+        { role: "kick", path: "", status: "missing" },
+        { role: "bass", path: "", status: "missing" }
+      ]
+    },
+    watch: {
+      loading: false,
+      status: null,
+      error: null
+    }
   },
   lowEndAnalysis: {
     loading: false,
     report: null,
-    error: null
+    error: null,
+    selection: {
+      rows: [],
+      dirty: false
+    }
   },
   routingAudit: {
     loading: false,
     report: null,
-    error: null
+    error: null,
+    level2: {
+      stage: "idle",
+      decision: null,
+      markerName: null,
+      loopDurationSeconds: null
+    }
   },
   projectOrganizer: {
     loading: false,
@@ -25,6 +53,7 @@ const state = {
   projectHealth: {
     loading: false,
     error: null,
+    backendData: null,
     lastRun: null
   },
   transport: {
@@ -48,6 +77,7 @@ const state = {
     pollTimer: null
   },
   runtimeWorkflows: {},
+  workflowProgressTimers: {},
   workflowUserDecisions: {},
   setupFeedback: {},
   actionFeedback: {},
@@ -73,6 +103,35 @@ const TERMINOLOGY = {
   }
 };
 
+const SCORE_STATUS_LABELS = {
+  ok: "OK",
+  needs_review: "Needs Review",
+  at_risk: "At Risk",
+  blocked: "Blocked",
+  not_run: "Not Run",
+  stale: "Stale",
+  unavailable: "Unavailable",
+  partial: "Needs Review",
+  final: "OK",
+  provisional: "Needs Review"
+};
+
+const SCORE_STATUS_CLASSES = {
+  ok: "badge-ok",
+  needs_review: "badge-warn",
+  at_risk: "badge-warn",
+  blocked: "badge-critical",
+  not_run: "badge-neutral",
+  stale: "badge-warn",
+  unavailable: "badge-neutral",
+  partial: "badge-warn",
+  final: "badge-ok",
+  provisional: "badge-warn"
+};
+
+const API_REQUEST_TIMEOUT_MS = 20000;
+const ORGANIZER_REQUEST_TIMEOUT_MS = 60000;
+
 const DEFAULT_WORKFLOW_CATALOG = [
   { id: "project_health", panel_id: "producer_health", title: "Health", group: "Project Review", maturity: "read_only", enabled: true, endpoint: null, client_action: "runProjectHealth", action_label: "Run Health Scan", safety_note: "Read-only overview across available workflow reports." },
   { id: "mix_review", panel_id: "producer_mix_review", title: "Mix Review", group: "Project Review", maturity: "read_only", enabled: true, endpoint: "/api/workflows/mix-review", action_label: "Run Mix Review", safety_note: "Read-only mixer review. No project changes are made." },
@@ -85,6 +144,64 @@ const DEFAULT_WORKFLOW_CATALOG = [
   { id: "sidechain_routing_check", panel_id: "producer_sidechaining", title: "Sidechain Routing Check", group: "Roadmap", maturity: "planned", enabled: false, endpoint: null, action_label: null, safety_note: "Planned after v3.0. Plugin detector settings remain a manual check." },
   { id: "plugin_assistant", panel_id: "producer_plugin_assistant", title: "Plugin Assistant", group: "Roadmap", maturity: "planned", enabled: false, endpoint: null, action_label: null, safety_note: "Planned after v3.0. Plugin loading remains manual." },
   { id: "preset_assistant", panel_id: "producer_preset_assistant", title: "Preset Assistant", group: "Roadmap", maturity: "planned", enabled: false, endpoint: null, action_label: null, safety_note: "Planned after v3.0. Preset loading remains manual." }
+];
+
+const ROUTING_LEVEL2_MARKER_NAMES = [
+  "loudest",
+  "loudest section",
+  "drop",
+  "main drop",
+  "chorus",
+  "full mix",
+  "test loop",
+  "routing test",
+  "analysis loop"
+];
+
+const MIX_REVIEW_LEVEL_LABELS = {
+  1: "Level 1 - Static",
+  2: "Level 2 - Live Peak Watch",
+  3: "Level 3 - Rendered Master",
+  4: "Level 4 - Stem/Bus Evidence"
+};
+
+const MIX_LEVEL3_EXPECTED_CHECKS = [
+  "Integrated LUFS",
+  "Short-Term Loudness Max",
+  "True Peak",
+  "Clipping Count",
+  "Crest Factor",
+  "Stereo Correlation",
+  "Mono Loss",
+  "Band Energy",
+  "Harshness Band",
+  "Drop-vs-Break Energy"
+];
+
+const MIX_LEVEL4_EXPECTED_CHECKS = [
+  "Kick/Bass Masking",
+  "Kick Transient vs Bass Sustain",
+  "Low-End Phase",
+  "Stem Headroom",
+  "Bus Balance",
+  "Sub-Side Energy per Stem",
+  "FX/Reverb Low-End Leakage",
+  "Mono Compatibility per Low-End Stem"
+];
+
+const MIX_STEM_ROLES = [
+  "kick",
+  "bass",
+  "sub",
+  "drums_bus",
+  "percussion_bus",
+  "synth_bus",
+  "lead_bus",
+  "fx_bus",
+  "vocal_bus",
+  "premaster",
+  "master",
+  "other"
 ];
 
 // ─── Setup Doctor Layers ──────────────────────────────────────────────────────
@@ -144,14 +261,48 @@ function maturityBadgeClass(value, enabled = true) {
   return "badge-pro-preview";
 }
 
+function apiTimeoutMessage(timeoutMs) {
+  const seconds = Math.round(timeoutMs / 1000);
+  return `Request timed out after ${seconds}s. Re-check setup; if this repeats, restart the local Control Center service.`;
+}
+
+function statusErrorText(error) {
+  return error?.message || "Status check failed. Re-check setup; if this repeats, restart the local Control Center service.";
+}
+
 async function api(path, options = {}) {
-  const response = await fetch(path, {
-    headers: { "Content-Type": "application/json" },
-    ...options
-  });
-  if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
-  const type = response.headers.get("content-type") || "";
-  return type.includes("application/json") ? response.json() : response.text();
+  const { timeoutMs: rawTimeoutMs, headers, ...fetchOptions } = options;
+  const timeoutMs = Number.isFinite(Number(rawTimeoutMs))
+    ? Number(rawTimeoutMs)
+    : API_REQUEST_TIMEOUT_MS;
+  let timeoutId = null;
+
+  if (
+    timeoutMs > 0
+    && typeof AbortController === "function"
+    && typeof setTimeout === "function"
+    && typeof clearTimeout === "function"
+    && !fetchOptions.signal
+  ) {
+    const controller = new AbortController();
+    fetchOptions.signal = controller.signal;
+    timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  }
+
+  try {
+    const response = await fetch(path, {
+      ...fetchOptions,
+      headers: { "Content-Type": "application/json", ...(headers || {}) }
+    });
+    if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+    const type = response.headers.get("content-type") || "";
+    return type.includes("application/json") ? response.json() : response.text();
+  } catch (error) {
+    if (error?.name === "AbortError") throw new Error(apiTimeoutMessage(timeoutMs));
+    throw error;
+  } finally {
+    if (timeoutId && typeof clearTimeout === "function") clearTimeout(timeoutId);
+  }
 }
 
 function statusReportData() {
@@ -301,9 +452,12 @@ async function refresh() {
   }
 
   try {
-    state.status = await api("/api/refresh", { method: "POST", body: "{}" });
+    const statusPath = state.status ? "/api/status/quick" : "/api/status";
+    state.status = await api(statusPath);
+    state.statusError = null;
     render();
   } catch (error) {
+    state.statusError = statusErrorText(error);
     const refreshTime = document.getElementById("refresh-time");
     if (refreshTime) refreshTime.textContent = "Error";
     const bridgePill = document.getElementById("bridge-pill");
@@ -311,9 +465,36 @@ async function refresh() {
       bridgePill.textContent = "Error";
       bridgePill.className = "pill pill-offline";
     }
+    if (state.status) {
+      render();
+    } else {
+      renderStatusUnavailable(state.statusError);
+    }
   } finally {
     if (loadingOverlay) loadingOverlay.style.display = "none";
     if (loadingInterval) { clearInterval(loadingInterval); loadingInterval = null; }
+  }
+}
+
+function statusCheckIssueCard(message) {
+  return card("Status check did not finish", "Action Needed", `${message}\n\nNo FL Studio project changes were made.`, [
+    { text: "Re-check Status", disabled: false, onclick: refresh }
+  ]);
+}
+
+function renderStatusUnavailable(message) {
+  text("next-action-title", "Status check did not finish");
+  text("next-action-detail", message);
+  const nextButton = document.getElementById("next-action-button");
+  if (nextButton) {
+    nextButton.textContent = "Re-check Status";
+    nextButton.onclick = refresh;
+  }
+
+  const setupSteps = document.getElementById("setup-steps");
+  if (setupSteps) {
+    setupSteps.innerHTML = "";
+    setupSteps.appendChild(statusCheckIssueCard(message));
   }
 }
 
@@ -521,6 +702,7 @@ function runtimeWorkflowState(workflowId) {
 
 function workflowReportSlot(workflowId) {
   return {
+    project_health: state.projectHealth,
     mix_review: state.mixReview,
     low_end_analysis: state.lowEndAnalysis,
     routing_audit: state.routingAudit,
@@ -596,12 +778,120 @@ function workflowRunBody(workflowId, base = {}) {
   return decisions.length ? { ...base, user_decisions: decisions } : { ...base };
 }
 
+function beginWorkflowRun(workflowId, phase) {
+  const slot = workflowReportSlot(workflowId) || runtimeWorkflowState(workflowId);
+  slot.loading = true;
+  slot.error = null;
+  slot.run = {
+    status: "running",
+    phase: phase || "reading project data",
+    started_at: new Date().toISOString(),
+    completed_at: null,
+    elapsed_ms: 0,
+    freshness: { status: "running" }
+  };
+  scheduleWorkflowProgressRender(workflowId);
+}
+
+function finishWorkflowRun(workflowId, report = null, error = null) {
+  const slot = workflowReportSlot(workflowId) || runtimeWorkflowState(workflowId);
+  const now = new Date();
+  const startedAt = slot.run?.started_at ? new Date(slot.run.started_at) : now;
+  slot.loading = false;
+  slot.run = {
+    ...(report?.ui_state || slot.run || {}),
+    status: error ? "failed" : (report?.ui_state?.status || "succeeded"),
+    phase: error ? "failed" : (report?.ui_state?.phase || "complete"),
+    started_at: slot.run?.started_at || report?.ui_state?.started_at || now.toISOString(),
+    completed_at: report?.ui_state?.completed_at || now.toISOString(),
+    elapsed_ms: Math.max(0, now.getTime() - startedAt.getTime()),
+    freshness: report?.ui_state?.freshness || slot.run?.freshness || { status: error ? "unavailable" : "fresh" }
+  };
+  clearWorkflowProgressRender(workflowId);
+}
+
+function scheduleWorkflowProgressRender(workflowId) {
+  if (window.__FLS_PILOT_TEST__) return;
+  clearWorkflowProgressRender(workflowId);
+  state.workflowProgressTimers[workflowId] = setInterval(() => {
+    const slot = workflowReportSlot(workflowId);
+    if (!slot?.loading) {
+      clearWorkflowProgressRender(workflowId);
+      return;
+    }
+    renderWorkflowPanelById(workflowId);
+  }, 1000);
+}
+
+function clearWorkflowProgressRender(workflowId) {
+  const timer = state.workflowProgressTimers?.[workflowId];
+  if (timer) clearInterval(timer);
+  if (state.workflowProgressTimers) delete state.workflowProgressTimers[workflowId];
+}
+
+function workflowProgressText(name, slot, fallbackPhase) {
+  const run = slot?.run || {};
+  const phase = safeString(run.phase || fallbackPhase || "reading project data");
+  const elapsed = workflowElapsedText(run.started_at);
+  const updated = new Date().toLocaleTimeString();
+  return `${name} running. Phase: ${phase}. Elapsed: ${elapsed}. Last update: ${updated}.`;
+}
+
+function workflowElapsedText(startedAt) {
+  const start = startedAt ? new Date(startedAt).getTime() : Date.now();
+  const elapsed = Math.max(0, Date.now() - start);
+  const seconds = Math.floor(elapsed / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const rest = seconds % 60;
+  return minutes ? `${minutes}m ${String(rest).padStart(2, "0")}s` : `${rest}s`;
+}
+
+function canonicalScoreSummary(report) {
+  return report?.ui_state?.score_summary || report?.score_summary || null;
+}
+
+function canonicalStatus(summary, fallback = "not_run") {
+  const value = String(summary?.status || summary?.score_status || fallback || "not_run")
+    .toLowerCase()
+    .replaceAll("-", "_")
+    .replaceAll(" ", "_");
+  if (value === "high_risk") return "at_risk";
+  if (value === "low_risk" || value === "clear" || value === "solid" || value === "organized") return "ok";
+  if (value === "limited") return "needs_review";
+  return SCORE_STATUS_LABELS[value] ? value : fallback;
+}
+
+function scoreStatusLabel(status) {
+  return SCORE_STATUS_LABELS[canonicalStatus({ status })] || "Not Run";
+}
+
+function scoreStatusClass(status) {
+  return SCORE_STATUS_CLASSES[canonicalStatus({ status })] || "badge-neutral";
+}
+
+function scoreValue(value) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? `${Math.round(numeric)} / 100` : "--";
+}
+
+function riskValue(value, hasReport = true) {
+  if (!hasReport) return "Not Run";
+  return scoreValue(value);
+}
+
+function coverageValue(coverage) {
+  if (!coverage || typeof coverage !== "object") return "--";
+  if (coverage.required != null && coverage.available != null) {
+    return `${coverage.available} / ${coverage.required}`;
+  }
+  return coverage.score == null ? "--" : `${Math.round(Number(coverage.score))}%`;
+}
+
 async function runRuntimeProductWorkflow(workflowId) {
   const workflow = workflowById(workflowId);
   if (!workflow?.endpoint) return;
   const workflowState = runtimeWorkflowState(workflowId);
-  workflowState.loading = true;
-  workflowState.error = null;
+  beginWorkflowRun(workflowId, "running workflow");
   renderRuntimeProductPanel(workflowId);
   try {
     const body = {};
@@ -619,10 +909,11 @@ async function runRuntimeProductWorkflow(workflowId) {
       body: JSON.stringify(requestBody)
     });
     syncWorkflowUserDecisions(workflowId, workflowState.report);
+    finishWorkflowRun(workflowId, workflowState.report);
   } catch (error) {
     workflowState.error = error.message;
+    finishWorkflowRun(workflowId, null, error);
   } finally {
-    workflowState.loading = false;
     renderRuntimeProductPanel(workflowId);
   }
 }
@@ -768,14 +1059,14 @@ function renderInteractionRequests(report, workflowId, { showEmpty = false } = {
   const card = document.createElement("section");
   card.className = "workflow-runtime-list workflow-runtime-interactions";
   const title = document.createElement("h2");
-  title.textContent = "Workflow needs your input";
+  title.textContent = "Decisions affecting this workflow";
   card.appendChild(title);
 
-  const requests = Array.isArray(report?.interaction_requests) ? report.interaction_requests : [];
+  const requests = workflowInteractionRequests(report, workflowId);
   if (!requests.length) {
     if (!showEmpty) return null;
     const empty = document.createElement("p");
-    empty.textContent = "No interaction requests reported.";
+    empty.textContent = "No scoring or workflow decisions are pending.";
     card.appendChild(empty);
     return card;
   }
@@ -788,7 +1079,7 @@ function renderInteractionRequests(report, workflowId, { showEmpty = false } = {
     const heading = document.createElement("h3");
     heading.textContent = safeString(request.title || interactionTypeLabel(request.type));
     const prompt = document.createElement("p");
-    prompt.textContent = safeString(request.prompt || request.id || "Review this request.");
+    prompt.textContent = interactionPromptText(request);
     item.append(heading, prompt);
 
     const body = document.createElement("div");
@@ -806,6 +1097,84 @@ function renderInteractionRequests(report, workflowId, { showEmpty = false } = {
     card.appendChild(item);
   }
   return card;
+}
+
+function workflowInteractionRequests(report, workflowId) {
+  const rows = Array.isArray(report?.interaction_requests) ? report.interaction_requests : [];
+  const out = [];
+  const seen = new Set();
+  for (const row of rows) {
+    if (!row || typeof row !== "object") continue;
+    const requestId = interactionRequestId(row);
+    if (!requestId) continue;
+    if (workflowId === "low_end_analysis" && requestId === "low_end.confirm_detected_tracks") {
+      continue;
+    }
+    const normalized = {
+      ...row,
+      interaction_request_id: requestId,
+      options: dedupeInteractionOptions(row.options),
+    };
+    const key = [
+      requestId,
+      normalized.finding_id || normalized.entity_id || "",
+      JSON.stringify((normalized.options || []).map(option => option.id || option.value || option.label))
+    ].join("|");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    if (!interactionHasWorkflowImpact(normalized)) continue;
+    out.push(normalized);
+  }
+  return out;
+}
+
+function interactionHasWorkflowImpact(request) {
+  if (!request || typeof request !== "object") return false;
+  if (request.type === "manual_task") return true;
+  if (Array.isArray(request.options) && request.options.length) return true;
+  const metadata = request.metadata || {};
+  return Boolean(
+    request.affects_scoring
+    || request.affects_plan_gating
+    || metadata.reason
+    || metadata.finding_ids
+    || metadata.allowed_roles
+    || metadata.plan_gating
+  );
+}
+
+function dedupeInteractionOptions(options) {
+  if (!Array.isArray(options)) return [];
+  const out = [];
+  const seen = new Set();
+  for (const option of options) {
+    if (!option || typeof option !== "object") continue;
+    const optionId = safeString(option.id || option.value || option.label);
+    const entityId = safeString(option.entity_id || option.canonical_id || "");
+    const key = [optionId, entityId, option.finding_id || "", option.track ?? ""].join("|");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ ...option, label: interactionOptionLabel(option) });
+  }
+  return out;
+}
+
+function interactionOptionLabel(option) {
+  const base = safeString(option.label || option.id || option.value || "Option");
+  const context = [];
+  if (option.track != null && option.track !== "") context.push(mixTrackNumber(option.track));
+  if (option.channel != null && option.channel !== "") context.push(`Channel ${option.channel}`);
+  if (option.rule) context.push(safeString(option.rule).replaceAll("_", " "));
+  return context.length ? `${base} · ${context.join(" · ")}` : base;
+}
+
+function interactionPromptText(request) {
+  const impact = [];
+  const metadata = request.metadata || {};
+  if (request.affects_scoring || metadata.reason || metadata.finding_ids) impact.push("score");
+  if (request.affects_plan_gating || metadata.plan_gating) impact.push("plan");
+  if (!impact.length) return safeString(request.prompt || request.id || "Review this decision.");
+  return `${safeString(request.prompt || "Review this decision.")} Affects: ${impact.join(", ")}.`;
 }
 
 function renderWorkflowInteractionMount(mountId, workflowId, report) {
@@ -1027,15 +1396,29 @@ function renderWorkflowPanelById(workflowId) {
 function evidenceLabel(value) {
   const labels = {
     static_snapshot_only: "Project metadata",
+    short_live_snapshot: "Short live snapshot",
+    watch_window: "Watch window",
+    live_runtime: "Short live snapshot",
     loaded_plugin_inventory: "Loaded plugin inventory",
     local_preset_name_inventory: "Local preset names",
     rendered_master: "Rendered master audio",
+    rendered_master_audio: "Audio evidence",
+    rendered_stem: "Audio evidence",
+    stem_or_bus_audio: "Audio evidence",
     stem: "Selected short stem",
     candidate: "Selected audio candidate",
     manual_check: "Manual check",
     unavailable: "Unavailable"
   };
   return labels[value] || safeString(value).replaceAll("_", " ");
+}
+
+function evidenceModeLabel(value) {
+  const normalized = String(value || "").toLowerCase();
+  if (normalized === "watch" || normalized === "watch_window") return "Watch window";
+  if (normalized === "live" || normalized === "live_runtime" || normalized === "short_live_snapshot") return "Short live snapshot";
+  if (normalized.includes("rendered") || normalized.includes("stem")) return "Audio evidence";
+  return evidenceLabel(value || "static_snapshot_only");
 }
 
 // ─── Audio Analysis Jobs ─────────────────────────────────────────────────────
@@ -1266,23 +1649,29 @@ function audioJobButton(label, handler, primary = false) {
 }
 
 function renderNextAction() {
-  const action = state.status?.ui?.next_action || fallbackNextAction();
+  let action = state.status?.ui?.next_action || fallbackNextAction();
+  if (
+    hasLiveFlData()
+    && (action.target_panel === "setup" || String(action.label || "").toLowerCase().includes("setup doctor"))
+  ) {
+    action = fallbackNextAction();
+  }
   text("next-action-title", action.label || "Check status");
   text("next-action-detail", action.detail || "Run a check to see the current setup state.");
   const button = document.getElementById("next-action-button");
   if (!button) return;
   button.textContent = action.action_label || action.label || "Run Check";
   button.onclick = () => {
-    if (action.action_path && action.action_path !== "/api/refresh") {
-      processAction(action.action_path);
-      return;
-    }
-    if (action.action_path === "/api/refresh") {
-      refresh();
+    if (action.action_path === "/api/refresh" || action.action_path === "/api/diagnose") {
+      runGuidanceAction(action.action_path);
       return;
     }
     if (action.target_panel) {
       selectPanel(action.target_panel);
+      return;
+    }
+    if (action.action_path) {
+      processAction(action.action_path);
       return;
     }
     refresh();
@@ -1361,9 +1750,9 @@ function setWorkflowFeedback({ id, baseClass, loading, error, report, loadingTex
     feedback.textContent = error;
     return;
   }
-  if (report?.ok) {
+  if (report && report.ok !== false) {
     feedback.classList.add("is-live");
-    const timestamp = new Date(report.generated_at || Date.now()).toLocaleTimeString();
+    const timestamp = new Date(report.generated_at || report.created_at || Date.now()).toLocaleTimeString();
     feedback.textContent = `${completeLabel}: ${timestamp}. Read-only scan. No project changes are made.`;
     return;
   }
@@ -1656,6 +2045,12 @@ function renderSetup() {
   const container = document.getElementById("setup-steps");
   if (!container) return;
   container.innerHTML = "";
+
+  if (state.statusError) {
+    container.appendChild(statusCheckIssueCard(state.statusError));
+  }
+
+  if (!state.status) return;
 
   // Root-cause summary banner
   const banner = _buildSetupDoctorBanner();
@@ -2377,7 +2772,7 @@ function renderLivePlaybackMounts() {
     title.textContent = "Live Playback";
     const badge = document.createElement("span");
     badge.className = "badge badge-neutral";
-    badge.textContent = transport.playing ? "Level 2" : "Level 1";
+    badge.textContent = transport.playing ? "Short live snapshot" : "Static snapshot";
     heading.append(title, badge);
 
     const grid = document.createElement("div");
@@ -2385,7 +2780,6 @@ function renderLivePlaybackMounts() {
     for (const [label, value] of [
       ["Position", formatTransportPosition(transport)],
       ["Tempo", bpm(project.tempo_bpm || transport.tempo?.bpm || transport.tempo)],
-      ["Record", transport.recording ? "ON" : "OFF"],
       ["Markers", markers.length ? String(markers.length) : "None"]
     ]) {
       const item = document.createElement("div");
@@ -2399,10 +2793,10 @@ function renderLivePlaybackMounts() {
 
     const controls = document.createElement("div");
     controls.className = "transport-controls";
-    for (const action of ["play", "pause", "stop", "record"]) {
+    for (const action of ["play", "pause", "stop"]) {
       const button = document.createElement("button");
       button.type = "button";
-      button.className = action === "record" ? "transport-button transport-record" : "transport-button";
+      button.className = "transport-button";
       button.dataset.transportAction = action;
       button.textContent = action.charAt(0).toUpperCase() + action.slice(1);
       button.addEventListener("click", () => transportAction(action));
@@ -2421,23 +2815,339 @@ function renderLivePlaybackMounts() {
 
 // ─── Mix Review ──────────────────────────────────────────────────────────────
 async function runMixReview() {
-  state.mixReview.loading = true;
-  state.mixReview.error = null;
+  syncMixReviewOptionsFromDom();
+  beginWorkflowRun("mix_review", "reading mixer levels and evidence");
   renderMixReview();
   try {
+    const requestBody = workflowRunBody("mix_review", { inputs: mixReviewInputs() });
     const result = await api("/api/workflows/mix-review", {
       method: "POST",
-      body: JSON.stringify(workflowRunBody("mix_review"))
+      body: JSON.stringify(requestBody)
     });
     state.mixReview.report = result;
     syncWorkflowUserDecisions("mix_review", result);
     state.mixReview.error = result?.ok === false
       ? (result.error || "Mix Review unavailable.")
       : null;
+    finishWorkflowRun("mix_review", result, state.mixReview.error ? new Error(state.mixReview.error) : null);
   } catch (error) {
     state.mixReview.error = `Mix Review failed: ${error.message}`;
+    finishWorkflowRun("mix_review", null, error);
   } finally {
-    state.mixReview.loading = false;
+    renderMixReview();
+  }
+}
+
+function syncMixReviewOptionsFromDom() {
+  const options = state.mixReview.options;
+  const selected = document.querySelector?.("input[name='mix-review-level']:checked");
+  options.level = clampMixReviewLevel(Number(selected?.value || options.level || 1));
+  options.genreProfile = document.getElementById("mix-review-genre-profile")?.value || "";
+  options.loopSeconds = clampCaptureSeconds(
+    document.getElementById("mix-level2-loop-seconds")?.value || options.loopSeconds
+  );
+  options.playbackMode = document.getElementById("mix-level2-playback-mode")?.value || "user_starts";
+  const markerSelect = document.getElementById("mix-level2-marker");
+  options.markerName = markerSelect?.value || "";
+  options.masterPath = document.getElementById("mix-level3-master-path")?.value?.trim() || options.masterPath || "";
+  options.stems = mixStemRowsFromDom();
+  return options;
+}
+
+function mixReviewInputs() {
+  const options = state.mixReview.options;
+  const evidence = [];
+  if (options.level >= 3 || options.masterPath) {
+    evidence.push({
+      source_kind: "rendered_master",
+      path: options.masterPath || null,
+      status: options.masterPath ? "pending_external_analyzer" : "missing"
+    });
+  }
+  if (options.level >= 4) {
+    for (const stem of options.stems || []) {
+      evidence.push({
+        source_kind: "rendered_stem",
+        stem_role: stem.role || "other",
+        path: stem.path || null,
+        status: stem.path ? (stem.status || "pending_external_analyzer") : "missing"
+      });
+    }
+  }
+  return {
+    level: options.level,
+    genre_profile: options.genreProfile || null,
+    capture: {
+      loop_seconds: options.loopSeconds,
+      playback_mode: options.playbackMode || "user_starts",
+      marker_id: null,
+      marker_name: options.markerName || null,
+      requested_loudest_section: true
+    },
+    audio_evidence: evidence
+  };
+}
+
+function clampMixReviewLevel(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 1;
+  return Math.max(1, Math.min(4, Math.round(numeric)));
+}
+
+function clampCaptureSeconds(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 16;
+  return Math.max(8, Math.min(60, Math.round(numeric)));
+}
+
+function renderMixReviewOptions(report) {
+  const options = state.mixReview.options;
+  const level = clampMixReviewLevel(options.level);
+  (document.querySelectorAll?.("input[name='mix-review-level']") || []).forEach(input => {
+    input.checked = Number(input.value) === level;
+    const card = input.closest?.(".mix-review-level-card");
+    if (card) card.classList.toggle("is-selected", input.checked);
+  });
+  const levelBadge = document.getElementById("mix-review-level-badge");
+  if (levelBadge) {
+    levelBadge.textContent = MIX_REVIEW_LEVEL_LABELS[level] || `Level ${level}`;
+    levelBadge.className = `badge ${level >= 3 ? "badge-warn" : level === 2 ? "badge-ok" : "badge-neutral"}`;
+  }
+  const profile = document.getElementById("mix-review-genre-profile");
+  if (profile) profile.value = options.genreProfile || "";
+  const loop = document.getElementById("mix-level2-loop-seconds");
+  if (loop) loop.value = String(options.loopSeconds || 16);
+  const playback = document.getElementById("mix-level2-playback-mode");
+  if (playback) playback.value = options.playbackMode || "user_starts";
+  renderMixMarkerOptions();
+  renderMixLevelSections(level);
+  renderMixWatchStatus(report);
+  renderMixExpectedChecks("mix-level3-checks", MIX_LEVEL3_EXPECTED_CHECKS);
+  renderMixExpectedChecks("mix-level4-checks", MIX_LEVEL4_EXPECTED_CHECKS);
+  renderMixStemRoleTable();
+}
+
+function renderMixLevelSections(level) {
+  const level2 = document.getElementById("mix-level2-flow");
+  const level3 = document.getElementById("mix-level3-evidence");
+  const level4 = document.getElementById("mix-level4-evidence");
+  if (level2) level2.style.display = level === 2 ? "grid" : "none";
+  if (level3) level3.style.display = level >= 3 ? "grid" : "none";
+  if (level4) level4.style.display = level >= 4 ? "grid" : "none";
+}
+
+function renderMixMarkerOptions() {
+  const select = document.getElementById("mix-level2-marker");
+  if (!select) return;
+  const selected = state.mixReview.options.markerName || "";
+  select.innerHTML = "";
+  appendOption(select, "", "Loudest section / drop");
+  const markers = transportMarkers();
+  for (const marker of markers) {
+    const name = String(marker.name || marker.label || marker.title || "").trim();
+    if (!name) continue;
+    appendOption(select, name, name);
+  }
+  select.value = selected;
+}
+
+function appendOption(select, value, label) {
+  const option = document.createElement("option");
+  option.value = value;
+  option.textContent = label;
+  select.appendChild(option);
+}
+
+function transportMarkers() {
+  const markerPayload = getStatusReport()?.transport?.markers;
+  if (Array.isArray(markerPayload)) return markerPayload;
+  if (Array.isArray(markerPayload?.markers)) return markerPayload.markers;
+  return [];
+}
+
+function renderMixWatchStatus(report) {
+  const node = document.getElementById("mix-level2-watch-status");
+  if (!node) return;
+  const watch = state.mixReview.watch;
+  const summaryStatus = report?.mix_review?.evidence_summary?.watch_window;
+  if (watch.error) {
+    node.textContent = watch.error;
+    node.className = "mix-watch-status is-error";
+    return;
+  }
+  const status = watch.status || {};
+  if (status.running) {
+    node.textContent = `Watching ${status.tracks || 0} tracks for ${status.elapsed_s || 0}s.`;
+    node.className = "mix-watch-status is-live";
+    return;
+  }
+  if (summaryStatus === "available") {
+    node.textContent = "Fresh watch evidence is available.";
+    node.className = "mix-watch-status is-live";
+    return;
+  }
+  if (summaryStatus === "stale") {
+    node.textContent = "Watch evidence is stale.";
+    node.className = "mix-watch-status is-warn";
+    return;
+  }
+  node.textContent = "No fresh watch evidence yet.";
+  node.className = "mix-watch-status";
+}
+
+function renderMixExpectedChecks(id, checks) {
+  const node = document.getElementById(id);
+  if (!node) return;
+  node.innerHTML = "";
+  const title = document.createElement("strong");
+  title.textContent = "Expected checks";
+  node.appendChild(title);
+  const list = document.createElement("div");
+  list.className = "mix-check-chip-list";
+  for (const check of checks) {
+    const chip = document.createElement("span");
+    chip.textContent = check;
+    list.appendChild(chip);
+  }
+  node.appendChild(list);
+}
+
+function renderMixStemRoleTable() {
+  const table = document.getElementById("mix-stem-role-table");
+  if (!table) return;
+  table.innerHTML = "";
+  const rows = state.mixReview.options.stems || [];
+  rows.forEach((stem, index) => {
+    const row = document.createElement("div");
+    row.className = "mix-stem-row";
+    const role = document.createElement("select");
+    role.dataset.stemIndex = String(index);
+    role.dataset.stemField = "role";
+    for (const roleName of MIX_STEM_ROLES) appendOption(role, roleName, roleName.replaceAll("_", " "));
+    role.value = stem.role || "other";
+    const path = document.createElement("input");
+    path.type = "text";
+    path.placeholder = "/path/to/stem.wav";
+    path.value = stem.path || "";
+    path.dataset.stemIndex = String(index);
+    path.dataset.stemField = "path";
+    const status = document.createElement("span");
+    status.className = `badge ${stem.path ? "badge-warn" : "badge-neutral"}`;
+    status.textContent = stem.path ? "Pending analyzer" : "Missing";
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "ghost-button compact";
+    remove.textContent = "Remove";
+    remove.addEventListener("click", () => {
+      state.mixReview.options.stems = rows.filter((_, rowIndex) => rowIndex !== index);
+      renderMixStemRoleTable();
+    });
+    row.append(role, path, status, remove);
+    table.appendChild(row);
+  });
+}
+
+function mixStemRowsFromDom() {
+  const table = document.getElementById("mix-stem-role-table");
+  if (!table) return state.mixReview.options.stems || [];
+  const rows = [...table.querySelectorAll(".mix-stem-row")];
+  return rows.map(row => ({
+    role: row.querySelector("[data-stem-field='role']")?.value || "other",
+    path: row.querySelector("[data-stem-field='path']")?.value?.trim() || "",
+    status: row.querySelector("[data-stem-field='path']")?.value?.trim()
+      ? "pending_external_analyzer"
+      : "missing"
+  }));
+}
+
+async function mixWatchRequest(action, params = {}) {
+  const response = await api("/api/mix-watch", {
+    method: "POST",
+    body: JSON.stringify({ action, params })
+  });
+  if (response?.ok === false) throw new Error(response.error || "Mix watch failed.");
+  return response;
+}
+
+async function startMixLevel2Watch() {
+  syncMixReviewOptionsFromDom();
+  const options = state.mixReview.options;
+  state.mixReview.watch.loading = true;
+  state.mixReview.watch.error = null;
+  renderMixReview();
+  try {
+    const response = await mixWatchRequest("start", {
+      loop_seconds: options.loopSeconds,
+      interval_ms: 150
+    });
+    state.mixReview.watch.status = response.watch || null;
+    if (options.playbackMode === "gui_starts") {
+      await transportAction("play");
+    }
+    if (!window.__FLS_PILOT_TEST__ && typeof setTimeout === "function") {
+      setTimeout(() => stopMixLevel2Watch({ runReview: true }), options.loopSeconds * 1000);
+    }
+  } catch (error) {
+    state.mixReview.watch.error = error.message;
+  } finally {
+    state.mixReview.watch.loading = false;
+    renderMixReview();
+  }
+}
+
+async function stopMixLevel2Watch({ runReview = false } = {}) {
+  state.mixReview.watch.loading = true;
+  renderMixReview();
+  try {
+    const response = await mixWatchRequest("stop");
+    state.mixReview.watch.status = response.watch || null;
+    state.mixReview.watch.error = null;
+    if (runReview) await runMixReview();
+  } catch (error) {
+    state.mixReview.watch.error = error.message;
+  } finally {
+    state.mixReview.watch.loading = false;
+    renderMixReview();
+  }
+}
+
+async function prepareMixRenderedMasterEvidence() {
+  syncMixReviewOptionsFromDom();
+  const path = state.mixReview.options.masterPath;
+  if (!path) {
+    state.mixReview.error = "Rendered master path is required.";
+    renderMixReview();
+    return;
+  }
+  try {
+    const response = await audioAnalysisRequest("submit", { path });
+    state.audioAnalysis.activeJob = response.job;
+    state.mixReview.error = null;
+    await loadAudioAnalysisJobs();
+  } catch (error) {
+    state.mixReview.error = error.message;
+  } finally {
+    renderMixReview();
+  }
+}
+
+async function prepareMixStemEvidence() {
+  syncMixReviewOptionsFromDom();
+  const stems = (state.mixReview.options.stems || []).filter(stem => stem.path);
+  if (!stems.length) {
+    state.mixReview.error = "At least one stem path is required.";
+    renderMixReview();
+    return;
+  }
+  try {
+    for (const stem of stems) {
+      await audioAnalysisRequest("submit", { path: stem.path });
+    }
+    state.mixReview.error = null;
+    await loadAudioAnalysisJobs();
+  } catch (error) {
+    state.mixReview.error = error.message;
+  } finally {
     renderMixReview();
   }
 }
@@ -2453,6 +3163,7 @@ function renderMixReview() {
   setRunButton("run-mix-review", isLoading, "Run Mix Review");
 
   renderMixFeedback(report, error, isLoading);
+  renderMixReviewOptions(report);
   renderWorkflowInteractionMount("mix-review-interactions", "mix_review", report);
   renderMixSummary(report, isLoading);
   renderMixLevels(report);
@@ -2471,7 +3182,7 @@ function renderMixFeedback(report, error, isLoading) {
     loading: isLoading,
     error,
     report,
-    loadingText: "Mix Review is reading FL Studio mixer data...",
+    loadingText: workflowProgressText("Mix Review", state.mixReview, "reading FL Studio mixer data"),
     idleText: "Review has not run yet.",
     completeLabel: "Last review"
   });
@@ -2479,12 +3190,14 @@ function renderMixFeedback(report, error, isLoading) {
 
 function renderMixSummary(report, isLoading) {
   const summary = report?.summary || {};
-  const score = Number.isFinite(Number(summary.health_score))
-    ? Number(summary.health_score)
+  const scoreSummary = canonicalScoreSummary(report);
+  const score = Number.isFinite(Number(scoreSummary?.health_score ?? summary.health_score))
+    ? Number(scoreSummary?.health_score ?? summary.health_score)
     : null;
-  const label = summary.health_label || (report?.ok ? "Live" : "Idle");
+  const status = canonicalStatus(scoreSummary, report?.ok ? lowEndScoreStatus(score) : "not_run");
+  const label = scoreStatusLabel(status);
 
-  text("mix-score-value", score == null ? "--" : `${Math.round(score)}%`);
+  text("mix-score-value", scoreValue(score));
   text("mix-score-caption", isLoading ? "Reading" : label);
   text("mix-score-label", label);
   text("mix-used-total", summary.used_tracks ?? "--");
@@ -2507,18 +3220,14 @@ function renderMixSummary(report, isLoading) {
 
   const scoreLabel = document.getElementById("mix-score-label");
   if (scoreLabel) {
-    scoreLabel.className = `badge ${mixBadgeClass(score, report?.ok)}`;
+    scoreLabel.className = `badge ${scoreStatusClass(status)}`;
   }
 
   const levelState = document.getElementById("mix-level-state");
   if (levelState) {
-    const hasLevels = summary.levels_valid === true;
-    levelState.textContent = isLoading
-      ? "Reading"
-      : report?.ok
-        ? (hasLevels ? "Live" : "Limited")
-        : "Idle";
-    levelState.className = `badge ${report?.ok && hasLevels ? "badge-ok" : "badge-neutral"}`;
+    const evidence = evidenceModeLabel(report?.evidence_mode || scoreSummary?.evidence_mode || summary.peak_source);
+    levelState.textContent = isLoading ? "Reading" : (report?.ok ? evidence : "Not Run");
+    levelState.className = `badge ${report?.ok ? "badge-ok" : "badge-neutral"}`;
   }
 
   renderExplicitLabels(".mix-score-stats", report);
@@ -2593,7 +3302,15 @@ function renderMixFindings(report) {
     title.textContent = safeString(finding.title);
     const detail = document.createElement("span");
     detail.textContent = mixFindingDetail(finding);
-    body.append(title, detail);
+    const badges = document.createElement("div");
+    badges.className = "mix-finding-badges";
+    for (const badgeData of mixFindingBadges(finding)) {
+      const badge = document.createElement("span");
+      badge.className = `badge ${badgeData.className}`;
+      badge.textContent = badgeData.label;
+      badges.appendChild(badge);
+    }
+    body.append(title, detail, badges);
 
     const severity = document.createElement("span");
     severity.className = "mix-finding-severity";
@@ -2602,6 +3319,28 @@ function renderMixFindings(report) {
     row.append(icon, body, severity);
     list.appendChild(row);
   }
+}
+
+function mixFindingBadges(finding) {
+  const evidence = String(finding.evidence_type || finding.metadata?.evidence_type || "").toLowerCase();
+  const proof = String(finding.proof_status || finding.metadata?.proof_status || "").toLowerCase();
+  const confidence = String(finding.confidence || finding.metadata?.confidence || "").toLowerCase();
+  const out = [];
+  const evidenceLabels = {
+    static_snapshot: "Static",
+    live_meter: "Live",
+    watch_window: "Watch",
+    rendered_master: "Rendered Pending",
+    rendered_stem: "Stem Pending",
+    manual_check: "Manual Check"
+  };
+  if (evidenceLabels[evidence]) out.push({ label: evidenceLabels[evidence], className: "badge-neutral" });
+  if (proof === "heuristic") out.push({ label: "Heuristic", className: "badge-warn" });
+  if (proof === "provisional") out.push({ label: "Provisional", className: "badge-warn" });
+  if (proof === "evidence_backed") out.push({ label: "Evidence-backed", className: "badge-ok" });
+  if (proof === "pending_external_analyzer") out.push({ label: "External Analyzer Required", className: "badge-warn" });
+  if (confidence) out.push({ label: `Confidence ${confidence}`, className: "badge-neutral" });
+  return out;
 }
 
 function renderMixProposals(report) {
@@ -2758,8 +3497,8 @@ function renderMixNotes(report) {
 
 // ─── Low-End Analysis ────────────────────────────────────────────────────────
 async function runLowEndAnalysis() {
-  state.lowEndAnalysis.loading = true;
-  state.lowEndAnalysis.error = null;
+  syncLowEndSelectionDecision();
+  beginWorkflowRun("low_end_analysis", "checking low-end roles and mono safety");
   renderLowEndAnalysis();
   try {
     const result = await api("/api/workflows/low-end-analysis", {
@@ -2767,14 +3506,16 @@ async function runLowEndAnalysis() {
       body: JSON.stringify(workflowRunBody("low_end_analysis"))
     });
     state.lowEndAnalysis.report = result;
+    syncLowEndSelectionFromReport(result);
     syncWorkflowUserDecisions("low_end_analysis", result);
     state.lowEndAnalysis.error = result?.ok === false
       ? (result.error || "Low-End Analysis unavailable.")
       : null;
+    finishWorkflowRun("low_end_analysis", result, state.lowEndAnalysis.error ? new Error(state.lowEndAnalysis.error) : null);
   } catch (error) {
     state.lowEndAnalysis.error = `Low-End Analysis failed: ${error.message}`;
+    finishWorkflowRun("low_end_analysis", null, error);
   } finally {
-    state.lowEndAnalysis.loading = false;
     renderLowEndAnalysis();
   }
 }
@@ -2791,6 +3532,7 @@ function renderLowEndAnalysis() {
 
   renderLowEndFeedback(report, error, isLoading);
   renderWorkflowInteractionMount("low-end-interactions", "low_end_analysis", report);
+  renderLowEndSelection(report);
   renderLowEndSummary(report, isLoading);
   renderLowEndFocus(report);
   renderLowEndFindings(report);
@@ -2807,7 +3549,7 @@ function renderLowEndFeedback(report, error, isLoading) {
     loading: isLoading,
     error,
     report,
-    loadingText: "Low-End Analysis is reading FL Studio mixer data...",
+    loadingText: workflowProgressText("Low-End Analysis", state.lowEndAnalysis, "checking low-end roles and mono safety"),
     idleText: "Analysis has not run yet.",
     completeLabel: "Last analysis"
   });
@@ -2816,11 +3558,13 @@ function renderLowEndFeedback(report, error, isLoading) {
 function renderLowEndSummary(report, isLoading) {
   const tracks = lowEndTracks(report);
   const findings = lowEndFindings(report);
-  const score = lowEndScore(report, tracks, findings);
-  const label = lowEndScoreLabel(score, report?.ok);
+  const scoreSummary = canonicalScoreSummary(report);
+  const score = scoreSummary?.health_score ?? lowEndScore(report, tracks, findings);
+  const status = canonicalStatus(scoreSummary, report?.ok ? lowEndScoreStatus(score) : "not_run");
+  const label = scoreStatusLabel(status);
   const summary = report?.summary || {};
 
-  text("low-end-score-value", score == null ? "--" : `${Math.round(score)}%`);
+  text("low-end-score-value", scoreValue(score));
   text("low-end-score-caption", isLoading ? "Reading" : label);
   text("low-end-score-label", label);
   text("low-end-track-total", report ? tracks.length : "--");
@@ -2839,7 +3583,7 @@ function renderLowEndSummary(report, isLoading) {
 
   const scoreLabel = document.getElementById("low-end-score-label");
   if (scoreLabel) {
-    scoreLabel.className = `badge ${mixBadgeClass(score, report?.ok)}`;
+    scoreLabel.className = `badge ${scoreStatusClass(status)}`;
   }
 
   const mapState = document.getElementById("low-end-map-state");
@@ -3211,7 +3955,7 @@ function lowEndFindings(report) {
   return Array.isArray(findings) ? findings : [];
 }
 
-function lowEndTracks(report) {
+function lowEndReportTracks(report) {
   const rows = new Map();
 
   function keyFor(track) {
@@ -3268,6 +4012,247 @@ function lowEndTracks(report) {
     .slice(0, 18);
 }
 
+function lowEndTracks(report) {
+  const selected = lowEndSelectionTracks(report);
+  return selected.length ? selected : lowEndReportTracks(report);
+}
+
+function syncLowEndSelectionFromReport(report, { force = false } = {}) {
+  if (!report) return;
+  const selection = state.lowEndAnalysis.selection || { rows: [], dirty: false };
+  if (selection.dirty && !force) return;
+  const tracks = lowEndReportTracks(report);
+  selection.rows = tracks.map(track => ({
+    entity_id: lowEndEntityId(track),
+    track: track.track,
+    name: safeString(track.name || mixTrackNumber(track.track)),
+    role: track.low_end_role || lowEndRole(track.name),
+    selected: true,
+    source: "detected",
+    track_data: { ...track }
+  })).filter(row => row.entity_id);
+  selection.dirty = false;
+  state.lowEndAnalysis.selection = selection;
+  syncLowEndSelectionDecision();
+}
+
+function lowEndSelectionRows() {
+  const selection = state.lowEndAnalysis.selection;
+  return Array.isArray(selection?.rows) ? selection.rows : [];
+}
+
+function lowEndSelectionTracks(report) {
+  const rows = lowEndSelectionRows().filter(row => row.selected !== false);
+  if (!rows.length) return [];
+  const all = lowEndAllMixerTracks(report);
+  const byEntity = new Map(all.map(track => [lowEndEntityId(track), track]));
+  const out = [];
+  for (const row of rows) {
+    const source = byEntity.get(row.entity_id) || row.track_data || {};
+    out.push({
+      ...source,
+      track: row.track ?? source.track ?? source.index,
+      name: row.name || source.name || mixTrackNumber(row.track ?? source.track ?? source.index),
+      low_end: true,
+      low_end_role: row.role || source.low_end_role || lowEndRole(row.name || source.name),
+      validated_by_user: true,
+      validation_source: row.source === "detected" ? "detected_selection" : "user_selection"
+    });
+  }
+  const roleOrder = { kick: 0, sub: 1, bass: 2, other: 3 };
+  return out.sort((a, b) => {
+    const roleDelta = (roleOrder[a.low_end_role] ?? 9) - (roleOrder[b.low_end_role] ?? 9);
+    if (roleDelta !== 0) return roleDelta;
+    return mixPeakSortValue(b.peak_db) - mixPeakSortValue(a.peak_db);
+  });
+}
+
+function lowEndAllMixerTracks(report) {
+  const rows = [
+    ...(Array.isArray(report?.details?.all_tracks) ? report.details.all_tracks : []),
+    ...(Array.isArray(report?.details?.tracks) ? report.details.tracks : []),
+    ...(Array.isArray(report?.visuals?.stereo_tracks) ? report.visuals.stereo_tracks : [])
+  ];
+  const map = new Map();
+  for (const row of rows) {
+    if (!row || typeof row !== "object") continue;
+    const track = row.track ?? row.index;
+    const entity = lowEndEntityId({ track });
+    if (!entity) continue;
+    map.set(entity, {
+      ...row,
+      track,
+      name: row.name || row.track_name || mixTrackNumber(track)
+    });
+  }
+  return Array.from(map.values()).sort((a, b) => Number(a.track ?? 999) - Number(b.track ?? 999));
+}
+
+function lowEndEntityId(track) {
+  const value = track?.track ?? track?.index;
+  if (value == null || value === "") return "";
+  return `mixer:${value}`;
+}
+
+function syncLowEndSelectionDecision() {
+  const rows = lowEndSelectionRows();
+  if (!rows.length) return;
+  const selectedRows = rows.filter(row => row.selected !== false && row.entity_id);
+  const detectedRows = rows.filter(row => row.source === "detected" && row.entity_id);
+  const selected = selectedRows.map(row => row.entity_id);
+  const roleChanges = selectedRows.map(row => ({
+    entity_id: row.entity_id,
+    role: row.role || "other"
+  }));
+  const added = selectedRows
+    .filter(row => row.source === "user")
+    .map(row => ({
+      entity_id: row.entity_id,
+      role: row.role || "other"
+    }));
+  const removed = detectedRows
+    .filter(row => row.selected === false)
+    .map(row => row.entity_id);
+  upsertWorkflowUserDecision("low_end_analysis", {
+    interaction_id: "low_end.confirm_detected_tracks",
+    interaction_request_id: "low_end.confirm_detected_tracks",
+    workflow_id: "low_end_analysis",
+    type: "multi_select",
+    decision: "selected",
+    selected,
+    selected_values: selected,
+    role_changes: roleChanges,
+    added_entities: added,
+    removed_entities: removed,
+    confirmed: true,
+    skipped: false
+  });
+}
+
+function renderLowEndSelection(report) {
+  const list = document.getElementById("low-end-selection-list");
+  if (!list) return;
+  if (report && !lowEndSelectionRows().length) syncLowEndSelectionFromReport(report);
+  list.innerHTML = "";
+
+  const badge = document.getElementById("low-end-selection-state");
+  const rows = lowEndSelectionRows();
+  if (badge) {
+    badge.textContent = rows.length ? "Affects Next Run" : "Not Run";
+    badge.className = `badge ${rows.length ? "badge-warn" : "badge-neutral"}`;
+  }
+
+  renderLowEndAddTrackSelect(report);
+
+  if (!rows.length) {
+    list.appendChild(lowEndPlaceholder("Run Low-End Analysis to review detected kick, bass, and sub tracks."));
+    return;
+  }
+
+  for (const row of rows) {
+    const item = document.createElement("div");
+    item.className = row.selected === false ? "low-end-selection-row is-muted" : "low-end-selection-row";
+
+    const label = document.createElement("label");
+    label.className = "low-end-selection-include";
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.checked = row.selected !== false;
+    checkbox.addEventListener("change", () => {
+      row.selected = checkbox.checked;
+      state.lowEndAnalysis.selection.dirty = true;
+      syncLowEndSelectionDecision();
+      renderLowEndAnalysis();
+    });
+    const name = document.createElement("span");
+    name.textContent = `${safeString(row.name)} · ${mixTrackNumber(row.track)}`;
+    label.append(checkbox, name);
+
+    const role = document.createElement("select");
+    role.className = "low-end-role-select";
+    for (const option of [
+      ["kick", "Kick"],
+      ["sub", "Sub / 808"],
+      ["bass", "Bass"],
+      ["other", "Other Low-End"]
+    ]) {
+      const node = document.createElement("option");
+      node.value = option[0];
+      node.textContent = option[1];
+      role.appendChild(node);
+    }
+    role.value = row.role || "other";
+    role.addEventListener("change", () => {
+      row.role = role.value;
+      row.selected = true;
+      state.lowEndAnalysis.selection.dirty = true;
+      syncLowEndSelectionDecision();
+      renderLowEndAnalysis();
+    });
+
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "ghost-button compact";
+    remove.textContent = "Remove";
+    remove.addEventListener("click", () => {
+      row.selected = false;
+      state.lowEndAnalysis.selection.dirty = true;
+      syncLowEndSelectionDecision();
+      renderLowEndAnalysis();
+    });
+
+    item.append(label, role, remove);
+    list.appendChild(item);
+  }
+}
+
+function renderLowEndAddTrackSelect(report) {
+  const select = document.getElementById("low-end-add-track");
+  if (!select) return;
+  const current = new Set(lowEndSelectionRows().map(row => row.entity_id));
+  const tracks = lowEndAllMixerTracks(report).filter(track => !current.has(lowEndEntityId(track)));
+  const previous = select.value;
+  select.innerHTML = "";
+  if (!tracks.length) {
+    const option = document.createElement("option");
+    option.value = "";
+    option.textContent = "No additional tracks";
+    select.appendChild(option);
+    return;
+  }
+  for (const track of tracks) {
+    const option = document.createElement("option");
+    option.value = lowEndEntityId(track);
+    option.textContent = `${safeString(track.name)} · ${mixTrackNumber(track.track)}`;
+    select.appendChild(option);
+  }
+  if (previous && Array.from(select.options || []).some(option => option.value === previous)) {
+    select.value = previous;
+  }
+}
+
+function addLowEndSelectedTrack() {
+  const select = document.getElementById("low-end-add-track");
+  const role = document.getElementById("low-end-add-role")?.value || "other";
+  const entityId = select?.value || "";
+  if (!entityId || lowEndSelectionRows().some(row => row.entity_id === entityId)) return;
+  const report = state.lowEndAnalysis.report;
+  const source = lowEndAllMixerTracks(report).find(track => lowEndEntityId(track) === entityId);
+  if (!source) return;
+  state.lowEndAnalysis.selection.rows.push({
+    entity_id: entityId,
+    track: source.track,
+    name: safeString(source.name || mixTrackNumber(source.track)),
+    role,
+    selected: true,
+    source: "user",
+    track_data: { ...source }
+  });
+  state.lowEndAnalysis.selection.dirty = true;
+  syncLowEndSelectionDecision();
+  renderLowEndAnalysis();
+}
+
 function lowEndNameMatches(value) {
   const name = String(value || "").toLowerCase();
   return ["kick", "sub", "bass", "808", "boom"].some(keyword => name.includes(keyword));
@@ -3316,10 +4301,15 @@ function lowEndScore(report, tracks, findings) {
 }
 
 function lowEndScoreLabel(score, ok) {
-  if (!ok || score == null) return "Idle";
-  if (score >= 90) return "Solid";
-  if (score >= 75) return "Needs Review";
-  return "At Risk";
+  if (!ok || score == null) return "Not Run";
+  return scoreStatusLabel(lowEndScoreStatus(score));
+}
+
+function lowEndScoreStatus(score) {
+  if (score == null) return "not_run";
+  if (score >= 90) return "ok";
+  if (score >= 75) return "needs_review";
+  return "at_risk";
 }
 
 function renderExplicitLabels(containerSelector, report) {
@@ -3349,12 +4339,25 @@ function renderExplicitLabels(containerSelector, report) {
     explicitDiv.append(div);
   };
 
-  const analysis = report.analysis || {};
-  const h = analysis.health_score ?? report.summary?.health_score;
-  const r = analysis.risk_score ?? report.summary?.risk_score;
-  const c = analysis.coverage;
-  const conf = analysis.confidence_score;
+  const scoreSummary = canonicalScoreSummary(report) || {};
+  const metadata = report.metadata || {};
+  const h = scoreSummary.health_score ?? report.health_score ?? report.summary?.health_score;
+  const r = scoreSummary.risk_score ?? report.risk_score ?? report.summary?.risk_score;
+  const c = scoreSummary.coverage ?? report.coverage;
+  const conf = scoreSummary.confidence_score ?? report.confidence_score;
 
+  if (metadata.evidence_level_label) {
+    addStat("Evidence", safeString(metadata.evidence_level_label).replaceAll("_", " "));
+  }
+  if (metadata.audio_evidence_status) {
+    addStat("Audio Evidence", safeString(metadata.audio_evidence_status).replaceAll("_", " "));
+  }
+  if (scoreSummary.status || metadata.score_status) {
+    addStat("Score Status", scoreStatusLabel(scoreSummary.status || metadata.score_status));
+  }
+  if (metadata.role_confirmation_state) {
+    addStat("Roles", safeString(metadata.role_confirmation_state).replaceAll("_", " "));
+  }
   if (h != null) addStat("Health", `${Math.round(h)} / 100`);
   if (r != null) addStat("Risk", `${Math.round(r)} / 100`);
   if (c != null && c.required) addStat("Coverage", `${c.available} / ${c.required}`);
@@ -3403,26 +4406,119 @@ function formatSigned(value) {
 }
 
 // ─── Routing Audit ───────────────────────────────────────────────────────────
-async function runRoutingAudit() {
-  state.routingAudit.loading = true;
-  state.routingAudit.error = null;
+function routingAuditOptions() {
+  const mode = document.getElementById("routing-check-mode")?.value || "level_1_static";
+  const compliance = document.getElementById("routing-template-compliance")?.value || "auto_detect";
+  const selected = document.getElementById("routing-template-profile")?.value || "";
+  const options = {
+    routing_check_mode: mode,
+    template_compliance: compliance,
+  };
+  if (compliance === "manual_select" && selected) {
+    options.selected_template_profile = selected;
+  }
+  if (mode === "level_2_signal_flow") {
+    const level2 = state.routingAudit.level2 || {};
+    if (level2.decision) options.playback_decision = level2.decision;
+    if (level2.markerName) options.marker_name = level2.markerName;
+    if (level2.loopDurationSeconds) options.loop_duration_seconds = level2.loopDurationSeconds;
+  }
+  return options;
+}
+
+function routingTemplateProfiles() {
+  const rows = state.routingAudit.report?.details?.template_profile_catalog
+    || state.status?.ui?.template_profile_catalog
+    || [];
+  return Array.isArray(rows) ? rows : [];
+}
+
+function populateRoutingTemplateProfiles() {
+  const select = document.getElementById("routing-template-profile");
+  if (!select) return;
+  const previous = select.value;
+  const profiles = routingTemplateProfiles();
+  select.innerHTML = "";
+  if (!profiles.length) {
+    const option = document.createElement("option");
+    option.value = "";
+    option.textContent = "No profiles loaded";
+    select.appendChild(option);
+    return;
+  }
+  for (const profile of profiles) {
+    const option = document.createElement("option");
+    option.value = profile.profile_id || "";
+    option.textContent = profile.display_name || profile.profile_id || "Template Profile";
+    select.appendChild(option);
+  }
+  if (previous && [...select.options].some(option => option.value === previous)) {
+    select.value = previous;
+  }
+}
+
+function resetRoutingLevel2Flow() {
+  state.routingAudit.level2 = {
+    stage: "idle",
+    decision: null,
+    markerName: null,
+    loopDurationSeconds: null
+  };
+}
+
+function routingLevel2Ready() {
+  const level2 = state.routingAudit.level2 || {};
+  return ["ready_auto", "ready_manual", "ready_existing_loop"].includes(level2.stage);
+}
+
+async function runRoutingAuditWithCurrentOptions() {
+  beginWorkflowRun("routing_audit", "reading channel routing and signal flow");
   renderRoutingAudit();
   try {
     const result = await api("/api/workflows/routing-audit", {
       method: "POST",
-      body: JSON.stringify(workflowRunBody("routing_audit"))
+      body: JSON.stringify(workflowRunBody("routing_audit", routingAuditOptions()))
     });
     state.routingAudit.report = result;
     syncWorkflowUserDecisions("routing_audit", result);
     state.routingAudit.error = result?.ok === false
       ? (result.error || "Routing Audit unavailable.")
       : null;
+    if (
+      result?.routing_check_level === 2
+      && result?.details?.signal_flow
+      && result.details.signal_flow.available === false
+    ) {
+      state.routingAudit.level2 = {
+        ...state.routingAudit.level2,
+        stage: "fallback"
+      };
+    }
+    finishWorkflowRun("routing_audit", result, state.routingAudit.error ? new Error(state.routingAudit.error) : null);
   } catch (error) {
     state.routingAudit.error = `Routing Audit failed: ${error.message}`;
+    finishWorkflowRun("routing_audit", null, error);
   } finally {
-    state.routingAudit.loading = false;
     renderRoutingAudit();
   }
+}
+
+async function runRoutingAudit() {
+  const options = routingAuditOptions();
+  if (options.routing_check_mode !== "level_2_signal_flow") {
+    resetRoutingLevel2Flow();
+    await runRoutingAuditWithCurrentOptions();
+    return;
+  }
+  if (!routingLevel2Ready()) {
+    state.routingAudit.level2 = {
+      ...state.routingAudit.level2,
+      stage: "choose"
+    };
+    renderRoutingAudit();
+    return;
+  }
+  await runRoutingAuditWithCurrentOptions();
 }
 
 function renderRoutingAudit() {
@@ -3436,12 +4532,293 @@ function renderRoutingAudit() {
   setRunButton("run-routing-audit", isLoading, "Run Routing Audit");
 
   renderRoutingFeedback(report, error, isLoading);
+  renderRoutingControls(report);
   renderWorkflowInteractionMount("routing-audit-interactions", "routing_audit", report);
   renderRoutingSummary(report, isLoading);
   renderRoutingGraph(report);
   renderRoutingFindings(report);
   renderRoutingRisks(report);
   renderRoutingTables(report);
+}
+
+function renderRoutingControls(report) {
+  populateRoutingTemplateProfiles();
+  const compliance = document.getElementById("routing-template-compliance")?.value || "auto_detect";
+  const profileWrap = document.getElementById("routing-template-profile-wrap");
+  if (profileWrap) profileWrap.hidden = compliance !== "manual_select";
+
+  const status = document.getElementById("routing-template-status");
+  if (status) {
+    const template = report?.details?.template_status || {};
+    if (compliance === "off") {
+      status.textContent = "Template Compliance: Off";
+    } else if (template.display_name && template.profile_source === "manual_select") {
+      status.textContent = `Selected template: ${safeString(template.display_name)} / Confidence: ${safeString(template.confidence)}`;
+    } else if (template.display_name) {
+      status.textContent = `Detected template: ${safeString(template.display_name)} / Confidence: ${safeString(template.confidence)}`;
+    } else if (compliance === "manual_select") {
+      status.textContent = "Selected template: choose a profile before running compliance checks.";
+    } else {
+      status.textContent = "Template Compliance: Auto-detect";
+    }
+  }
+
+  renderRoutingLevel2Flow(report);
+}
+
+function renderRoutingLevel2Flow(report) {
+  const container = document.getElementById("routing-level2-flow");
+  if (!container) return;
+  container.innerHTML = "";
+  const mode = document.getElementById("routing-check-mode")?.value || "level_1_static";
+  if (mode !== "level_2_signal_flow") return;
+
+  const level2 = state.routingAudit.level2 || {};
+  const stage = level2.stage || "idle";
+  if (stage === "idle") {
+    container.appendChild(routingLevel2Notice(
+      "Signal Flow Assisted Routing Audit (Lvl 2)",
+      "Level 2 requires playback to collect simple signal-flow data such as peak activity and level changes. Lower your monitoring volume before continuing.",
+      [
+        ["Prepare Level 2", () => {
+          state.routingAudit.level2 = { ...level2, stage: "choose" };
+          renderRoutingAudit();
+        }]
+      ]
+    ));
+    return;
+  }
+
+  if (stage === "choose") {
+    container.appendChild(routingLevel2Notice(
+      "Signal Flow Assisted Routing Audit (Lvl 2)",
+      "Do you want FLS Pilot to start playback automatically?",
+      [
+        ["Start playback automatically", () => startRoutingLevel2Automatic()],
+        ["I will start playback manually", () => showRoutingManualPlayback()],
+        ["Cancel Level 2 check", () => {
+          resetRoutingLevel2Flow();
+          const modeSelect = document.getElementById("routing-check-mode");
+          if (modeSelect) modeSelect.value = "level_1_static";
+          renderRoutingAudit();
+        }]
+      ]
+    ));
+    return;
+  }
+
+  if (stage === "marker_found") {
+    const marker = level2.marker || {};
+    container.appendChild(routingLevel2Notice(
+      "Analysis Marker Found",
+      `FLS Pilot found a possible analysis marker: "${safeString(marker.name)}". Use this marker for the Signal Flow Assisted Routing Audit (Lvl 2)?`,
+      [
+        ["Use marker and start playback", () => useRoutingMarkerAndStart(marker)],
+        ["Choose another marker", () => showRoutingMarkerChooser()],
+        ["I will set the loop manually", () => showRoutingManualLoopPrompt()],
+        ["Cancel", () => { resetRoutingLevel2Flow(); renderRoutingAudit(); }]
+      ]
+    ));
+    return;
+  }
+
+  if (stage === "choose_marker") {
+    container.appendChild(routingMarkerChooser());
+    return;
+  }
+
+  if (stage === "no_marker") {
+    container.appendChild(routingLevel2Notice(
+      "Set An Analysis Loop",
+      "No suitable analysis marker was found. Please set a playlist marker or loop around the loudest or most representative section of the song. Recommended loop length: 8-60 seconds.",
+      [
+        ["I have set the marker/loop - continue", () => {
+          state.routingAudit.level2 = {
+            stage: "ready_existing_loop",
+            decision: "start_playback_automatically",
+            markerName: null,
+            loopDurationSeconds: 16
+          };
+          runRoutingAuditWithCurrentOptions();
+        }],
+        ["I will start playback manually", () => showRoutingManualPlayback()],
+        ["Run Static Routing & Settings Audit (Lvl 1) instead", () => runRoutingLevel1Instead()],
+        ["Cancel", () => { resetRoutingLevel2Flow(); renderRoutingAudit(); }]
+      ]
+    ));
+    return;
+  }
+
+  if (stage === "manual") {
+    container.appendChild(routingLevel2Notice(
+      "Manual Playback",
+      "Please start playback in FL Studio and loop the loudest or most representative section of the song. Recommended loop length: 8-60 seconds.",
+      [
+        ["Playback is running - start analysis", () => {
+          state.routingAudit.level2 = {
+            stage: "ready_manual",
+            decision: "manual_playback_running",
+            markerName: null,
+            loopDurationSeconds: 16
+          };
+          runRoutingAuditWithCurrentOptions();
+        }],
+        ["Run Level 1", () => runRoutingLevel1Instead()],
+        ["Cancel", () => { resetRoutingLevel2Flow(); renderRoutingAudit(); }]
+      ]
+    ));
+    return;
+  }
+
+  if (stage === "fallback") {
+    container.appendChild(routingLevel2Notice(
+      "Signal Flow Data Unavailable",
+      "Signal Flow Assisted Routing Audit (Lvl 2) could not collect signal-flow data. You can either set a loop and try again, or run Static Routing & Settings Audit (Lvl 1) instead.",
+      [
+        ["Try Level 2 again", () => {
+          state.routingAudit.level2 = { stage: "choose", decision: null, markerName: null, loopDurationSeconds: null };
+          renderRoutingAudit();
+        }],
+        ["Run Level 1", () => runRoutingLevel1Instead()],
+        ["Cancel", () => { resetRoutingLevel2Flow(); renderRoutingAudit(); }]
+      ]
+    ));
+    return;
+  }
+
+  if (routingLevel2Ready()) {
+    container.appendChild(routingLevel2Notice(
+      "Level 2 Ready",
+      "Playback evidence is ready for a signal-flow assisted routing audit.",
+      [
+        ["Run Signal Flow Assisted Routing Audit (Lvl 2)", () => runRoutingAuditWithCurrentOptions()],
+        ["Reset", () => { resetRoutingLevel2Flow(); renderRoutingAudit(); }]
+      ]
+    ));
+  }
+}
+
+function routingLevel2Notice(titleText, bodyText, actions = []) {
+  const panel = document.createElement("div");
+  panel.className = "routing-level2-card";
+  const title = document.createElement("strong");
+  title.textContent = titleText;
+  const body = document.createElement("p");
+  body.textContent = bodyText;
+  const actionRow = document.createElement("div");
+  actionRow.className = "routing-level2-actions";
+  for (const [label, handler] of actions) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = label.includes("Run") || label.includes("Use") || label.includes("start")
+      ? "ghost-button primary-action"
+      : "ghost-button";
+    button.textContent = label;
+    button.addEventListener("click", handler);
+    actionRow.appendChild(button);
+  }
+  panel.append(title, body, actionRow);
+  return panel;
+}
+
+function routingAnalysisMarkers() {
+  const markers = markerRows(getStatusReport()?.transport || {});
+  return markers.filter(marker => {
+    const name = String(marker.name || "").toLowerCase();
+    return ROUTING_LEVEL2_MARKER_NAMES.some(token => name.includes(token));
+  });
+}
+
+function startRoutingLevel2Automatic() {
+  const markers = routingAnalysisMarkers();
+  if (markers.length) {
+    state.routingAudit.level2 = {
+      ...state.routingAudit.level2,
+      stage: "marker_found",
+      marker: markers[0],
+      markerName: markers[0].name || null
+    };
+  } else {
+    state.routingAudit.level2 = {
+      ...state.routingAudit.level2,
+      stage: "no_marker",
+      decision: null,
+      markerName: null
+    };
+  }
+  renderRoutingAudit();
+}
+
+function showRoutingMarkerChooser() {
+  state.routingAudit.level2 = {
+    ...state.routingAudit.level2,
+    stage: "choose_marker"
+  };
+  renderRoutingAudit();
+}
+
+function routingMarkerChooser() {
+  const markers = markerRows(getStatusReport()?.transport || {});
+  const panel = routingLevel2Notice(
+    "Choose Analysis Marker",
+    "Select the playlist marker that starts the loudest or most representative section.",
+    []
+  );
+  const row = panel.querySelector(".routing-level2-actions");
+  for (const marker of markers) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "ghost-button";
+    button.textContent = marker.name || `Marker ${Number(marker.index) + 1}`;
+    button.addEventListener("click", () => useRoutingMarkerAndStart(marker));
+    row.appendChild(button);
+  }
+  const manual = document.createElement("button");
+  manual.type = "button";
+  manual.className = "ghost-button";
+  manual.textContent = "I will set the loop manually";
+  manual.addEventListener("click", showRoutingManualLoopPrompt);
+  row.appendChild(manual);
+  return panel;
+}
+
+function showRoutingManualLoopPrompt() {
+  state.routingAudit.level2 = {
+    ...state.routingAudit.level2,
+    stage: "no_marker"
+  };
+  renderRoutingAudit();
+}
+
+function showRoutingManualPlayback() {
+  state.routingAudit.level2 = {
+    stage: "manual",
+    decision: "manual_playback",
+    markerName: null,
+    loopDurationSeconds: null
+  };
+  renderRoutingAudit();
+}
+
+async function useRoutingMarkerAndStart(marker) {
+  state.routingAudit.level2 = {
+    stage: "ready_auto",
+    decision: "start_playback_automatically",
+    markerName: marker?.name || null,
+    loopDurationSeconds: 16
+  };
+  if (marker && marker.index != null) {
+    await transportAction("jump_to_marker", { index: Number(marker.index) || 0 });
+  }
+  await transportAction("play");
+  await runRoutingAuditWithCurrentOptions();
+}
+
+async function runRoutingLevel1Instead() {
+  resetRoutingLevel2Flow();
+  const modeSelect = document.getElementById("routing-check-mode");
+  if (modeSelect) modeSelect.value = "level_1_static";
+  await runRoutingAuditWithCurrentOptions();
 }
 
 function renderRoutingFeedback(report, error, isLoading) {
@@ -3451,7 +4828,7 @@ function renderRoutingFeedback(report, error, isLoading) {
     loading: isLoading,
     error,
     report,
-    loadingText: "Routing Audit is reading FL Studio routing data...",
+    loadingText: workflowProgressText("Routing Audit", state.routingAudit, "reading channel routing and signal flow"),
     idleText: "Audit has not run yet.",
     completeLabel: "Last audit"
   });
@@ -3459,12 +4836,14 @@ function renderRoutingFeedback(report, error, isLoading) {
 
 function renderRoutingSummary(report, isLoading) {
   const summary = report?.summary || {};
-  const score = Number.isFinite(Number(summary.health_score))
-    ? Number(summary.health_score)
+  const scoreSummary = canonicalScoreSummary(report);
+  const score = Number.isFinite(Number(scoreSummary?.health_score ?? summary.health_score))
+    ? Number(scoreSummary?.health_score ?? summary.health_score)
     : null;
-  const label = summary.health_label || (report?.ok ? "Live" : "Idle");
+  const status = canonicalStatus(scoreSummary, report?.ok ? lowEndScoreStatus(score) : "not_run");
+  const label = scoreStatusLabel(status);
 
-  text("routing-score-value", score == null ? "--" : `${Math.round(score)}%`);
+  text("routing-score-value", scoreValue(score));
   text("routing-score-caption", isLoading ? "Reading" : label);
   text("routing-score-label", label);
   text("routing-automation-total", summary.unrouted_automation_clips ?? "--");
@@ -3483,10 +4862,15 @@ function renderRoutingSummary(report, isLoading) {
     ring.dataset.state = routingScoreState(score);
   }
 
+  const scoreLabel = document.getElementById("routing-score-label");
+  if (scoreLabel) {
+    scoreLabel.className = `badge ${scoreStatusClass(status)}`;
+  }
+
   const mapState = document.getElementById("routing-map-state");
   if (mapState) {
-    mapState.textContent = isLoading ? "Reading" : (report?.ok ? "Live" : "Idle");
-    mapState.className = `badge ${report?.ok ? "badge-ok" : "badge-neutral"}`;
+    mapState.textContent = isLoading ? "Reading" : (report?.ok ? evidenceModeLabel(report?.evidence_mode) : "Not Run");
+    mapState.className = `badge ${report?.ok ? scoreStatusClass(status) : "badge-neutral"}`;
   }
 }
 
@@ -3609,7 +4993,7 @@ function renderRoutingFindings(report) {
     const title = document.createElement("strong");
     title.textContent = safeString(finding.title);
     const detail = document.createElement("span");
-    detail.textContent = safeString(finding.detail);
+    detail.textContent = safeString(finding.detail || finding.evidence?.[0]?.detail);
     body.append(title, detail);
 
     const count = document.createElement("span");
@@ -3764,16 +5148,16 @@ function routingScoreState(score) {
 
 function routingSeverityClass(severity) {
   const value = String(severity || "").toLowerCase();
-  if (value === "critical") return "is-critical";
-  if (value === "warning") return "is-warning";
+  if (value === "critical" || value === "high" || value === "error") return "is-critical";
+  if (value === "warning" || value === "medium") return "is-warning";
   if (value === "ok") return "is-ok";
   return "is-info";
 }
 
 function routingSeverityIcon(severity) {
   const value = String(severity || "").toLowerCase();
-  if (value === "critical") return "!";
-  if (value === "warning") return "△";
+  if (value === "critical" || value === "high" || value === "error") return "!";
+  if (value === "warning" || value === "medium") return "△";
   if (value === "ok") return "✓";
   return "i";
 }
@@ -3848,12 +5232,12 @@ function formatRouteLevel(value) {
 
 // ─── Project Organizer ──────────────────────────────────────────────────────
 async function runProjectOrganizer() {
-  state.projectOrganizer.loading = true;
-  state.projectOrganizer.error = null;
+  beginWorkflowRun("project_organizer", "reading project organization");
   renderProjectOrganizer();
   try {
     const result = await api("/api/workflows/project-organizer", {
       method: "POST",
+      timeoutMs: ORGANIZER_REQUEST_TIMEOUT_MS,
       body: JSON.stringify(workflowRunBody("project_organizer"))
     });
     state.projectOrganizer.report = result;
@@ -3861,10 +5245,11 @@ async function runProjectOrganizer() {
     state.projectOrganizer.error = result?.ok === false
       ? (result.error || "Project Organizer unavailable.")
       : null;
+    finishWorkflowRun("project_organizer", result, state.projectOrganizer.error ? new Error(state.projectOrganizer.error) : null);
   } catch (error) {
     state.projectOrganizer.error = `Project Organizer failed: ${error.message}`;
+    finishWorkflowRun("project_organizer", null, error);
   } finally {
-    state.projectOrganizer.loading = false;
     renderProjectOrganizer();
   }
 }
@@ -3899,7 +5284,7 @@ function renderOrganizerFeedback(report, error, isLoading) {
     loading: isLoading,
     error,
     report,
-    loadingText: "Project Organizer is reading channels, mixer tracks, patterns, and playlist tracks...",
+    loadingText: workflowProgressText("Project Organizer", state.projectOrganizer, "reading organization data"),
     idleText: "Organizer has not run yet.",
     completeLabel: "Last scan"
   });
@@ -3907,12 +5292,14 @@ function renderOrganizerFeedback(report, error, isLoading) {
 
 function renderOrganizerSummary(report, isLoading) {
   const summary = report?.summary || {};
-  const score = Number.isFinite(Number(summary.organization_score))
-    ? Number(summary.organization_score)
+  const scoreSummary = canonicalScoreSummary(report);
+  const score = Number.isFinite(Number(scoreSummary?.health_score ?? summary.organization_score))
+    ? Number(scoreSummary?.health_score ?? summary.organization_score)
     : null;
-  const label = summary.health_label || (report?.ok ? "Live" : "Idle");
+  const status = canonicalStatus(scoreSummary, report?.ok ? lowEndScoreStatus(score) : "not_run");
+  const label = scoreStatusLabel(status);
 
-  text("organizer-score-value", score == null ? "--" : `${Math.round(score)}%`);
+  text("organizer-score-value", scoreValue(score));
   text("organizer-score-caption", isLoading ? "Reading" : label);
   text("organizer-score-label", label);
   text("organizer-channel-total", summary.channels ?? "--");
@@ -3921,7 +5308,7 @@ function renderOrganizerSummary(report, isLoading) {
   text("organizer-proposal-total", summary.proposed_changes ?? "--");
   text("organizer-name-total", summary.naming_cleanup ?? "--");
   text("organizer-routing-total", summary.routing_cleanup ?? "--");
-  text("organizer-color-total", summary.color_readback_missing ?? "--");
+  text("organizer-color-total", summary.color_cleanup ?? "--");
   text("organizer-group-total", summary.grouping_candidates ?? "--");
   text("organizer-findings-count", summary.diagnostics ?? 0);
   text("organizer-plan-count", summary.proposed_changes ?? 0);
@@ -3935,13 +5322,13 @@ function renderOrganizerSummary(report, isLoading) {
 
   const scoreLabel = document.getElementById("organizer-score-label");
   if (scoreLabel) {
-    scoreLabel.className = `badge ${mixBadgeClass(score, report?.ok)}`;
+    scoreLabel.className = `badge ${scoreStatusClass(status)}`;
   }
 
   const mapState = document.getElementById("organizer-map-state");
   if (mapState) {
-    mapState.textContent = isLoading ? "Reading" : (report?.ok ? "Live" : "Idle");
-    mapState.className = `badge ${report?.ok ? "badge-ok" : "badge-neutral"}`;
+    mapState.textContent = isLoading ? "Reading" : (report?.ok ? evidenceModeLabel(report?.evidence_mode) : "Not Run");
+    mapState.className = `badge ${report?.ok ? scoreStatusClass(status) : "badge-neutral"}`;
   }
 
   renderExplicitLabels(".organizer-score-stats", report);
@@ -3953,55 +5340,61 @@ function renderOrganizerMap(report) {
   grid.innerHTML = "";
 
   const summary = report?.summary || {};
+  const findings = Array.isArray(report?.findings) ? report.findings : [];
+  const cleanupSteps = Array.isArray(report?.cleanup_plan?.steps) ? report.cleanup_plan.steps : [];
+  const firstFinding = findings.find((finding) => finding?.severity !== "ok") || findings[0];
+  const guided = report?.guided || {};
+  const planStatus = organizerPlanStatusLabel(report?.organization_plan?.status);
+  const namingCount = Number(summary.naming_cleanup || 0);
+  const colorCount = Number(summary.color_cleanup || 0);
   const cards = [
     {
-      title: "Analyze Organization",
-      tool: "fl_analyze_project_organization",
+      title: "Findings",
+      tool: report?.cleanup_plan?.scan_tool || "fl_scan_project_organization",
       value: summary.diagnostics ?? "--",
-      detail: "Finds naming, routing, color-readback, pattern, and playlist cleanup signals.",
+      detail: firstFinding
+        ? safeString(firstFinding.title)
+        : "No actionable organizer findings in the current snapshot.",
       state: Number(summary.diagnostics || 0) ? "warning" : "ok"
     },
     {
-      title: "Plan Cleanup",
-      tool: "fl_plan_project_cleanup",
+      title: "Next Step",
+      tool: guided.next_tool || "manual review",
+      value: guided.state === "ready" ? "Ready" : "Review",
+      detail: guided.next_issue || "Run Organizer to choose the next safe action.",
+      state: guided.state === "ready" ? "warning" : "ok"
+    },
+    {
+      title: "Cleanup Plan",
+      tool: report?.cleanup_plan?.apply_tool || "fl_apply_project_cleanup_step",
       value: summary.proposed_changes ?? "--",
-      detail: "Builds proposal-mode actions before any write is considered.",
-      state: Number(summary.proposed_changes || 0) ? "info" : "ok"
+      detail: cleanupSteps.length
+        ? "Exact before/after proposals are listed below for one-step approval."
+        : "No write-safe cleanup proposal is available from current evidence.",
+      state: cleanupSteps.length ? "info" : "ok"
     },
     {
-      title: "Apply One Step",
-      tool: "fl_apply_project_cleanup_step",
-      value: summary.routing_cleanup ?? "--",
-      detail: "Routes, renames, or colors one approved cleanup unit with rollback.",
-      state: Number(summary.routing_cleanup || 0) ? "warning" : "ok"
-    },
-    {
-      title: "Guided Cleanup",
-      tool: "fl_start_guided_cleanup",
-      value: safeString(report?.guided?.state || "idle"),
-      detail: "Presents the next issue, one proposed fix, approval, readback, and rollback note.",
-      state: report?.guided?.state === "ready" ? "info" : "ok"
-    },
-    {
-      title: "Naming Standard",
+      title: "Standards",
       tool: "fl_apply_naming_standard",
-      value: summary.naming_cleanup ?? "--",
-      detail: "Collects consistent channel and mixer naming rules for approval.",
-      state: Number(summary.naming_cleanup || 0) ? "info" : "ok"
+      value: `${namingCount} / ${colorCount}`,
+      detail: "Naming and color rules are suggestions only until individually approved.",
+      state: namingCount || colorCount ? "info" : "ok"
     },
     {
-      title: "Color Standard",
-      tool: "fl_apply_color_standard",
-      value: summary.color_readback_missing ?? "--",
-      detail: "Shows color coverage limits and prepares approved color rules.",
-      state: Number(summary.color_readback_missing || 0) ? "info" : "ok"
+      title: "Stored Plan",
+      tool: report?.organization_plan?.plan_tool || "fl_plan_project_organization",
+      value: planStatus,
+      detail: "Template-aware batches require stored decisions before any apply step.",
+      state: cleanupSteps.length ? "warning" : "ok"
     },
     {
-      title: "Group Tracks",
-      tool: "fl_group_tracks",
-      value: summary.grouping_candidates ?? "--",
-      detail: "Suggests bus grouping candidates without selecting a bus automatically.",
-      state: Number(summary.grouping_candidates || 0) ? "info" : "ok"
+      title: "Rollback",
+      tool: report?.organization_plan?.rollback_tool || "fl_rollback_organization_change",
+      value: cleanupSteps.length ? "Required" : "Idle",
+      detail: cleanupSteps.length
+        ? "Any applied organizer write must create one named rollback unit."
+        : "Rollback is only relevant after an approved write.",
+      state: cleanupSteps.length ? "info" : "ok"
     }
   ];
 
@@ -4025,6 +5418,18 @@ function renderOrganizerMap(report) {
     node.append(top, detail, tool);
     grid.appendChild(node);
   }
+}
+
+function organizerPlanStatusLabel(value) {
+  const status = String(value || "").toLowerCase();
+  if (status === "requires_template_or_step_approval") return "Approval";
+  if (status === "no_template_plan_generated") return "No Plan";
+  if (!status) return "Pending";
+  return status
+    .split("_")
+    .filter(Boolean)
+    .map((part) => part[0]?.toUpperCase() + part.slice(1))
+    .join(" ");
 }
 
 function renderOrganizerGuided(report) {
@@ -4075,6 +5480,7 @@ function renderOrganizerFindings(report) {
   }
 
   for (const finding of findings) {
+    const evidence = organizerFindingEvidence(finding);
     const row = document.createElement("div");
     row.className = `organizer-finding ${routingSeverityClass(finding.severity)}`;
 
@@ -4086,16 +5492,23 @@ function renderOrganizerFindings(report) {
     const title = document.createElement("strong");
     title.textContent = safeString(finding.title);
     const detail = document.createElement("span");
-    detail.textContent = safeString(finding.detail);
+    detail.textContent = safeString(finding.detail || evidence?.detail || finding.rule_id);
     body.append(title, detail);
 
     const count = document.createElement("span");
     count.className = "organizer-finding-count";
-    count.textContent = safeString(finding.count ?? 0);
+    count.textContent = safeString(finding.count ?? evidence?.count ?? 0);
 
     row.append(icon, body, count);
     list.appendChild(row);
   }
+}
+
+function organizerFindingEvidence(finding) {
+  const evidenceRows = Array.isArray(finding?.evidence) ? finding.evidence : [];
+  return evidenceRows.find(
+    (row) => row && typeof row === "object" && (row.detail || row.count != null)
+  );
 }
 
 function renderOrganizerPlan(report) {
@@ -4105,7 +5518,9 @@ function renderOrganizerPlan(report) {
 
   const steps = Array.isArray(report?.cleanup_plan?.steps) ? report.cleanup_plan.steps : [];
   if (!steps.length) {
-    list.appendChild(organizerPlaceholder("No cleanup proposals yet."));
+    list.appendChild(
+      organizerPlaceholder("No write-safe cleanup proposal is available from current evidence.")
+    );
     return;
   }
 
@@ -4124,17 +5539,57 @@ function renderOrganizerPlan(report) {
     const detail = document.createElement("p");
     detail.textContent = safeString(step.detail);
 
+    const preview = document.createElement("div");
+    preview.className = "organizer-plan-preview";
+    const before = document.createElement("span");
+    before.textContent = `Before: ${organizerPreviewText(
+      step.before_state || step.observed_state
+    )}`;
+    const after = document.createElement("span");
+    after.textContent = `After: ${organizerPreviewText(
+      step.proposed_after_state || step.proposed_state
+    )}`;
+    preview.append(before, after);
+
     const footer = document.createElement("div");
     footer.className = "organizer-plan-footer";
     const tool = document.createElement("code");
     tool.textContent = safeString(step.tool);
     const approval = document.createElement("em");
-    approval.textContent = step.requires_explicit_approval ? "Approval required" : "Read-only";
+    const stepStatus = safeString(
+      step.status || (step.requires_explicit_approval ? "requires_user_approval" : "read_only")
+    );
+    approval.textContent = `${stepStatus.replaceAll("_", " ")} · ${safeString(
+      step.rollback_tool || "rollback available"
+    )}`;
     footer.append(tool, approval);
 
-    row.append(header, detail, footer);
+    row.append(header, detail, preview, footer);
     list.appendChild(row);
   }
+}
+
+function organizerPreviewText(value) {
+  if (value == null || value === "") return "Unavailable";
+  if (typeof value !== "object") return safeString(value);
+  const entries = Object.entries(value)
+    .filter(([, entryValue]) => entryValue != null && entryValue !== "")
+    .slice(0, 4);
+  if (!entries.length) return "Unavailable";
+  return entries
+    .map(
+      ([key, entryValue]) =>
+        `${key.replaceAll("_", " ")}: ${organizerPreviewValue(entryValue)}`
+    )
+    .join(" · ");
+}
+
+function organizerPreviewValue(value) {
+  if (Array.isArray(value)) return value.map(organizerPreviewValue).join(", ");
+  if (value && typeof value === "object") {
+    try { return JSON.stringify(value); } catch { return "Unavailable"; }
+  }
+  return safeString(value);
 }
 
 function renderOrganizerStandards(report) {
@@ -4268,9 +5723,8 @@ function safeClassName(value) {
 
 // ─── Project Health ─────────────────────────────────────────────────────────
 async function runProjectHealth() {
-  state.projectHealth.loading = true;
+  beginWorkflowRun("project_health", "aggregating workflow reports");
   state.projectHealth.error = null;
-  state.projectHealth.lastRun = null;
   renderProjectHealth();
 
   try {
@@ -4279,13 +5733,13 @@ async function runProjectHealth() {
       throw new Error("Invalid backend Project Health payload shape");
     }
     state.projectHealth.backendData = payload;
+    finishWorkflowRun("project_health", payload);
   } catch (error) {
-    state.projectHealth.backendData = null;
     state.projectHealth.error = error.message || "Runtime Project Health is unavailable.";
+    finishWorkflowRun("project_health", null, error);
     console.warn("Runtime Project Health request failed:", error);
   }
 
-  state.projectHealth.loading = false;
   state.projectHealth.lastRun = new Date().toISOString();
   renderProjectHealth();
 }
@@ -4326,13 +5780,17 @@ function buildHealthOverview() {
         risk: sec.risk_score,
         coverage: sec.coverage,
         confidence: sec.confidence_score,
+        freshness: sec.freshness || "unknown",
         hasReport: sec.report_id != null,
         error: sec.freshness === "missing" || sec.freshness === "unavailable" ? sec.reason : null,
+        status: healthSectionStatusFromBackend(sec),
         findingsCount: findings.length,
         findings,
         metrics: [
-          { label: "Coverage", value: sec.coverage?.score != null ? `${sec.coverage.score}%` : "--" },
-          { label: "Confidence", value: sec.confidence_score != null ? `${sec.confidence_score}%` : "--" }
+          { label: "Risk", value: sec.report_id == null ? "Not Run" : scoreValue(sec.risk_score) },
+          { label: "Coverage", value: coverageValue(sec.coverage) },
+          { label: "Confidence", value: scoreValue(sec.confidence_score) },
+          { label: "Freshness", value: healthFreshnessLabel(sec.freshness) }
         ]
       };
     });
@@ -4345,6 +5803,8 @@ function buildHealthOverview() {
       risk: backend.overall_risk_score,
       coverage_pct: backend.overall_coverage_pct,
       confidence: backend.overall_confidence_score,
+      freshness: backend.ui_state?.freshness?.status || backend.overall_status || "unknown",
+      scoreStatus: backend.ui_state?.score_summary?.status || "not_run",
       warnings,
       availableSections: backend.sections.filter(s => s.report_id != null).length,
       readySections: backend.sections.filter(s => s.freshness === "fresh" || s.freshness === "partial").length,
@@ -4355,7 +5815,6 @@ function buildHealthOverview() {
     };
   }
 
-  // Render-only compatibility for reports already present in older clients.
   const sections = [
     buildLegacyRuntimeSection("project_organizer", "Organizer", "producer_organizer", state.projectOrganizer),
     buildLegacyRuntimeSection("mix_review", "Mix Review", "producer_mix_review", state.mixReview),
@@ -4374,6 +5833,9 @@ function buildHealthOverview() {
     sections,
     score: null,
     risk: null,
+    confidence: null,
+    freshness: availableSections ? "partial" : "missing",
+    scoreStatus: availableSections ? "needs_review" : "not_run",
     warnings,
     availableSections,
     readySections,
@@ -4386,26 +5848,41 @@ function buildHealthOverview() {
 
 function buildLegacyRuntimeSection(id, title, target, stateData) {
   const report = stateData.report;
-  const analysis = report?.analysis || report?.details?.analysis_report || {};
+  const scoreSummary = canonicalScoreSummary(report);
   const findings = healthNormalizeFindings(
     title,
     target,
     Array.isArray(report?.findings) ? report.findings : []
   );
+  const score = scoreSummary?.health_score ?? report?.health_score;
+  const risk = scoreSummary?.risk_score ?? report?.risk_score;
   return {
     id,
     title,
     target,
-    score: Number.isFinite(Number(analysis.health_score)) ? Number(analysis.health_score) : null,
-    risk: Number.isFinite(Number(analysis.risk_score)) ? Number(analysis.risk_score) : null,
-    coverage: analysis.coverage || null,
-    confidence: analysis.confidence_score ?? null,
+    score: Number.isFinite(Number(score)) ? Number(score) : null,
+    risk: Number.isFinite(Number(risk)) ? Number(risk) : null,
+    coverage: scoreSummary?.coverage || report?.coverage || null,
+    confidence: scoreSummary?.confidence_score ?? report?.confidence_score ?? null,
+    freshness: report?.freshness?.status || "unknown",
     hasReport: Boolean(report),
     error: stateData.error || null,
     loading: Boolean(stateData.loading),
+    status: healthSectionStatus(
+      Number.isFinite(Number(score)) ? Number(score) : null,
+      Boolean(report),
+      stateData.loading,
+      stateData.error,
+      report?.freshness?.status
+    ),
     findings,
     findingsCount: findings.length,
-    metrics: []
+    metrics: [
+      { label: "Risk", value: report ? riskValue(risk, true) : "Not Run" },
+      { label: "Coverage", value: coverageValue(scoreSummary?.coverage || report?.coverage) },
+      { label: "Confidence", value: scoreValue(scoreSummary?.confidence_score ?? report?.confidence_score) },
+      { label: "Freshness", value: healthFreshnessLabel(report?.freshness?.status) }
+    ]
   };
 }
 
@@ -4650,21 +6127,28 @@ function renderHealthFeedback(aggregate, isLoading) {
     loading: isLoading,
     error: state.projectHealth.error,
     report,
-    loadingText: "Health scan is reading Organizer, Mix Review, Routing, and Low-End reports...",
+    loadingText: workflowProgressText("Health Scan", state.projectHealth, "aggregating workflow reports"),
     idleText: "Health overview has not run yet.",
     completeLabel: `Last overview. Coverage ${coverage}`
   });
 }
 
 function renderHealthSummary(aggregate, isLoading) {
-  const riskText = aggregate.risk == null ? "--" : `${Math.round(aggregate.risk)}%`;
-  const scoreText = aggregate.score == null ? "--" : `${Math.round(aggregate.score)}%`;
-  const label = isLoading ? "Reading" : healthRiskLabel(aggregate.risk, aggregate.availableSections);
+  const status = aggregate.scoreStatus || healthAggregateStatus(aggregate);
+  const label = isLoading ? "Running" : scoreStatusLabel(status);
 
-  text("health-risk-value", riskText);
+  text("health-risk-value", scoreValue(aggregate.score));
   text("health-risk-caption", label);
-  text("health-score-value", scoreText);
+  text("health-score-value", scoreValue(aggregate.score));
+  text(
+    "health-risk-stat-value",
+    aggregate.availableSections === aggregate.totalSections && aggregate.score != null
+      ? riskValue(aggregate.risk, true)
+      : "Not Run"
+  );
   text("health-coverage-value", `${aggregate.availableSections}/${aggregate.totalSections}`);
+  text("health-confidence-value", scoreValue(aggregate.confidence));
+  text("health-freshness-value", healthFreshnessLabel(aggregate.freshness));
   text("health-finding-total", aggregate.availableSections ? aggregate.findingTotal : "--");
   text("health-blocker-total", aggregate.availableSections ? aggregate.blockerTotal : "--");
   text("health-section-count", `${aggregate.availableSections}/${aggregate.totalSections}`);
@@ -4672,14 +6156,14 @@ function renderHealthSummary(aggregate, isLoading) {
 
   const ring = document.getElementById("health-risk-ring");
   if (ring) {
-    ring.style.setProperty("--risk", aggregate.risk == null ? 0 : Math.max(0, Math.min(100, aggregate.risk)));
-    ring.dataset.state = healthRiskState(aggregate.risk);
+    ring.style.setProperty("--risk", aggregate.score == null ? 0 : Math.max(0, Math.min(100, aggregate.score)));
+    ring.dataset.state = routingScoreState(aggregate.score);
   }
 
   const statusLabel = document.getElementById("health-status-label");
   if (statusLabel) {
     statusLabel.textContent = label;
-    statusLabel.className = `badge ${healthRiskBadgeClass(aggregate.risk, aggregate.availableSections)}`;
+    statusLabel.className = `badge ${scoreStatusClass(status)}`;
   }
 }
 
@@ -4704,14 +6188,14 @@ function renderHealthSections(sections) {
     const score = document.createElement("div");
     score.className = "health-section-score";
     const value = document.createElement("strong");
-    value.textContent = section.risk == null ? "--" : `${Math.round(section.risk)}%`;
+    value.textContent = section.score == null ? "--" : scoreValue(section.score);
     const label = document.createElement("span");
-    label.textContent = "Risk";
+    label.textContent = "Health";
     score.append(value, label);
 
     const metrics = document.createElement("div");
     metrics.className = "health-section-metrics";
-    for (const metric of section.metrics.slice(0, 2)) {
+    for (const metric of section.metrics.slice(0, 4)) {
       const metricEl = document.createElement("div");
       const metricLabel = document.createElement("span");
       metricLabel.textContent = metric.label;
@@ -4801,7 +6285,7 @@ function renderHealthNavigation(sections) {
     const detail = document.createElement("span");
     detail.textContent = section.score == null
       ? section.status
-      : `${Math.round(section.score)}% score · ${section.status}`;
+      : `Health ${scoreValue(section.score)} · ${section.status}`;
 
     item.append(label, detail);
     list.appendChild(item);
@@ -4908,14 +6392,50 @@ function healthSeverityRank(severity) {
   return 0;
 }
 
-function healthSectionStatus(score, hasReport, loading, error) {
+function healthSectionStatus(score, hasReport, loading, error, freshness) {
   if (loading) return "Reading";
   if (error) return "Unavailable";
   if (!hasReport) return "Not run";
-  if (score == null) return "Limited";
-  if (score >= 90) return "Clear";
-  if (score >= 75) return "Needs review";
-  return "At risk";
+  if (freshness === "stale") return "Stale";
+  if (score == null) return "Needs Review";
+  if (score >= 90) return "OK";
+  if (score >= 75) return "Needs Review";
+  return "At Risk";
+}
+
+function healthSectionStatusFromBackend(section) {
+  if (!section || section.report_id == null) return "Not Run";
+  if (section.freshness === "stale") return "Stale";
+  if (section.freshness === "unavailable") return "Unavailable";
+  const score = Number(section.health_score);
+  if (!Number.isFinite(score)) return "Needs Review";
+  if (score >= 90) return "OK";
+  if (score >= 75) return "Needs Review";
+  return "At Risk";
+}
+
+function healthAggregateStatus(aggregate) {
+  if (!aggregate.availableSections) return "not_run";
+  if (aggregate.availableSections < aggregate.totalSections || aggregate.score == null) return "needs_review";
+  const risk = Number(aggregate.risk);
+  if (!Number.isFinite(risk)) return "unavailable";
+  if (risk >= 50) return "blocked";
+  if (risk >= 26) return "at_risk";
+  if (risk >= 11) return "needs_review";
+  return "ok";
+}
+
+function healthFreshnessLabel(value) {
+  const status = String(value || "unknown").toLowerCase();
+  const labels = {
+    fresh: "Fresh",
+    partial: "Partial",
+    stale: "Stale",
+    missing: "Not Run",
+    unavailable: "Unavailable",
+    unknown: "Not Run"
+  };
+  return labels[status] || stateLabel(status);
 }
 
 function healthRiskLabel(risk, availableSections) {
@@ -4947,7 +6467,8 @@ function healthSectionClass(section) {
 }
 
 function healthSectionBadgeClass(section) {
-  if (section.hasReport && !section.error && section.score != null && section.score >= 90) return "badge-ok";
+  if (section.status === "OK") return "badge-ok";
+  if (section.status === "Unavailable" || section.status === "Not Run") return "badge-neutral";
   if (!section.hasReport && !section.loading) return "badge-neutral";
   return "badge-warn";
 }
@@ -5226,7 +6747,10 @@ async function processAction(path) {
 }
 
 async function runGuidanceAction(path) {
-  if (path === "/api/refresh") { await refresh(); return; }
+  if (path === "/api/refresh" || path === "/api/diagnose") {
+    await processAction(path);
+    return;
+  }
   await processAction(path);
 }
 
@@ -5373,11 +6897,63 @@ function wireEvents() {
   const mixRefreshButton = document.getElementById("mix-refresh-status");
   if (mixRefreshButton) mixRefreshButton.addEventListener("click", refresh);
 
+  document.querySelectorAll("input[name='mix-review-level']").forEach(input => {
+    input.addEventListener("change", () => {
+      syncMixReviewOptionsFromDom();
+      renderMixReview();
+    });
+  });
+
+  const mixProfile = document.getElementById("mix-review-genre-profile");
+  if (mixProfile) mixProfile.addEventListener("change", () => {
+    syncMixReviewOptionsFromDom();
+    renderMixReview();
+  });
+
+  const mixLoopSeconds = document.getElementById("mix-level2-loop-seconds");
+  if (mixLoopSeconds) mixLoopSeconds.addEventListener("change", () => {
+    syncMixReviewOptionsFromDom();
+    renderMixReview();
+  });
+
+  const mixPlaybackMode = document.getElementById("mix-level2-playback-mode");
+  if (mixPlaybackMode) mixPlaybackMode.addEventListener("change", () => {
+    syncMixReviewOptionsFromDom();
+    renderMixReview();
+  });
+
+  const mixMarker = document.getElementById("mix-level2-marker");
+  if (mixMarker) mixMarker.addEventListener("change", () => {
+    syncMixReviewOptionsFromDom();
+    renderMixReview();
+  });
+
+  const startMixWatch = document.getElementById("mix-level2-start-watch");
+  if (startMixWatch) startMixWatch.addEventListener("click", startMixLevel2Watch);
+
+  const stopMixWatch = document.getElementById("mix-level2-stop-watch");
+  if (stopMixWatch) stopMixWatch.addEventListener("click", () => stopMixLevel2Watch({ runReview: true }));
+
+  const prepareMaster = document.getElementById("mix-level3-submit-master");
+  if (prepareMaster) prepareMaster.addEventListener("click", prepareMixRenderedMasterEvidence);
+
+  const addStemRow = document.getElementById("mix-add-stem-row");
+  if (addStemRow) addStemRow.addEventListener("click", () => {
+    syncMixReviewOptionsFromDom();
+    state.mixReview.options.stems.push({ role: "other", path: "", status: "missing" });
+    renderMixStemRoleTable();
+  });
+
+  const submitStemEvidence = document.getElementById("mix-submit-stem-evidence");
+  if (submitStemEvidence) submitStemEvidence.addEventListener("click", prepareMixStemEvidence);
+
   const runLowEndButton = document.getElementById("run-low-end-analysis");
   if (runLowEndButton) runLowEndButton.addEventListener("click", runLowEndAnalysis);
 
   const lowEndRefreshButton = document.getElementById("low-end-refresh-status");
   if (lowEndRefreshButton) lowEndRefreshButton.addEventListener("click", refresh);
+  const lowEndAddTrackButton = document.getElementById("low-end-add-track-button");
+  if (lowEndAddTrackButton) lowEndAddTrackButton.addEventListener("click", addLowEndSelectedTrack);
 
   const submitAudioButton = document.getElementById("submit-audio-analysis");
   if (submitAudioButton) submitAudioButton.addEventListener("click", submitAudioAnalysis);
@@ -5390,6 +6966,22 @@ function wireEvents() {
 
   const routingRefreshButton = document.getElementById("routing-refresh-status");
   if (routingRefreshButton) routingRefreshButton.addEventListener("click", refresh);
+
+  const routingMode = document.getElementById("routing-check-mode");
+  if (routingMode) routingMode.addEventListener("change", () => {
+    resetRoutingLevel2Flow();
+    renderRoutingAudit();
+  });
+
+  const routingTemplateCompliance = document.getElementById("routing-template-compliance");
+  if (routingTemplateCompliance) routingTemplateCompliance.addEventListener("change", () => {
+    renderRoutingAudit();
+  });
+
+  const routingTemplateProfile = document.getElementById("routing-template-profile");
+  if (routingTemplateProfile) routingTemplateProfile.addEventListener("change", () => {
+    renderRoutingAudit();
+  });
 
   const runOrganizerButton = document.getElementById("run-project-organizer");
   if (runOrganizerButton) runOrganizerButton.addEventListener("click", runProjectOrganizer);
@@ -5454,6 +7046,7 @@ function wireEvents() {
 // ─── Public API (for testing) ─────────────────────────────────────────────────
 window.flsPilotControlCenter = {
   state,
+  refresh,
   processAction,
   transportAction,
   refreshTransportStatus,
@@ -5467,9 +7060,17 @@ window.flsPilotControlCenter = {
   refreshAudioAnalysisJob,
   cancelAudioAnalysisJob,
   linkAudioAnalysisResult,
+  startMixLevel2Watch,
+  stopMixLevel2Watch,
+  prepareMixRenderedMasterEvidence,
+  prepareMixStemEvidence,
+  mixReviewInputs,
   runRuntimeProductWorkflow,
   renderMixReview,
   renderLowEndAnalysis,
+  renderLowEndSelection,
+  addLowEndSelectedTrack,
+  syncLowEndSelectionDecision,
   renderProjectData,
   renderLivePlaybackMounts,
   renderRoutingAudit,

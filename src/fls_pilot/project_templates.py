@@ -140,9 +140,7 @@ def resolve_with_user_decisions(
                 "validated_by_user": True,
                 "validation_source": "user_decision",
                 "selected_template_slug": "none",
-                "notes": [
-                    "User confirmed that none of the ambiguous template profiles apply."
-                ],
+                "notes": ["User confirmed that none of the ambiguous template profiles apply."],
             }
         )
         return resolved
@@ -161,11 +159,7 @@ def resolve_with_user_decisions(
     name_by = {int(row["index"]): str(row.get("name") or "") for row in tracks}
     channel_by = _channels_by_index(channel_rows or [])
     profile = next(
-        (
-            row
-            for row in load_profiles()
-            if str(row.get("template_slug") or "") == selected
-        ),
+        (row for row in load_profiles() if str(row.get("template_slug") or "") == selected),
         None,
     )
     if profile is None:
@@ -212,6 +206,17 @@ def load_profiles() -> tuple[dict[str, Any], ...]:
             profile["_profile_path"] = str(path)
         profiles.append(profile)
     return tuple(profiles)
+
+
+def profile_by_slug(template_slug: Any) -> dict[str, Any] | None:
+    """Return a loaded template profile by slug."""
+    slug = str(template_slug or "").strip()
+    if not slug:
+        return None
+    for profile in load_profiles():
+        if str(profile.get("template_slug") or "") == slug:
+            return dict(profile)
+    return None
 
 
 def unmatched_context() -> dict[str, Any]:
@@ -366,10 +371,7 @@ def _template_profile_decision(
 ) -> Mapping[str, Any] | None:
     for row in reversed(tuple(user_decisions)):
         request_id = str(
-            row.get("interaction_request_id")
-            or row.get("interaction_id")
-            or row.get("id")
-            or ""
+            row.get("interaction_request_id") or row.get("interaction_id") or row.get("id") or ""
         ).strip()
         if request_id != "template.confirm_profile":
             continue
@@ -436,9 +438,7 @@ def _score_profile(
             route_matches += 1
 
     channel_total, channel_matches = _channel_matches(profile, channel_by or {})
-    channel_match_ratio = (
-        channel_matches / channel_total if channel_total and channel_by else 1.0
-    )
+    channel_match_ratio = channel_matches / channel_total if channel_total and channel_by else 1.0
     channel_gate_ok = (
         channel_match_ratio >= MIN_CHANNEL_MATCH_RATIO if channel_total and channel_by else True
     )
@@ -535,9 +535,7 @@ def _scores_too_close(best: Mapping[str, Any], candidate: Mapping[str, Any]) -> 
 
 
 def _has_clear_profile_lead(best: Mapping[str, Any], candidate: Mapping[str, Any]) -> bool:
-    channel_gap = int(best.get("channel_matches") or 0) - int(
-        candidate.get("channel_matches") or 0
-    )
+    channel_gap = int(best.get("channel_matches") or 0) - int(candidate.get("channel_matches") or 0)
     channel_ratio_gap = float(best.get("channel_match_ratio") or 0.0) - float(
         candidate.get("channel_match_ratio") or 0.0
     )

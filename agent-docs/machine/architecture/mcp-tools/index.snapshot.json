@@ -2,7 +2,7 @@
   "schema": "fls-pilot.architecture.mcp-tools.index.v1",
   "source_snapshot": "agent-docs/machine/architecture-analysis.snapshot.json",
   "source_snapshot_sha256": "ff0d38588b91510a3073e81d885de38f9116cddfbcd95686cbf11c28a6db8d7f",
-  "generated_at": "2026-06-19",
+  "generated_at": "2026-07-03",
   "default_agent_rule": "For MCP work, read architecture/mcp-surface.snapshot.json first, then load only the affected module slice below.",
   "modules": {
     "arrange": {
@@ -211,12 +211,13 @@
     },
     "project_organizer": {
       "path": "agent-docs/machine/architecture/mcp-tools/project_organizer.snapshot.json",
-      "tools_total": 5,
+      "tools_total": 11,
       "safety_class_counts": {
-        "read-only": 2,
-        "write-safe-required": 3
+        "read-only": 5,
+        "server-state": 2,
+        "write-safe-required": 4
       },
-      "destructive_hint_true_count": 0
+      "destructive_hint_true_count": 1
     },
     "routing": {
       "path": "agent-docs/machine/architecture/mcp-tools/routing.snapshot.json",

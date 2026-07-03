@@ -9,6 +9,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from fls_pilot import protocol
+from fls_pilot.analysis import routing_checks
 from fls_pilot.analysis.routing import routing_analysis_report_from_legacy_payload
 from fls_pilot.tools import routing
 
@@ -76,6 +77,8 @@ class RoutingReviewBridge:
                     {"i": 1, "name": "Lead", "routes_to": [{"dst": 0}]},
                 ],
             }
+        if command == protocol.CMD_MIXER_GET_ALL_PEAKS:
+            return {"tracks": params["tracks"], "peaks": [1000000 for _ in params["tracks"]]}
         raise AssertionError(f"unexpected command: {command}")
 
 
@@ -95,14 +98,45 @@ def test_fl_review_routing_returns_canonical_report_and_ui_lists(monkeypatch):
     assert result["generators_direct_to_master"][0]["channel"] == 1
     assert result["coverage"]["status"] == "fresh"
     assert result["metadata"]["legacy_routing_review"]["unrouted_channels"]
+    assert result["routing_evidence_level"] == routing_checks.ROUTING_EVIDENCE_LEVEL_STATIC
+    assert result["plan_gating_status"] == "blocked_requires_confirmation"
+    assert result["cleanup_plan_allowed"] is False
     assert result["findings"][0]["entities"][0]["canonical_id"] == "channel:2"
     direct = next(
         row for row in result["findings"] if row["rule_id"] == "routing.generators_direct_to_master"
     )
     assert direct["metadata"]["evidence_type"] == "routing_based_detection"
+    assert direct["metadata"]["routing_evidence_level"] == "static_routing_snapshot"
+    assert direct["metadata"]["finding_state"] == "name_based_unconfirmed"
+    assert direct["metadata"]["fix_plan_allowed"] is False
     assert direct["metadata"]["human_validation_required"] is True
     assert result["interaction_requests"][0]["id"] == "routing.confirm_cleanup_heuristics"
     assert result["metadata"]["score_status"] == "provisional"
+
+
+def test_fl_review_routing_level_2_labels_meter_evidence_as_proxy(monkeypatch):
+    mcp = MockMCP()
+    routing.register(mcp)
+
+    bridge = RoutingReviewBridge()
+    monkeypatch.setattr(routing, "get_bridge", lambda: bridge)
+
+    result = mcp.tools["fl_review_routing"](
+        routing_check_mode=routing_checks.ROUTING_MODE_LEVEL_2,
+        template_compliance=routing_checks.TEMPLATE_COMPLIANCE_MANUAL,
+        selected_template_profile="psytrance",
+    )
+
+    assert result["routing_evidence_level"] == "meter_snapshot_proxy"
+    proxy = next(
+        row
+        for row in result["findings"]
+        if row["metadata"].get("routing_evidence_level") == "meter_snapshot_proxy"
+    )
+    assert proxy["metadata"]["proxy_label"] == "meter_snapshot_proxy"
+    assert proxy["metadata"]["requires_user_confirmation"] is True
+    assert proxy["metadata"]["fix_plan_allowed"] is False
+    assert "proxy evidence" in " ".join(proxy["limitations"]).lower()
 
 
 def test_fl_plan_routing_cleanup_returns_workflow_report():
@@ -117,9 +151,12 @@ def test_fl_plan_routing_cleanup_returns_workflow_report():
     assert plan["workflow"] == "routing_cleanup_plan"
     assert plan["mode"] == "dry_run"
     assert len(plan["proposed_changes"]) == 2
+    assert plan["metadata"]["plan_gating_status"] == "blocked_requires_confirmation"
+    assert plan["metadata"]["cleanup_plan_allowed"] is False
 
     change_1 = plan["proposed_changes"][0]
     assert change_1["id"] == "fix_routing_issues"
+    assert change_1["status"] == "blocked"
     assert change_1["tool"] == "fl_apply_routing_cleanup"
     assert change_1["safety_class"] == "write-safe-required"
     assert change_1["risk_level"] == "medium"
@@ -128,6 +165,32 @@ def test_fl_plan_routing_cleanup_returns_workflow_report():
 
     change_2 = plan["proposed_changes"][1]
     assert change_2["id"] == "create_buses"
+
+
+def test_confirmed_source_finding_can_make_cleanup_plan_ready():
+    mcp = MockMCP()
+    routing.register(mcp)
+
+    plan = mcp.tools["fl_plan_routing_cleanup"](
+        issues=["route source through expected bus"],
+        proposed_buses=[],
+        source_findings=[
+            {
+                "id": "dead_end_tracks",
+                "severity": "high",
+                "title": "Mixer Paths Without Output",
+                "detail": "Static routing snapshot found a dead-end track.",
+                "count": 1,
+                "finding_state": "user_confirmed_intent",
+                "routing_evidence_level": "user_confirmed_routing_intent",
+                "metadata": {"validated_by_user": True},
+            }
+        ],
+    )
+
+    assert plan["metadata"]["plan_gating_status"] == "ready_for_user_approval"
+    assert plan["metadata"]["cleanup_plan_allowed"] is True
+    assert plan["proposed_changes"][0]["status"] == "proposed"
 
 
 def test_routing_analysis_user_decision_clears_pending_validation() -> None:
@@ -170,6 +233,39 @@ def test_routing_analysis_user_decision_clears_pending_validation() -> None:
     assert report["metadata"]["score_status"] == "final"
     assert report["metadata"]["blocked_fix_plan_until_confirmed"] is False
     assert "pending_interaction_request_ids" not in report["metadata"]
+
+
+def test_rejected_routing_finding_does_not_contribute_risk() -> None:
+    findings = routing_checks.enrich_routing_findings(
+        [
+            {
+                "id": "generators_direct_to_master",
+                "severity": "high",
+                "title": "Generators Direct to Master",
+                "detail": "Static suspicion.",
+                "count": 1,
+                "metadata": {
+                    "human_validation_required": True,
+                    "interaction_request_id": "routing.confirm_cleanup_heuristics",
+                },
+            }
+        ],
+        user_decisions=[
+            {
+                "interaction_id": "routing.confirm_cleanup_heuristics",
+                "decision": "selected",
+                "rejected_findings": ["generators_direct_to_master"],
+            }
+        ],
+    )
+    report = routing_analysis_report_from_legacy_payload(
+        {"ok": True, "summary": {"findings": 1}, "findings": findings},
+        workflow="routing_audit",
+        title="Routing Audit",
+    ).to_dict()
+
+    assert report["risk_score"] == 0
+    assert report["findings"][0]["metadata"]["finding_state"] == "rejected_by_user"
 
 
 def test_fl_apply_routing_cleanup_requires_approval(monkeypatch):

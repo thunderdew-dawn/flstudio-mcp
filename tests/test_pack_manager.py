@@ -18,7 +18,7 @@ def _manifest(pack_id: str, *, workflow_id: str = "low_end_analysis") -> dict:
         "version": "1.0.0",
         "title": pack_id,
         "publisher": "FLS Pilot",
-        "min_app_version": "3.0.0rc1",
+        "min_app_version": "3.0.0b3",
         "workflows": [
             {
                 "workflow_id": workflow_id,

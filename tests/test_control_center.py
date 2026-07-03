@@ -8,6 +8,7 @@ from unittest import mock
 import pytest
 
 from fls_pilot import control_center, doctor, runtime_config
+from fls_pilot.analysis.store import ReportStore
 from fls_pilot.packs import load_pack_manifest
 from fls_pilot.workflows.registry import (
     DEFAULT_WORKFLOW_REGISTRY,
@@ -106,6 +107,30 @@ def test_control_transport_allows_only_transient_marker_navigation(monkeypatch):
     assert denied["ok"] is False
 
 
+def test_control_mix_watch_status_is_bridge_free(monkeypatch):
+    def fail_bridge(*args, **kwargs):  # noqa: ANN002, ANN003, ANN202
+        raise AssertionError("status must not open a bridge")
+
+    monkeypatch.setattr(control_center, "TCPBridge", fail_bridge)
+
+    payload = control_center._control_mix_watch(_state(), {"action": "status"})
+
+    assert payload["ok"] is True
+    assert "watch" in payload
+
+
+def test_control_mix_watch_rejects_unknown_action_before_bridge(monkeypatch):
+    def fail_bridge(*args, **kwargs):  # noqa: ANN002, ANN003, ANN202
+        raise AssertionError("invalid actions must not open a bridge")
+
+    monkeypatch.setattr(control_center, "TCPBridge", fail_bridge)
+
+    payload = control_center._control_mix_watch(_state(), {"action": "render"})
+
+    assert payload["ok"] is False
+    assert "action must be" in payload["error"]
+
+
 def test_workflow_inputs_from_body_normalizes_user_decisions() -> None:
     inputs = control_center._workflow_inputs_from_body(
         {
@@ -168,22 +193,16 @@ def test_status_groups_fl_studio_application_separately(monkeypatch):
 
     assert status["groups"]["fl_app"][0]["component"] == "FL Studio Application"
     assert not any(
-        f["component"] == "FL Studio Application"
-        for f in status["groups"]["controller"]
+        f["component"] == "FL Studio Application" for f in status["groups"]["controller"]
     )
-    assert not any(
-        f["component"] == "FL Studio Application"
-        for f in status["groups"]["other"]
-    )
+    assert not any(f["component"] == "FL Studio Application" for f in status["groups"]["other"])
 
 
 def test_setup_guidance_prompts_to_open_fl_studio():
     """Open FL Studio card must appear and precede the controller card."""
     groups = {
         "environment": [],
-        "fl_app": [
-            _finding("FL Studio Application", "blocker", "failed").to_dict()
-        ],
+        "fl_app": [_finding("FL Studio Application", "blocker", "failed").to_dict()],
         "midi": [],
         "controller": [
             _finding("FL Studio Controller Script", "blocker", "probe_needed").to_dict()
@@ -255,7 +274,7 @@ def test_ui_payload_uses_effective_workflow_registry_metadata() -> None:
             "version": "1.0.0",
             "title": "House Pack",
             "publisher": "FLS Pilot",
-            "min_app_version": "3.0.0rc1",
+            "min_app_version": "3.0.0b3",
             "workflows": [
                 {
                     "workflow_id": "low_end_analysis",
@@ -413,6 +432,92 @@ def test_daemon_startup_guidance_is_not_ok_when_daemon_stopped():
     assert "not running" in daemon_items[0]["text"]
 
 
+def test_setup_guidance_ignores_mcp_stdio_when_fl_setup_is_ready():
+    groups = {
+        "environment": [],
+        "fl_app": [],
+        "midi": [],
+        "controller": [],
+        "daemon": [_finding("TCP Daemon / Bridge").to_dict()],
+        "mcp_stdio": [
+            _finding("MCP stdio Transport", "blocker", "failed").to_dict(),
+        ],
+        "mcp_sse": [],
+        "mcp_apply": [],
+        "optional_dependencies": [],
+        "other": [],
+    }
+
+    guidance = control_center._setup_guidance(
+        groups=groups,
+        readiness={"state": "blocked"},
+        processes={"daemon": {"state": "external"}},
+        ports={"daemon": {"host": "127.0.0.1", "selected_port": 9787}},
+        daemon_autostart={"state": "external", "message": "A daemon is already reachable."},
+        sse_probe={},
+    )
+
+    titles = [item["title"] for item in guidance]
+    assert "Daemon startup" not in titles
+    assert "Fix MCP stdio startup" not in titles
+    assert titles == ["Setup is ready"]
+
+
+def test_setup_guidance_prioritizes_open_fl_when_bridge_failure_is_derivative():
+    groups = {
+        "environment": [],
+        "fl_app": [
+            _finding("FL Studio Application", "blocker", "failed").to_dict(),
+        ],
+        "midi": [],
+        "controller": [
+            _finding("FL Studio Controller Script", "blocker", "probe_needed").to_dict(),
+        ],
+        "daemon": [
+            _finding("TCP Daemon / Bridge", "blocker", "failed").to_dict(),
+        ],
+        "mcp_stdio": [
+            _finding("MCP stdio Transport", "blocker", "failed").to_dict(),
+        ],
+        "mcp_sse": [],
+        "mcp_apply": [],
+        "optional_dependencies": [],
+        "other": [],
+    }
+
+    guidance = control_center._setup_guidance(
+        groups=groups,
+        readiness={"state": "blocked"},
+        processes={"daemon": {"state": "external"}},
+        ports={"daemon": {"host": "127.0.0.1", "selected_port": 9787}},
+        daemon_autostart={"state": "external", "message": "A daemon is already reachable."},
+        sse_probe={},
+    )
+
+    titles = [item["title"] for item in guidance]
+    assert titles[0] == "Open FL Studio"
+    assert "Daemon startup" not in titles
+    assert "Connect FL Studio to the controller" not in titles
+    assert "Fix MCP stdio startup" not in titles
+
+
+def test_readiness_ignores_mcp_stdio_for_control_center_setup():
+    findings = [
+        _finding("Python Environment"),
+        _finding("Core Dependencies"),
+        _finding("TCP Daemon / Bridge"),
+        _finding("FL Studio Application"),
+        _finding("FL Studio Controller Script"),
+        _finding("MCP stdio Transport", "blocker", "failed"),
+    ]
+
+    readiness = control_center._readiness(findings, {})
+
+    assert readiness["state"] == "ready_for_review"
+    assert readiness["blocker_count"] == 0
+    assert readiness["read_only_review_ready"] is True
+
+
 def test_setup_guidance_prioritizes_midi_manual_action(monkeypatch):
     findings = [
         _finding("Python Environment"),
@@ -535,6 +640,46 @@ def test_runtime_client_follows_selected_daemon_fallback_port(monkeypatch):
     assert created == [("127.0.0.1", 9788)]
     assert client is state.runtime_client
     assert client.port == 9788
+
+
+def test_project_health_prefers_local_reports_over_empty_runtime_health(monkeypatch):
+    now = control_center.datetime.now(control_center.timezone.utc)
+    local_store = ReportStore()
+    local_report = control_center.AnalysisReport(
+        workflow="mix_review",
+        title="Mix Review",
+        analysis_mode="static_snapshot",
+        evidence_mode="static_snapshot_only",
+        created_at=now.isoformat(),
+        freshness=control_center.Freshness(
+            status="fresh",
+            created_at=now.isoformat(),
+            valid_until=(now + control_center.timedelta(minutes=1)).isoformat(),
+        ),
+        coverage=control_center.Coverage(required=1, available=1),
+        risk_score=12,
+        health_score=88,
+        confidence_score=90,
+    )
+    local_store.add_report(local_report)
+    empty_runtime_health = control_center.aggregate_project_health(ReportStore())
+
+    class FakeRuntimeClient:
+        def project_health(self):  # noqa: ANN201
+            return empty_runtime_health
+
+    monkeypatch.setattr(control_center, "get_report_store", lambda: local_store)
+    monkeypatch.setattr(control_center, "_runtime_client", lambda state: FakeRuntimeClient())
+
+    payload = control_center._project_health_payload(_state())
+    mix_section = next(
+        row for row in payload["sections"] if row["workflow"] == "mix_review"
+    )
+
+    assert mix_section["report_id"] == local_report.report_id
+    assert mix_section["freshness"] == "fresh"
+    assert payload["ui_state"]["score_summary"]["coverage"]["available"] == 1
+    assert payload["ui_state"]["score_summary"]["coverage"]["required"] == 4
 
 
 def test_start_daemon_reports_non_daemon_port_conflict(monkeypatch):
@@ -1046,12 +1191,122 @@ def test_build_project_organizer_report_surfaces_cleanup_plan():
     assert report["workflow"] == "project_organizer"
     assert report["summary"]["unnamed_channels"] == 1
     assert report["summary"]["routing_cleanup"] == 1
+    assert report["summary"]["unnamed_playlist_tracks"] == 0
     assert report["summary"]["proposed_changes"] >= 3
     assert any(
         step["tool"] == "fl_apply_project_cleanup_step" for step in report["cleanup_plan"]["steps"]
     )
     assert report["guided"]["next_tool"] == "fl_apply_project_cleanup_step"
     assert report["safety"]["read_only"] is True
+
+
+def test_project_organizer_ignores_empty_playlist_slots_without_content_evidence():
+    report = control_center._build_project_organizer_report(
+        channels=[],
+        mixer_tracks=[],
+        patterns=[],
+        playlist_tracks=[
+            {"index": 1, "name": "Track 1", "mute": False, "solo": False},
+            {"index": 2, "name": "Playlist Track 2", "mute": False, "solo": False},
+            {"index": 3, "name": "Arranged Hook", "mute": False, "solo": False},
+        ],
+        routing=[],
+        template_context={},
+    )
+
+    assert report["summary"]["unnamed_playlist_tracks"] == 0
+    assert report["summary"]["diagnostics"] == 0
+    assert report["summary"]["organization_score"] == 100
+    assert report["summary"]["proposed_changes"] == 0
+    assert report["guided"]["state"] == "clear"
+    assert report["guided"]["next_tool"] is None
+    assert all(
+        finding["id"] != "unnamed_playlist_tracks" for finding in report["findings"]
+    )
+    playlist_rows = [
+        row for row in report["details"]["items"] if row["area"] == "Playlist"
+    ]
+    assert playlist_rows[0]["status"] == "Slot"
+
+
+def test_project_organizer_counts_playlist_tracks_only_with_content_evidence():
+    report = control_center._build_project_organizer_report(
+        channels=[],
+        mixer_tracks=[],
+        patterns=[],
+        playlist_tracks=[
+            {"index": 1, "name": "Track 1", "clip_count": 2},
+            {"index": 2, "name": "Playlist Track 2", "clips": []},
+        ],
+        routing=[],
+        template_context={},
+    )
+
+    assert report["summary"]["unnamed_playlist_tracks"] == 1
+    assert report["summary"]["diagnostics"] == 1
+    assert report["summary"]["organization_score"] == 98
+    assert any(finding["id"] == "unnamed_playlist_tracks" for finding in report["findings"])
+    playlist_rows = [
+        row for row in report["details"]["items"] if row["area"] == "Playlist"
+    ]
+    assert playlist_rows[0]["status"] == "Needs name"
+    assert playlist_rows[1]["status"] == "Slot"
+
+
+def test_project_organizer_does_not_emit_noop_pattern_rename():
+    report = control_center._build_project_organizer_report(
+        channels=[],
+        mixer_tracks=[],
+        patterns=[{"index": 1, "name": "Pattern 1", "color": None}],
+        playlist_tracks=[],
+        routing=[],
+        template_context={},
+    )
+
+    assert report["summary"]["unnamed_patterns"] == 1
+    assert report["summary"]["proposed_changes"] == 0
+    assert report["guided"]["state"] == "clear"
+    assert report["guided"]["next_tool"] is None
+    assert not any(
+        step.get("id") == "rename_pattern_1"
+        for step in report["cleanup_plan"]["steps"]
+    )
+
+
+def test_control_center_exposes_before_after_and_rollback_for_organizer():
+    report = control_center._build_project_organizer_report(
+        channels=[
+            {
+                "channel": 1,
+                "name": "Channel 1",
+                "type": {"label": "genplug"},
+                "target_mixer_track": 0,
+                "target_name": "Master",
+            }
+        ],
+        mixer_tracks=[{"i": 0, "name": "Master", "color": 1}],
+        patterns=[],
+        playlist_tracks=[],
+        routing=[{"i": 0, "name": "Master", "routes_to": []}],
+        template_context={},
+    )
+
+    route_step = next(
+        step for step in report["cleanup_plan"]["steps"] if step["kind"] == "channel_routing"
+    )
+    rename_step = next(
+        step for step in report["cleanup_plan"]["steps"] if step["kind"] == "channel_naming"
+    )
+
+    assert route_step["risk"] == "medium"
+    assert route_step["before_state"] == {
+        "target_mixer_track": 0,
+        "target_name": "Master",
+    }
+    assert route_step["proposed_after_state"] == {"target_mixer_track": "next_free"}
+    assert route_step["rollback_tool"] == "fl_rollback_organization_change"
+    assert rename_step["before_state"] == {"name": "Channel 1"}
+    assert rename_step["proposed_after_state"] == {"name": "Instrument 1"}
 
 
 def test_build_mix_review_report_summarizes_levels_findings_and_visuals():
@@ -1186,7 +1441,121 @@ def test_mix_review_user_decision_validates_heuristic_findings():
     assert finding["metadata"]["user_intent"] == "intentional"
 
 
-def test_build_mix_review_report_surfaces_playback_limitations_when_stopped():
+def test_mix_review_rejected_and_ignored_findings_do_not_drive_score_or_fix_plan():
+    snapshot = {
+        "playing": True,
+        "levels_valid": True,
+        "peak_window": {"source": "sustained_1200ms"},
+        "tracks": [
+            {
+                "index": 0,
+                "name": "Master",
+                "vol_db": 0.0,
+                "peak_db": -3.0,
+                "peak_max": 0.7,
+                "pan": 0.0,
+                "stereo_sep": 0.0,
+                "plugins": [],
+                "routes_to": [],
+            },
+            {
+                "index": 5,
+                "name": "Pad",
+                "vol_db": -7.0,
+                "peak_db": -14.0,
+                "peak_max": 0.2,
+                "pan": 0.0,
+                "stereo_sep": 0.0,
+                "plugins": [],
+                "routes_to": [{"dst": 0, "dst_name": "Master"}],
+            },
+        ],
+        "template_context": {},
+        "gather_errors": [],
+    }
+
+    base = control_center._build_mix_review_report(snapshot, options={"level": 2})
+    heuristic = next(row for row in base["findings"] if row["rule"] == "missing_hpf")
+    rejected = control_center._build_mix_review_report(
+        snapshot,
+        options={"level": 2},
+        user_decisions=(
+            {
+                "interaction_id": "mix_review.reject_finding",
+                "decision": "rejected",
+                "finding_id": heuristic["id"],
+            },
+        ),
+    )
+    ignored = control_center._build_mix_review_report(
+        snapshot,
+        options={"level": 2},
+        user_decisions=(
+            {
+                "interaction_id": "mix_review.ignore_finding",
+                "decision": "ignored",
+                "finding_id": heuristic["id"],
+            },
+        ),
+    )
+
+    rejected_finding = next(row for row in rejected["findings"] if row["id"] == heuristic["id"])
+    ignored_finding = next(row for row in ignored["findings"] if row["id"] == heuristic["id"])
+    assert rejected_finding["metadata"]["finding_state"] == "rejected_by_user"
+    assert ignored_finding["metadata"]["finding_state"] == "ignored_by_user"
+    assert rejected["metadata"]["risk_score_v2"] < base["metadata"]["risk_score_v2"]
+    assert ignored["metadata"]["risk_score_v2"] < base["metadata"]["risk_score_v2"]
+
+
+def test_mix_review_psytrance_profile_changes_weights_not_claims():
+    snapshot = {
+        "playing": True,
+        "levels_valid": True,
+        "peak_window": {"source": "sustained_1200ms"},
+        "tracks": [
+            {
+                "index": 0,
+                "name": "Master",
+                "vol_db": 0.0,
+                "peak_db": -4.0,
+                "peak_max": 0.63,
+                "pan": 0.0,
+                "stereo_sep": 0.0,
+                "plugins": [],
+                "routes_to": [],
+            },
+            {
+                "index": 2,
+                "name": "Sub Bass",
+                "vol_db": -3.0,
+                "peak_db": -4.0,
+                "peak_max": 0.63,
+                "pan": 0.42,
+                "stereo_sep": 0.5,
+                "plugins": [],
+                "routes_to": [{"dst": 0, "dst_name": "Master"}],
+            },
+        ],
+        "template_context": {},
+        "gather_errors": [],
+    }
+
+    default = control_center._build_mix_review_report(
+        snapshot,
+        options={"level": 2, "genre_profile": "default"},
+    )
+    psytrance = control_center._build_mix_review_report(
+        snapshot,
+        options={"level": 2, "genre_profile": "psytrance"},
+    )
+
+    assert psytrance["metadata"]["risk_score_v2"] > default["metadata"]["risk_score_v2"]
+    assert {row["rule"] for row in psytrance["findings"]} == {
+        row["rule"] for row in default["findings"]
+    }
+
+
+def test_build_mix_review_report_skips_playback_requirement_for_default_level_1():
     snapshot = {
         "playing": False,
         "levels_valid": False,
@@ -1217,10 +1586,23 @@ def test_build_mix_review_report_surfaces_playback_limitations_when_stopped():
     assert report["ok"] is True
     prerequisites = report.get("prerequisites", [])
     assert any(
-        req["id"] == "requires_playback"
-        and req["status"] in ("missing", "unavailable", "partial", "failed")
+        req["id"] == "requires_playback" and req["status"] == "skipped"
         for req in prerequisites
     )
+    assert "live_meter_window" not in report["coverage"]["missing"]
+
+    level_2_report = control_center._build_mix_review_report(snapshot, options={"level": 2})
+    level_2_analysis = control_center._generic_analysis_report_from_legacy(
+        level_2_report, "mix_review", "Mix Review"
+    )
+    level_2_payload = control_center.analysis_report_for_control_center(
+        level_2_analysis, level_2_report
+    )
+    assert any(
+        req["id"] == "requires_playback" and req["status"] == "missing"
+        for req in level_2_payload.get("prerequisites", [])
+    )
+    assert "live_meter_window" in level_2_payload["coverage"]["missing"]
 
 
 def test_direct_live_snapshot_remains_valid_without_watch_evidence():
@@ -1390,11 +1772,121 @@ def test_build_routing_audit_report_summarizes_graph_and_findings():
     assert report["findings"][0]["rule_id"].startswith("routing.")
     assert "analysis_report" not in report["details"]
     canonical_ids = {
-        entity["canonical_id"]
-        for finding in report["findings"]
-        for entity in finding["entities"]
+        entity["canonical_id"] for finding in report["findings"] for entity in finding["entities"]
     }
     assert {"channel:1", "mixer:1", "channel:3", "mixer:2", "mixer:9"} <= canonical_ids
+
+
+def test_build_routing_audit_report_adds_discrepancy_template_and_level2_findings():
+    channels = [
+        {
+            "channel": 1,
+            "name": "Kick",
+            "type": {"label": "genplug"},
+            "target_mixer_track": 2,
+            "target_name": "Kick",
+            "vol_norm": 0.02,
+            "pan": -1.0,
+            "mute": True,
+            "solo": False,
+        },
+        {
+            "channel": 2,
+            "name": "Bass",
+            "type": {"label": "genplug"},
+            "target_mixer_track": 11,
+            "target_name": "Bass",
+            "vol_norm": 0.9,
+            "pan": 0.0,
+            "mute": False,
+            "solo": False,
+        },
+    ]
+    mixer_tracks = [
+        {
+            "i": 0,
+            "name": "Master",
+            "vol_norm": 0.8,
+            "pan": 0.0,
+            "mute": False,
+            "solo": False,
+        },
+        {
+            "i": 1,
+            "name": "Premaster",
+            "vol_norm": 0.8,
+            "pan": 0.0,
+            "mute": False,
+            "solo": False,
+        },
+        {
+            "i": 2,
+            "name": "Kick",
+            "vol_norm": 0.9,
+            "pan": 1.0,
+            "mute": False,
+            "solo": True,
+        },
+        {
+            "i": 10,
+            "name": "Kick Bus",
+            "vol_norm": 0.9,
+            "pan": 0.0,
+            "mute": False,
+            "solo": False,
+        },
+        {
+            "i": 11,
+            "name": "Bass",
+            "vol_norm": 0.8,
+            "pan": 0.0,
+            "mute": False,
+            "solo": False,
+        },
+    ]
+    routing = [
+        {"i": 0, "name": "Master", "routes_to": []},
+        {"i": 1, "name": "Premaster", "routes_to": [{"dst": 0, "dst_name": "Master"}]},
+        {"i": 2, "name": "Kick", "routes_to": [{"dst": 0, "dst_name": "Master"}]},
+        {"i": 10, "name": "Kick Bus", "routes_to": [{"dst": 1, "dst_name": "Premaster"}]},
+        {"i": 11, "name": "Bass", "routes_to": [{"dst": 0, "dst_name": "Master"}]},
+    ]
+
+    _analysis_report, report = control_center._build_routing_audit_report(
+        channels=channels,
+        routing=routing,
+        mixer_tracks=mixer_tracks,
+        options=control_center.routing_checks.RoutingAuditOptions(
+            routing_check_mode=control_center.routing_checks.ROUTING_MODE_LEVEL_2,
+            template_compliance=control_center.routing_checks.TEMPLATE_COMPLIANCE_MANUAL,
+            selected_template_profile="psytrance",
+            playback_decision="manual_playback_running",
+            loop_duration_seconds=16,
+        ),
+        signal_flow={
+            "available": True,
+            "playback_used": True,
+            "active_threshold": 0.00001,
+            "track_peaks": {"0": 0.2, "1": 0.0, "2": 0.15, "10": 0.0, "11": 0.0},
+            "limitations": [],
+        },
+    )
+
+    ids = {finding["id"] for finding in report["findings"]}
+    assert "channel_mixer_volume_conflict" in ids
+    assert "channel_mixer_pan_conflict" in ids
+    assert "channel_mixer_mute_conflict" in ids
+    assert "channel_mixer_solo_conflict" in ids
+    assert "template.source_direct_to_master" in ids
+    assert "template.source_bypass_signal_confirmed" in ids
+    assert "template.expected_bus_silent_signal_confirmed" in ids
+    assert "channel_active_mixer_silent" in ids
+    assert "direct_to_master_signal_confirmed" in ids
+    assert report["routing_check_level"] == 2
+    assert report["evidence_mode"] == "static_snapshot_plus_meter_snapshot"
+    assert report["playback_used"] is True
+    assert report["template_compliance_summary"]["profile_id"] == "psytrance"
+    assert report["details"]["template_status"]["profile_source"] == "manual_select"
 
 
 def test_main_rejects_non_loopback_host():

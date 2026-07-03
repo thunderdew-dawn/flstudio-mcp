@@ -16,7 +16,7 @@ from .schema import (
     pending_human_validation_ids,
     provisional_score_metadata,
 )
-from .scoring import confidence_from_coverage, risk_from_severities
+from .scoring import clamp_score, confidence_from_coverage, risk_from_severities
 
 ROUTING_POLICY_NOTES = (
     "Preserve recognizable existing routing structure before proposing cleanup.",
@@ -37,26 +37,29 @@ def routing_analysis_report_from_legacy_payload(
     summary = dict(payload.get("summary") or {})
     findings = [dict(row) for row in payload.get("findings") or [] if isinstance(row, dict)]
     details = dict(payload.get("details") or {})
+    report_analysis_mode = _routing_analysis_mode(payload)
+    finding_evidence_mode = report_analysis_mode
     coverage = _routing_coverage(ok=ok, payload=payload, details=details)
     confidence = confidence_from_coverage(
         required=coverage.required,
         available=coverage.available,
-        evidence_mode="static_snapshot",
+        evidence_mode=report_analysis_mode,
     )
-    risk = risk_from_severities(tuple(row.get("severity", "info") for row in findings))
+    risk = _routing_risk_score(findings)
     analysis_findings = tuple(
-        _routing_finding(row, index=index, confidence_score=confidence)
+        _routing_finding(
+            row,
+            index=index,
+            confidence_score=confidence,
+            evidence_mode=str(row.get("evidence_mode") or finding_evidence_mode),
+        )
         for index, row in enumerate(findings, start=1)
     )
     interaction_requests = tuple(
-        dict(row)
-        for row in payload.get("interaction_requests") or ()
-        if isinstance(row, dict)
+        dict(row) for row in payload.get("interaction_requests") or () if isinstance(row, dict)
     )
     user_decisions = tuple(
-        dict(row)
-        for row in payload.get("user_decisions") or ()
-        if isinstance(row, dict)
+        dict(row) for row in payload.get("user_decisions") or () if isinstance(row, dict)
     )
     pending_validation = pending_human_validation_ids(
         analysis_findings,
@@ -74,11 +77,7 @@ def routing_analysis_report_from_legacy_payload(
     }
     for request in interaction_requests:
         request_id = str(request.get("id") or "").strip()
-        if (
-            request_id
-            and request_id not in decided
-            and request_id not in pending_validation
-        ):
+        if request_id and request_id not in decided and request_id not in pending_validation:
             pending_validation = (*pending_validation, request_id)
     report_created_at, valid_until = _validity_window(created_at or payload.get("generated_at"))
     source_observations = tuple(details.get("source_observation_ids") or ())
@@ -86,14 +85,23 @@ def routing_analysis_report_from_legacy_payload(
         "routing_summary": summary,
         "policy_notes": list(details.get("policy_notes") or ROUTING_POLICY_NOTES),
         "template_context": details.get("template_context") or payload.get("template_context"),
+        "routing_check_level": payload.get("routing_check_level"),
+        "routing_evidence_mode": payload.get("evidence_mode"),
+        "routing_evidence_level": payload.get("routing_evidence_level"),
+        "routing_evidence_levels": payload.get("routing_evidence_levels"),
+        "template_compliance_summary": payload.get("template_compliance_summary"),
+        "plan_gating_status": payload.get("plan_gating_status"),
+        "cleanup_plan_allowed": payload.get("cleanup_plan_allowed"),
+        "cleanup_plan_block_reason": payload.get("cleanup_plan_block_reason"),
+        "required_user_decisions": payload.get("required_user_decisions"),
     }
     metadata.update(dict(payload.get("metadata") or {}))
     metadata.update(provisional_score_metadata(pending_validation))
     return AnalysisReport(
         workflow=workflow,
         title=title,
-        analysis_mode="static_snapshot",
-        evidence_mode="static_snapshot_only",
+        analysis_mode=report_analysis_mode,
+        evidence_mode=str(payload.get("evidence_mode") or "static_snapshot_only"),
         created_at=report_created_at,
         project_fingerprint=details.get("project_fingerprint"),
         freshness=Freshness(
@@ -112,6 +120,16 @@ def routing_analysis_report_from_legacy_payload(
             ),
             Prerequisite("channel_routing_snapshot", "ok" if ok else "unavailable"),
             Prerequisite("routing_snapshot", "ok" if ok else "unavailable"),
+            Prerequisite(
+                "live_meter_window",
+                (
+                    "ok"
+                    if payload.get("playback_used") and payload.get("routing_check_level") == 2
+                    else "skipped"
+                    if payload.get("routing_check_level") != 2
+                    else "missing"
+                ),
+            ),
         ),
         risk_score=risk,
         confidence_score=confidence,
@@ -120,13 +138,14 @@ def routing_analysis_report_from_legacy_payload(
         limitations=(
             "Routing review is static metadata evidence; it does not prove audible signal flow.",
             "Plugin insertion, external inputs, and UI drag-and-drop routing remain manual.",
+            *tuple(str(item) for item in payload.get("limitations") or ()),
         ),
         source_observations=source_observations,
         next_actions=(
             {
                 "type": "workflow",
                 "id": "routing_cleanup_plan",
-                "label": "Plan cleanup only after reviewing the static routing evidence.",
+                "label": "Plan cleanup only after confirming routing findings and intent.",
             },
         ),
         interaction_requests=interaction_requests,
@@ -145,6 +164,22 @@ def _validity_window(value: Any, *, ttl_seconds: float = 120.0) -> tuple[str, st
         created = created.replace(tzinfo=timezone.utc)
     created = created.astimezone(timezone.utc)
     return created.isoformat(), (created + timedelta(seconds=ttl_seconds)).isoformat()
+
+
+def _routing_analysis_mode(payload: dict[str, Any]) -> str:
+    mode = str(payload.get("analysis_mode") or "").strip()
+    if mode in {
+        "static_snapshot",
+        "live_runtime",
+        "watch_window",
+        "rendered_audio",
+        "manual_check",
+        "hybrid",
+    }:
+        return mode
+    if payload.get("routing_check_level") == 2:
+        return "hybrid"
+    return "static_snapshot"
 
 
 def _decision_satisfies_validation(row: dict[str, Any]) -> bool:
@@ -166,12 +201,16 @@ def _routing_coverage(
     payload: dict[str, Any],
     details: dict[str, Any],
 ) -> Coverage:
-    required = 3
+    requires_live = payload.get("routing_check_level") == 2
+    required = 4 if requires_live else 3
     if not ok:
+        missing = ["fl_session_alive", "channel_routing_snapshot", "routing_snapshot"]
+        if requires_live:
+            missing.append("live_meter_window")
         return Coverage(
             required=required,
             available=0,
-            missing=("fl_session_alive", "channel_routing_snapshot", "routing_snapshot"),
+            missing=tuple(missing),
         )
     missing = []
     available = 1
@@ -183,6 +222,11 @@ def _routing_coverage(
         available += 1
     else:
         missing.append("routing_snapshot")
+    if requires_live:
+        if payload.get("playback_used") and not payload.get("limitations"):
+            available += 1
+        else:
+            missing.append("live_meter_window")
     return Coverage(required=required, available=available, missing=tuple(missing))
 
 
@@ -206,18 +250,22 @@ def _routing_finding(
     *,
     index: int,
     confidence_score: int,
+    evidence_mode: str = "static_snapshot",
 ) -> Finding:
     rule = str(row.get("id") or "routing_finding")
     severity = str(row.get("severity") or "info")
     row_metadata = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
+    risk_score = _as_int(row.get("risk_contribution"))
+    if risk_score is None:
+        risk_score = risk_from_severities((severity,))
     return Finding(
         id=rule,
         rule_id=f"routing.{rule}",
         title=str(row.get("title") or rule.replace("_", " ").title()),
         severity=severity,
-        risk_score=risk_from_severities((severity,)),
+        risk_score=risk_score,
         confidence_score=confidence_score,
-        evidence_mode="static_snapshot",
+        evidence_mode=evidence_mode,
         entities=_routing_entities(row),
         evidence=(
             {
@@ -226,13 +274,36 @@ def _routing_finding(
                 "items": list(row.get("items") or []),
             },
         ),
-        limitations=("Static routing metadata does not prove audible signal flow.",),
+        limitations=_routing_finding_limitations(row, evidence_mode=evidence_mode),
         metadata={
             **dict(row_metadata),
             "legacy_finding_index": index,
             "legacy_finding": row,
         },
     )
+
+
+def _routing_risk_score(findings: list[dict[str, Any]]) -> int:
+    explicit = [
+        value
+        for row in findings
+        if (value := _as_int(row.get("risk_contribution"))) is not None
+    ]
+    if explicit:
+        return clamp_score(sum(explicit))
+    return risk_from_severities(tuple(row.get("severity", "info") for row in findings))
+
+
+def _routing_finding_limitations(
+    row: dict[str, Any],
+    *,
+    evidence_mode: str,
+) -> tuple[str, ...]:
+    explicit = row.get("limitations")
+    values = [explicit] if isinstance(explicit, str) else [str(item) for item in explicit or ()]
+    if evidence_mode != "hybrid":
+        values.append("Static routing metadata does not prove audible signal flow.")
+    return tuple(dict.fromkeys(item for item in values if item))
 
 
 def _routing_entities(row: dict[str, Any]) -> tuple[EntityRef, ...]:

@@ -4,8 +4,8 @@
   "title": "Analysis workflows, reports, scoring, evidence, health aggregation and Control Center workflow panels",
   "source_snapshot": "agent-docs/machine/architecture-analysis.snapshot.json",
   "source_snapshot_sha256": "ff0d38588b91510a3073e81d885de38f9116cddfbcd95686cbf11c28a6db8d7f",
-  "generated_at": "2026-06-19",
-  "note": "Generated scoped slice of the full static architecture analysis. Load this file only when the coding task matches its scope.",
+  "generated_at": "2026-07-03",
+  "note": "Scoped slice refreshed for Project Organizer plan lifecycle metadata and Mix Review inline live-meter fallback; full static architecture analysis was not regenerated.",
   "load_when": [
     "workflow registry, report schema, scoring, evidence, freshness, prerequisites, or health aggregation changes",
     "Control Center project-review workflow panel ownership or endpoint changes",
@@ -21,7 +21,63 @@
         "enabled": true,
         "analysis_report_required": false,
         "health_inclusion_policy": "runtime_prerequisite_only",
-        "requirements": null,
+        "requirements": {
+          "workflow_id": "routing_audit",
+          "required": [
+            {
+              "id": "fl_session_alive",
+              "observation_kind": "fl_session_alive",
+              "required": true,
+              "evidence_mode": "static_snapshot",
+              "invalidates_on": [],
+              "ttl_seconds": 2
+            },
+            {
+              "id": "static_project_snapshot",
+              "observation_kind": "static_project_snapshot",
+              "required": true,
+              "evidence_mode": "static_snapshot",
+              "invalidates_on": [],
+              "ttl_seconds": 60
+            },
+            {
+              "id": "channel_routing_snapshot",
+              "observation_kind": "channel_routing_snapshot",
+              "required": true,
+              "evidence_mode": "static_snapshot",
+              "invalidates_on": [],
+              "ttl_seconds": 60
+            },
+            {
+              "id": "routing_snapshot",
+              "observation_kind": "routing_snapshot",
+              "required": true,
+              "evidence_mode": "static_snapshot",
+              "invalidates_on": [],
+              "ttl_seconds": 60
+            }
+          ],
+          "optional": [
+            {
+              "id": "live_meter_window",
+              "observation_kind": "live_meter_window",
+              "required": false,
+              "evidence_mode": "live_runtime",
+              "invalidates_on": [],
+              "ttl_seconds": 2
+            },
+            {
+              "id": "rendered_stem_features",
+              "observation_kind": "rendered_stem_features",
+              "required": false,
+              "evidence_mode": "rendered_audio",
+              "invalidates_on": [
+                "project_identity_change",
+                "audio_source_hash_changed"
+              ]
+            }
+          ]
+        },
         "parent_workflow_id": null,
         "panel_id": null,
         "group": "Project Review",
@@ -99,6 +155,16 @@
               "evidence_mode": "live_runtime",
               "invalidates_on": [],
               "ttl_seconds": 2
+            },
+            {
+              "id": "rendered_stem_features",
+              "observation_kind": "rendered_stem_features",
+              "required": false,
+              "evidence_mode": "rendered_audio",
+              "invalidates_on": [
+                "project_identity_change",
+                "audio_source_hash_changed"
+              ]
             }
           ]
         },
@@ -107,11 +173,83 @@
         "group": "Project Review",
         "endpoint": "/api/workflows/mix-review",
         "action_label": "Run Mix Review",
-        "safety_note": "Read-only mixer review. Static execution remains available; audio-backed conclusions require a linked rendered master.",
-        "supported_next_actions": [],
-        "manual_only_actions": [],
-        "forbidden_actions": [],
-        "metadata": {}
+        "safety_note": "Read-only mixer review. Level 1 is static with opportunistic current playback peaks when already playing; Level 2 uses optional transient playback/watch evidence; Level 3 uses linked rendered master proxy evidence; Level 4 uses role-confirmed stem/bus evidence.",
+        "supported_next_actions": [
+          "run_static_review",
+          "start_level_2_watch",
+          "link_rendered_master_evidence",
+          "link_stem_bus_evidence",
+          "confirm_mix_review_finding",
+          "accept_mix_review_finding",
+          "reject_mix_review_finding",
+          "ignore_mix_review_finding"
+        ],
+        "manual_only_actions": [
+          "choose_loudest_section",
+          "manual_audio_render",
+          "manual_stem_export",
+          "confirm_track_roles",
+          "approve_fix_plan"
+        ],
+        "forbidden_actions": [
+          "automatic_render",
+          "plugin_loading",
+          "playlist_clip_editing"
+        ],
+        "metadata": {
+          "mix_review_levels": [
+            "level_1_static_project_metadata",
+            "level_2_live_meter_window",
+            "level_3_rendered_master_audio_proxy",
+            "level_4_role_confirmed_stem_bus_audio"
+          ],
+          "finding_states": [
+            "static_heuristic",
+            "name_based_unconfirmed",
+            "metadata_suspected",
+            "live_meter_supported",
+            "rendered_master_proxy",
+            "stem_audio_confirmed",
+            "accepted_by_user",
+            "rejected_by_user",
+            "ignored_by_user",
+            "requires_more_evidence"
+          ],
+          "score_fields": [
+            "legacy_score",
+            "risk_score_v2",
+            "score_status",
+            "score_inputs",
+            "evidence_weight",
+            "decision_adjusted_score",
+            "blocked_findings_count",
+            "provisional_findings_count",
+            "confirmed_findings_count"
+          ],
+          "fix_plan_statuses": [
+            "blocked",
+            "draft",
+            "requires_user_approval",
+            "approved",
+            "not_applicable"
+          ],
+          "genre_profiles": [
+            "default",
+            "psytrance",
+            "techno",
+            "hiphop",
+            "ambient",
+            "rock",
+            "cinematic"
+          ],
+          "target_contexts": [
+            "streaming",
+            "club",
+            "festival",
+            "demo",
+            "unknown"
+          ]
+        }
       },
       {
         "id": "routing_audit",
@@ -127,11 +265,50 @@
         "group": "Project Review",
         "endpoint": "/api/workflows/routing-audit",
         "action_label": "Run Routing Audit",
-        "safety_note": "Read-only routing audit. Cleanup remains proposal-first.",
-        "supported_next_actions": [],
-        "manual_only_actions": [],
-        "forbidden_actions": [],
-        "metadata": {}
+        "safety_note": "Read-only routing audit. Static and meter findings remain evidence-labeled; cleanup remains proposal-first and confirmation-gated.",
+        "supported_next_actions": [
+          "run_static_routing_snapshot",
+          "run_meter_snapshot_proxy",
+          "confirm_template_profile",
+          "confirm_track_roles",
+          "plan_cleanup_after_confirmation"
+        ],
+        "manual_only_actions": [
+          "confirm_direct_to_master_intent",
+          "confirm_reference_monitor_only",
+          "confirm_sidechain_control_not_audible",
+          "approve_cleanup_plan"
+        ],
+        "forbidden_actions": [
+          "automatic_routing_cleanup",
+          "playlist_clip_editing",
+          "plugin_loading",
+          "automatic_render"
+        ],
+        "metadata": {
+          "routing_evidence_levels": [
+            "static_routing_snapshot",
+            "meter_snapshot_proxy",
+            "user_confirmed_routing_intent",
+            "verified_cleanup_readback"
+          ],
+          "plan_gating_statuses": [
+            "blocked_requires_confirmation",
+            "draft_proxy_evidence",
+            "ready_for_user_approval",
+            "no_actionable_findings"
+          ],
+          "intent_profiles": [
+            "default",
+            "psytrance_stem_bus_template",
+            "mixdown_premaster_template",
+            "recording_session",
+            "sound_design_session",
+            "live_performance",
+            "minimal_sketch",
+            "reference_monitoring"
+          ]
+        }
       },
       {
         "id": "low_end_analysis",
@@ -187,11 +364,56 @@
         "group": "Project Review",
         "endpoint": "/api/workflows/low-end-analysis",
         "action_label": "Run Low-End Safety Check",
-        "safety_note": "Read-only low-end review. Metadata raises suspicions; rendered audio is required for audio-backed energy and stereo proxy claims.",
-        "supported_next_actions": [],
-        "manual_only_actions": [],
-        "forbidden_actions": [],
-        "metadata": {}
+        "safety_note": "Read-only low-end review. Metadata raises suspicions; rendered master audio creates proxy claims only; stem-specific conclusions require role-confirmed stem or bus evidence.",
+        "supported_next_actions": [
+          "low_end.confirm_detected_tracks",
+          "low_end.assign_track_roles:*",
+          "low_end.choose_genre_profile",
+          "low_end.confirm_finding:*",
+          "audio.render_master",
+          "audio.render_low_end_stems",
+          "low_end.approve_fix_plan",
+          "low_end.after_fix_render"
+        ],
+        "manual_only_actions": [
+          "audio.render_master",
+          "audio.render_low_end_stems",
+          "low_end.confirm_detected_tracks",
+          "low_end.assign_track_roles:*",
+          "low_end.choose_genre_profile",
+          "low_end.confirm_finding:*",
+          "low_end.approve_fix_plan",
+          "low_end.after_fix_render"
+        ],
+        "forbidden_actions": [
+          "automatic_fl_studio_render",
+          "automatic_project_writes",
+          "plugin_loading",
+          "unsafe_fix_application",
+          "stem_specific_claims_from_master_only_audio",
+          "final_fix_plan_from_unconfirmed_static_metadata"
+        ],
+        "metadata": {
+          "evidence_levels": {
+            "1": "static_metadata",
+            "2": "live_playback_data",
+            "3": "rendered_master_audio",
+            "4": "role_confirmed_bus_or_stem_evidence",
+            "5": "deeper_batch_or_multi_source_evidence"
+          },
+          "genre_profiles": [
+            "default",
+            "psytrance"
+          ],
+          "future_genre_profiles": [
+            "techno",
+            "drum_and_bass",
+            "hip_hop",
+            "cinematic"
+          ],
+          "automatic_fl_render": false,
+          "master_audio_limit": "Rendered master audio may create proxy low-end findings but must not create kick, bass, sub, or stem-specific causal claims."
+        }
       },
       {
         "id": "project_organizer",
@@ -207,11 +429,38 @@
         "group": "Project Review",
         "endpoint": "/api/workflows/project-organizer",
         "action_label": "Run Organizer",
-        "safety_note": "Read-only scan. Cleanup requires an approved safe-write tool.",
-        "supported_next_actions": [],
-        "manual_only_actions": [],
-        "forbidden_actions": [],
-        "metadata": {}
+        "safety_note": "Read-only scan and template-aware planning. Cleanup requires a stored plan, explicit step approval, and an approved safe-write tool.",
+        "supported_next_actions": [
+          "scan_project_organization",
+          "plan_template_organization",
+          "update_organization_plan_decisions",
+          "approve_organization_steps",
+          "get_organization_status",
+          "rollback_organization_change",
+          "review_safe_proposals"
+        ],
+        "manual_only_actions": [
+          "choose_target_template",
+          "confirm_detected_roles",
+          "approve_step_selection"
+        ],
+        "forbidden_actions": [
+          "playlist_clip_editing",
+          "pattern_or_clip_deletion",
+          "plugin_loading",
+          "automatic_render",
+          "automatic_save_as"
+        ],
+        "metadata": {
+          "scan_tool": "fl_scan_project_organization",
+          "plan_tool": "fl_plan_project_organization",
+          "decision_tool": "fl_update_organization_plan_decision",
+          "apply_tool": "fl_apply_organization_plan",
+          "status_tool": "fl_get_organization_status",
+          "rollback_tool": "fl_rollback_organization_change",
+          "plan_store_required": true,
+          "step_selection_required": true
+        }
       },
       {
         "id": "preflight",

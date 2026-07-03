@@ -89,7 +89,7 @@ class RuntimeReportStore:
         if client is not None:
             payload = client.latest_report(workflow)
             return AnalysisReport.from_dict(payload) if payload else None
-        return local_runtime().latest_report(workflow)
+        return local_runtime().report_store.get_latest_report(workflow)
 
     def clear(self) -> None:
         if _default_client() is not None:
@@ -103,9 +103,11 @@ def local_runtime():
     global _LOCAL_RUNTIME
     if _LOCAL_RUNTIME is None:
         from .audio_worker import AudioAnalysisWorker
-        from .core import RuntimeCore
+        from .core import RuntimeCore, resolve_job_worker_concurrency
 
-        _LOCAL_RUNTIME = RuntimeCore()
+        _LOCAL_RUNTIME = RuntimeCore(
+            job_worker_concurrency=resolve_job_worker_concurrency()
+        )
         AudioAnalysisWorker(_LOCAL_RUNTIME.audio_artifacts).register(_LOCAL_RUNTIME)
     return _LOCAL_RUNTIME
 

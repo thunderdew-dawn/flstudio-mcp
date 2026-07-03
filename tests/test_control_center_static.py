@@ -9,6 +9,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 APP_JS = ROOT / "src" / "fls_pilot" / "control_center_static" / "app.js"
 INDEX_HTML = ROOT / "src" / "fls_pilot" / "control_center_static" / "index.html"
+STYLES_CSS = ROOT / "src" / "fls_pilot" / "control_center_static" / "styles.css"
 
 
 def _run_node_dom_check(script: str) -> None:
@@ -28,27 +29,46 @@ def _run_node_dom_check(script: str) -> None:
 def test_v3_runtime_workflow_copy_exposes_evidence_limits() -> None:
     html = INDEX_HTML.read_text("utf-8")
     js = APP_JS.read_text("utf-8")
+    css = STYLES_CSS.read_text("utf-8")
 
-    assert "Preflight <span class=\"badge badge-ok\">Read-only</span>" in html
+    assert 'Preflight <span class="badge badge-ok">Read-only</span>' in html
     assert "Level evidence, render settings, and mastering remain separate checks." in html
-    assert "Jam 2 Project <span class=\"badge badge-planned\">Planned</span>" in html
+    assert 'Jam 2 Project <span class="badge badge-planned">Planned</span>' in html
     assert "It is not part of the v3.0 release scope." in html
     assert "/api/workflows/jam-2-project" not in js
     assert "/api/workflows/plugin-assistant" not in js
-    assert "rendered_master: \"Rendered master audio\"" in js
-    assert "static_snapshot_only: \"Project metadata\"" in js
-    assert "id=\"producer_audio_evidence\"" in html
-    assert "id=\"project-title\"" in html
-    assert "id=\"transport-play\"" in html
-    assert "id=\"playlist-marker-strip\"" in html
-    assert "data-live-playback=\"mix_review\"" in html
-    assert "data-live-playback=\"low_end_analysis\"" in html
-    assert "data-live-playback=\"preflight\"" in html
-    assert "id=\"mix-review-interactions\"" in html
-    assert "id=\"low-end-interactions\"" in html
-    assert "id=\"routing-audit-interactions\"" in html
-    assert "id=\"organizer-interactions\"" in html
+    assert 'rendered_master: "Rendered master audio"' in js
+    assert 'static_snapshot_only: "Project metadata"' in js
+    assert 'id="producer_audio_evidence"' in html
+    assert 'id="project-title"' in html
+    assert 'id="transport-play"' in html
+    assert 'id="playlist-marker-strip"' in html
+    assert 'data-live-playback="mix_review"' in html
+    assert 'data-live-playback="low_end_analysis"' in html
+    assert 'data-live-playback="preflight"' in html
+    assert 'id="mix-review-interactions"' in html
+    assert 'id="low-end-interactions"' in html
+    assert 'id="low-end-selection-list"' in html
+    assert 'id="low-end-add-track"' in html
+    assert "function renderLowEndSelection" in js
+    assert "role_changes" in js
+    assert "added_entities" in js
+    assert "removed_entities" in js
+    assert 'id="routing-audit-interactions"' in html
+    assert 'id="organizer-interactions"' in html
+    assert "#organizer-interactions" in css
+    assert "grid-column: 1 / -1;" in css
+    assert "Routing Check Mode" in html
+    assert "Static Routing &amp; Settings Audit (Lvl 1)" in html
+    assert "Signal Flow Assisted Routing Audit (Lvl 2)" in html
+    assert "Template Compliance" in html
+    assert "Auto-detect Template Compliance" in html
+    assert "Select Template Profile" in html
+    assert "Template Compliance Off" in html
     assert "async function submitAudioAnalysis()" in js
+    assert "function renderRoutingLevel2Flow" in js
+    assert "Start playback automatically" in js
+    assert "Playback is running - start analysis" in js
     assert 'audioAnalysisRequest("cancel"' in js
     assert 'audioAnalysisRequest("result"' in js
 
@@ -66,6 +86,110 @@ def test_live_transport_polling_does_not_disable_controls() -> None:
     assert "state.transport.loading = true" not in refresh_body
     assert "state.transport.loading = false" not in refresh_body
     assert "button.disabled = state.transport.loading;" in js
+
+
+def test_initial_refresh_runs_full_status_before_quick_status() -> None:
+    js = APP_JS.read_text("utf-8")
+
+    assert 'const statusPath = state.status ? "/api/status/quick" : "/api/status";' in js
+    assert "const API_REQUEST_TIMEOUT_MS = 20000;" in js
+    assert "const ORGANIZER_REQUEST_TIMEOUT_MS = 60000;" in js
+    assert "timeoutMs: ORGANIZER_REQUEST_TIMEOUT_MS" in js
+
+
+def test_control_center_static_status_failure_guides_setup_recheck() -> None:
+    _run_node_dom_check(
+        r"""
+const assert = require("assert");
+const fs = require("fs");
+const vm = require("vm");
+
+class Element {
+  constructor(tagName, id = "") {
+    this.tagName = tagName.toUpperCase();
+    this.id = id;
+    this.children = [];
+    this.style = {};
+    this.dataset = {};
+    this.disabled = false;
+    this.onclick = null;
+    this._textContent = "";
+    this._className = "";
+  }
+  set className(value) { this._className = String(value || ""); }
+  get className() { return this._className; }
+  set textContent(value) {
+    this._textContent = String(value ?? "");
+    this.children = [];
+  }
+  get textContent() {
+    return this._textContent + this.children.map((child) => child.textContent).join("");
+  }
+  append(...nodes) { for (const node of nodes) this.appendChild(node); }
+  appendChild(node) { this.children.push(node); return node; }
+}
+
+function textTree(node) {
+  if (!node) return "";
+  return [node._textContent || "", ...node.children.map(textTree)].join("");
+}
+
+const elements = new Map();
+function register(id, tagName = "div") {
+  const element = new Element(tagName, id);
+  elements.set(id, element);
+  return element;
+}
+
+register("bridge-pill");
+register("refresh-time");
+register("next-action-title");
+register("next-action-detail");
+register("next-action-button", "button");
+register("setup-steps");
+
+const document = {
+  createElement: (tagName) => new Element(tagName),
+  getElementById: (id) => elements.get(id) || null,
+  querySelectorAll: () => [],
+  querySelector: () => null
+};
+
+const context = {
+  Blob,
+  URL,
+  clearInterval,
+  clearTimeout,
+  console,
+  document,
+  fetch: async () => { throw new Error("status backend did not answer"); },
+  navigator: {},
+  setInterval,
+  setTimeout,
+  window: { __FLS_PILOT_TEST__: true }
+};
+context.window.document = document;
+
+vm.createContext(context);
+vm.runInContext(fs.readFileSync(process.argv[1], "utf8"), context);
+
+const controls = context.window.flsPilotControlCenter;
+
+(async () => {
+  await controls.refresh();
+
+  assert.match(controls.state.statusError, /status backend did not answer/);
+  assert.strictEqual(elements.get("next-action-title").textContent, "Status check did not finish");
+  assert.strictEqual(elements.get("next-action-button").textContent, "Re-check Status");
+  const setupText = textTree(elements.get("setup-steps"));
+  assert.match(setupText, /Status check did not finish/);
+  assert.match(setupText, /No FL Studio project changes were made/);
+})().catch((error) => {
+  console.error(error && error.stack ? error.stack : error);
+  process.exit(1);
+});
+"""
+    )
 
 
 def test_control_center_static_runtime_and_disconnect_behaviour() -> None:
@@ -366,14 +490,14 @@ function createHarness() {
         fallback_port: 9788
       });
     }
-    if (path === "/api/refresh") {
+    if (path === "/api/status/quick") {
       return response(baseStatus({ state: "stopped", logs: [] }));
     }
     throw new Error(`unexpected fetch path: ${path}`);
   };
 
   await controls.processAction("/api/process/daemon/start");
-  assert.deepStrictEqual(calls, ["/api/process/daemon/start", "/api/refresh"]);
+  assert.deepStrictEqual(calls, ["/api/process/daemon/start", "/api/status/quick"]);
   assert.strictEqual(controls.state.actionFeedback.daemon.state, "attention");
   assert.match(controls.state.actionFeedback.daemon.text, /non-daemon process/);
   assert.match(controls.state.actionFeedback.daemon.text, /9788/);
@@ -793,16 +917,11 @@ controls.state.runtimeWorkflows.preflight = {
 };
 
 controls.renderRuntimeProductPanel("preflight");
-assert.match(textTree(content), /Workflow needs your input/);
-assert.match(textTree(content), /Confirm the export target is correct/);
+assert.match(textTree(content), /Decisions affecting this workflow/);
+assert.doesNotMatch(textTree(content), /Confirm the export target is correct/);
 assert.match(textTree(content), /Render a master WAV manually/);
 assert.match(textTree(content), /Pick a quality gate/);
 assert.match(textTree(content), /Pick manual checks/);
-
-collect(content, (node) => node.tagName === "BUTTON" && node.textContent === "Confirm")[0].listeners.click();
-let confirmDecision = controls.state.runtimeWorkflows.preflight.report.user_decisions.find((item) => item.interaction_id === "preflight.confirm_export");
-assert.strictEqual(confirmDecision.type, "confirm");
-assert.strictEqual(confirmDecision.confirmed, true);
 
 let release = collect(content, (node) => node.tagName === "INPUT" && node.value === "release")[0];
 release.checked = true;
@@ -832,12 +951,11 @@ assert.strictEqual(manualDecision.value, "/tmp/master.wav");
 assert.match(textTree(content), /Saved\. Re-run this workflow to apply your answer: completed/);
 
 const body = controls.workflowRunBody("preflight");
-assert.strictEqual(body.user_decisions.length, 4);
+assert.strictEqual(body.user_decisions.length, 3);
 assert.strictEqual(
   JSON.stringify(body.user_decisions.map((item) => item.interaction_id).sort()),
   JSON.stringify([
     "audio.render_master",
-    "preflight.confirm_export",
     "preflight.pick_checks",
     "preflight.pick_quality"
   ])
@@ -1173,7 +1291,7 @@ controls.state.mixReview.report = {
 controls.renderMixReview();
 
 assert.strictEqual(elements.get("run-mix-review").disabled, false);
-assert.strictEqual(elements.get("mix-score-value").textContent, "72%");
+assert.strictEqual(elements.get("mix-score-value").textContent, "72 / 100");
 assert.strictEqual(elements.get("mix-master-peak").textContent, "0.2 dB");
 assert.match(textTree(elements.get("mix-review-feedback")), /Last review/);
 assert.match(textTree(elements.get("mix-level-list")), /Lead Vox/);
@@ -1461,7 +1579,7 @@ controls.state.routingAudit.report = {
 controls.renderRoutingAudit();
 
 assert.strictEqual(elements.get("run-routing-audit").disabled, false);
-assert.strictEqual(elements.get("routing-score-value").textContent, "81%");
+assert.strictEqual(elements.get("routing-score-value").textContent, "81 / 100");
 assert.match(textTree(elements.get("routing-graph-sources")), /Kick/);
 assert.match(textTree(elements.get("routing-graph-buses")), /Vocal Bus/);
 assert.match(textTree(elements.get("routing-graph-master")), /Master/);
@@ -1652,6 +1770,7 @@ controls.state.projectOrganizer.report = {
     proposed_changes: 4,
     naming_cleanup: 2,
     routing_cleanup: 1,
+    color_cleanup: 4,
     color_readback_missing: 6,
     grouping_candidates: 1
   },
@@ -1669,6 +1788,18 @@ controls.state.projectOrganizer.report = {
       title: "Channels Need Mixer Targets",
       detail: "Channels routed only to Master or with unknown routing.",
       count: 1
+    },
+    {
+      id: "unnamed_patterns",
+      rule_id: "project_organizer.unnamed_patterns",
+      severity: "warning",
+      title: "Default Pattern Names",
+      evidence: [
+        {
+          detail: "Patterns with empty or default-looking names.",
+          count: 1
+        }
+      ]
     }
   ],
   cleanup_plan: {
@@ -1754,12 +1885,14 @@ controls.state.projectOrganizer.report = {
 controls.renderProjectOrganizer();
 
 assert.strictEqual(elements.get("run-project-organizer").disabled, false);
-assert.strictEqual(elements.get("organizer-score-value").textContent, "76%");
+assert.strictEqual(elements.get("organizer-score-value").textContent, "76 / 100");
 assert.strictEqual(elements.get("organizer-routing-total").textContent, "1");
+assert.strictEqual(elements.get("organizer-color-total").textContent, "4");
 assert.match(textTree(elements.get("organizer-feedback")), /Last scan/);
-assert.match(textTree(elements.get("organizer-map-grid")), /fl_analyze_project_organization/);
+assert.match(textTree(elements.get("organizer-map-grid")), /fl_scan_project_organization/);
 assert.match(textTree(elements.get("organizer-guided-steps")), /fl_plan_project_cleanup/);
 assert.match(textTree(elements.get("organizer-finding-list")), /Default Channel Names/);
+assert.match(textTree(elements.get("organizer-finding-list")), /Patterns with empty or default-looking names/);
 assert.match(textTree(elements.get("organizer-plan-list")), /fl_apply_project_cleanup_step/);
 assert.match(textTree(elements.get("organizer-standard-grid")), /fl_apply_color_standard/);
 assert.match(textTree(elements.get("organizer-group-list")), /Drum Bus/);
@@ -1884,7 +2017,10 @@ for (const id of [
   "health-risk-value",
   "health-risk-caption",
   "health-score-value",
+  "health-risk-stat-value",
   "health-coverage-value",
+  "health-confidence-value",
+  "health-freshness-value",
   "health-finding-total",
   "health-blocker-total",
   "health-section-count",
@@ -2085,9 +2221,12 @@ controls.state.projectHealth.backendData = {
 controls.renderProjectHealth();
 
 assert.strictEqual(elements.get("run-project-health").disabled, false);
-assert.strictEqual(elements.get("health-risk-value").textContent, "22%");
-assert.strictEqual(elements.get("health-score-value").textContent, "78%");
+assert.strictEqual(elements.get("health-risk-value").textContent, "78 / 100");
+assert.strictEqual(elements.get("health-score-value").textContent, "78 / 100");
+assert.strictEqual(elements.get("health-risk-stat-value").textContent, "22 / 100");
 assert.strictEqual(elements.get("health-coverage-value").textContent, "4/4");
+assert.strictEqual(elements.get("health-confidence-value").textContent, "82 / 100");
+assert.strictEqual(elements.get("health-freshness-value").textContent, "Fresh");
 assert.strictEqual(elements.get("health-ready-total").textContent, "4 ready");
 assert.match(textTree(elements.get("health-feedback")), /No project changes are made/);
 assert.match(textTree(elements.get("health-section-grid")), /Organizer/);

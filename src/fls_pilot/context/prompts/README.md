@@ -50,7 +50,9 @@ explicit user confirmation before any write occurs:
 
 - `fl_apply_mix_adjustment` — mix level changes
 - `fl_apply_routing_cleanup` — routing rewrites
+- `fl_apply_organization_plan` — stored Project Organizer plan steps
 - `fl_apply_project_cleanup_step` — naming/color/structure cleanup
+- `fl_rollback_organization_change` — organizer rollback through the changelog
 - `fl_piano_roll (write_notes)` — Piano Roll content
 - `fl_write_raga_melody` / `fl_write_raga_chords` — composition writes
 - `fl_gain_stage` — gain staging

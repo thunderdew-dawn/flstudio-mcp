@@ -1,11 +1,11 @@
 {
   "snapshot_version": 1,
-  "as_of": "2026-06-30",
+  "as_of": "2026-07-03",
   "status": "governed",
-  "governance_note": "Updated for read-only project metadata, playlist marker read/navigation, Control Center live playback controls, and Level 2 live-meter workflow declarations. Persistent-write safety posture is unchanged; new playback and marker navigation actions are transient.",
+  "governance_note": "Updated for Project Organizer plan lifecycle tools: read-only scan/status, server-state decision updates and rollback wrapper, and stored plan apply status persistence. Persistent-write safety posture remains rollback-first and is stricter for organizer routing: planning and review remain read-only, organization apply requires a typed stored plan, explicit step approval, fingerprint/hash/expiry validation, medium-risk routing or bus-layout steps are applied separately from low-risk rename/color cleanup, safety-layer writes, readback, changelog, and rollback.",
   "project": {
     "name": "fls-pilot",
-    "package_version": "3.0.0rc1",
+    "package_version": "3.0.0b3",
     "repository": "thunderdew-dawn/fls-pilot",
     "architecture_contract": "agent-docs/contracts/architecture-governance.md",
     "human_overview": "agent-docs/concepts/architecture.md"
@@ -238,8 +238,8 @@
       "registration_source": "src/fls_pilot/server.py",
       "tool_modules_source": "src/fls_pilot/tools/",
       "baseline": {
-        "registered_public_tools": 92,
-        "static_audited_tools": 168,
+        "registered_public_tools": 98,
+        "static_audited_tools": 174,
         "check": "python scripts/check_tool_registration_baseline.py"
       },
       "resources": [
@@ -350,7 +350,70 @@
     "legacy_report_compatibility": "unsupported",
     "audio_features_contract": "fls-pilot.audio-features.v1",
     "audio_artifact_contract": "fls-pilot.audio-artifact.v1",
-    "evidence_link_contract": "fls-pilot.evidence-link.v1"
+    "evidence_link_contract": "fls-pilot.evidence-link.v1",
+    "mix_review_contract": {
+      "evidence_levels": {
+        "1": "static_project_metadata",
+        "2": "live_meter_window",
+        "3": "rendered_master_audio_proxy",
+        "4": "role_confirmed_stem_or_bus_audio"
+      },
+      "inline_live_meter_policy": "Level 1 and Level 2 may sample current mixer peaks inline only when FL Studio playback is already running. Inline peaks are momentary live evidence; Level 2 watch evidence is still required for loud-section or full-song watch claims.",
+      "finding_states": [
+        "static_heuristic",
+        "name_based_unconfirmed",
+        "metadata_suspected",
+        "live_meter_supported",
+        "rendered_master_proxy",
+        "stem_audio_confirmed",
+        "accepted_by_user",
+        "rejected_by_user",
+        "ignored_by_user",
+        "requires_more_evidence"
+      ],
+      "score_model": "risk_score_v2 uses severity, evidence confidence, rule/profile weight, and user decision modifiers while preserving legacy_score metadata.",
+      "rendered_master_claim_limit": "proxy_only_no_stem_specific_causes",
+      "stem_specific_claims_require": "role_confirmed_stem_or_bus_audio",
+      "automatic_fl_render": false,
+      "persistent_writes": false,
+      "fix_plan_gating": "blocked_or_draft_until_sufficient_evidence_and_user_approval"
+    },
+    "low_end_contract": {
+      "evidence_levels": {
+        "1": "static_metadata",
+        "2": "live_playback_data",
+        "3": "rendered_master_audio",
+        "4": "role_confirmed_bus_or_stem_evidence",
+        "5": "deeper_batch_or_multi_source_evidence"
+      },
+      "rendered_master_claim_limit": "proxy_only_no_stem_specific_causes",
+      "stem_specific_claims_require": "role_confirmed_bus_or_stem_evidence",
+      "automatic_fl_render": false,
+      "persistent_writes": false,
+      "forbidden_actions": [
+        "automatic_fl_studio_render",
+        "automatic_project_writes",
+        "plugin_loading",
+        "unsafe_fix_application",
+        "stem_specific_claims_from_master_only_audio",
+        "final_fix_plan_from_unconfirmed_static_metadata"
+      ]
+    },
+    "routing_audit_contract": {
+      "levels": [
+        "level_1_static",
+        "level_2_signal_flow"
+      ],
+      "template_compliance_modes": [
+        "auto_detect",
+        "manual_select",
+        "off"
+      ],
+      "level_1_evidence_mode": "static_snapshot_only",
+      "level_2_evidence_mode": "static_snapshot_plus_meter_snapshot",
+      "level_2_playback_policy": "Control Center requires an explicit user choice before transient playback; MCP fl_review_routing reads meter evidence only and never starts playback.",
+      "persistent_writes": false
+    }
   },
   "safety": {
     "contract": "agent-docs/concepts/safety-contract.md",

@@ -9,7 +9,9 @@ from .audio_features import (
 from .audio_schema import (
     AUDIO_ARTIFACT_CONTRACT_VERSION,
     AUDIO_FEATURES_CONTRACT_VERSION,
+    AUDIO_FEATURES_PLACEHOLDER_STATUS,
     AudioArtifactManifest,
+    audio_features_placeholder,
     validate_audio_features,
 )
 from .broker import AnalysisBroker, StaticProjectSnapshot, StaticSnapshotPolicy
@@ -36,6 +38,19 @@ from .evidence_links import (
     EvidenceLinkStore,
 )
 from .fl_reads import StaticReadSpec, project_fingerprint
+from .low_end import (
+    LOW_END_EVIDENCE_LEVELS,
+    LOW_END_FUTURE_GENRE_PROFILES,
+    LOW_END_GENRE_PROFILES,
+    LOW_END_STEM_ROLES,
+    finding_state,
+    low_end_evidence_level,
+    low_end_evidence_metadata,
+    normalize_low_end_genre_profile,
+    normalize_stem_role,
+    role_confirmation_state,
+    weighted_low_end_risk,
+)
 from .observations import Observation, ObservationStore
 from .reports import (
     analysis_report_for_control_center,
@@ -84,6 +99,7 @@ from .scoring import (
     risk_band,
     risk_from_severities,
     routing_health_score,
+    weighted_mix_review_risk,
 )
 
 __all__ = [
@@ -91,6 +107,7 @@ __all__ = [
     "ACCEPTED_ANALYSIS_REPORT_VERSIONS",
     "AUDIO_ARTIFACT_CONTRACT_VERSION",
     "AUDIO_FEATURES_CONTRACT_VERSION",
+    "AUDIO_FEATURES_PLACEHOLDER_STATUS",
     "COMMON_OBSERVATIONS",
     "AnalysisBroker",
     "AudioArtifactManifest",
@@ -120,6 +137,10 @@ __all__ = [
     "Observation",
     "ObservationStore",
     "IncompatibleReportVersionError",
+    "LOW_END_EVIDENCE_LEVELS",
+    "LOW_END_FUTURE_GENRE_PROFILES",
+    "LOW_END_GENRE_PROFILES",
+    "LOW_END_STEM_ROLES",
     "Prerequisite",
     "StaticProjectSnapshot",
     "StaticReadSpec",
@@ -127,6 +148,7 @@ __all__ = [
     "WorkflowRequirement",
     "WorkflowRequirementSet",
     "analysis_report_for_control_center",
+    "audio_features_placeholder",
     "serialize_analysis_report",
     "channel_entity_id",
     "clamp_score",
@@ -134,14 +156,19 @@ __all__ = [
     "confidence_from_coverage",
     "coverage_score",
     "evidence_metadata",
+    "finding_state",
     "health_from_risk",
     "heuristic_validation_metadata",
     "get_analysis_broker",
     "get_report_store",
+    "low_end_evidence_level",
+    "low_end_evidence_metadata",
     "low_end_health_score",
     "mix_health_score",
     "mixer_count_policy",
     "mixer_entity_id",
+    "normalize_low_end_genre_profile",
+    "normalize_stem_role",
     "organizer_score",
     "pattern_count_policy",
     "pending_human_validation_ids",
@@ -157,6 +184,9 @@ __all__ = [
     "risk_from_severities",
     "routing_analysis_report_from_legacy_payload",
     "routing_health_score",
+    "role_confirmation_state",
     "require_analysis_report_version",
     "validate_audio_features",
+    "weighted_low_end_risk",
+    "weighted_mix_review_risk",
 ]

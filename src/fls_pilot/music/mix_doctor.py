@@ -16,11 +16,13 @@ tunable.
 
 from __future__ import annotations
 
+import contextlib
 import math
 import re
 
 from .. import kb_policy
 from .. import project_templates as templates
+from .mix_review_levels import MixReviewLevel
 
 # --------------------------------------------------------------------------
 # Thresholds (transparent + tunable)
@@ -138,6 +140,7 @@ def gather_snapshot(
     peaks_override=None,
     live_window=None,
     static_snapshot=None,
+    allow_live_meter=True,
 ):
     """Build a normalised whole-mix snapshot via cheap bridge reads.
 
@@ -217,7 +220,7 @@ def gather_snapshot(
     peaks = {}
     if peaks_override is not None:
         levels_valid, peak_source = True, "watch"
-    elif playing:
+    elif playing and allow_live_meter:
         from .levels import measure_many
 
         peaks = (
@@ -590,8 +593,9 @@ def rule_missing_hpf(tracks):
                     "low",
                     t["name"],
                     "no EQ in chain ({})".format(", ".join(names)),
-                    "{} has no EQ in its chain -- consider a high-pass (heuristic, not a "
-                    "confirmed problem).".format(t["name"]),
+                    "No EQ was detected on this melodic/vocal-like track. Consider "
+                    "a high-pass only if unwanted low energy is audible or confirmed "
+                    "by rendered/stem evidence.",
                     {
                         "intent": "fl_apply_eq_intent",
                         "args": {"track": t["index"], "intent": "high_pass"},
@@ -649,10 +653,10 @@ def rule_missing_compressor(tracks):
                     t["name"],
                     "no dynamics plugin in chain ({})".format(", ".join(names)),
                     (
-                        "{} is a naturally dynamic track (vocal/bass/drums/bus) "
-                        "but has no compressor in its chain -- consider adding "
-                        "one (heuristic)."
-                    ).format(t["name"]),
+                        "Dynamic control is unknown. This track type often benefits from "
+                        "compression, saturation, limiting, volume automation, or bus "
+                        "processing, but no dynamics plugin was detected by name."
+                    ),
                     {
                         "intent": "user_action_required",
                         "args": {},
@@ -800,8 +804,9 @@ def rule_eq_clash(tracks):
                     "medium",
                     None,
                     ev,
-                    f"Tracks boost the same band (~{items[0][1]:.0f} Hz): {', '.join(names)} "
-                    "-- competing EQ can muddy the mix.",
+                    "Potential overlapping EQ boosts were detected from plugin metadata. "
+                    "This is provisional until confirmed by live context or rendered/stem "
+                    "audio evidence.",
                     {
                         "intent": "fl_apply_eq_intent",
                         "args": {},
@@ -813,9 +818,76 @@ def rule_eq_clash(tracks):
     return out
 
 
-def diagnose(snapshot):
+def _finding_evidence_type(rule: str, evidence_mode: str, evidence: str) -> str:
+    if evidence_mode == "sufficient_watch_window":
+        return "watch_window"
+    if evidence_mode in {"recent_live_meter_window", "short_live_snapshot"} and rule in {
+        "clipping",
+        "headroom",
+        "imbalance",
+    }:
+        return "live_meter"
+    if rule == "ungrouped":
+        return "static_snapshot"
+    if rule == "eq_clash":
+        return "static_snapshot"
+    if rule == "imbalance" and str(evidence).startswith("fader"):
+        return "static_snapshot"
+    return "static_snapshot"
+
+
+def _finding_proof_status(rule: str, evidence_type: str, evidence: str) -> str:
+    if rule in {"clipping", "headroom"} and evidence_type in {"live_meter", "watch_window"}:
+        return "evidence_backed"
+    if rule == "imbalance" and evidence_type in {"live_meter", "watch_window"}:
+        return "evidence_backed"
+    if rule == "eq_clash":
+        return "provisional"
+    if rule in {"missing_hpf", "missing_compressor", "ungrouped"}:
+        return "heuristic"
+    if rule == "imbalance" and str(evidence).startswith("fader"):
+        return "heuristic"
+    return "provisional"
+
+
+def _finding_confidence(rule: str, evidence_type: str, proof_status: str) -> str:
+    if proof_status == "evidence_backed" and evidence_type == "watch_window":
+        return "high"
+    if proof_status == "evidence_backed":
+        return "medium"
+    if rule in {"missing_hpf", "missing_compressor", "eq_clash"}:
+        return "low"
+    if rule == "ungrouped":
+        return "medium"
+    return "low"
+
+
+def _annotate_finding_evidence(
+    row: dict,
+    *,
+    evidence_mode: str,
+    mix_review_level: MixReviewLevel,
+) -> dict:
+    rule = str(row.get("rule") or "")
+    evidence = str(row.get("evidence") or "")
+    evidence_type = _finding_evidence_type(rule, evidence_mode, evidence)
+    proof_status = _finding_proof_status(rule, evidence_type, evidence)
+    confidence = _finding_confidence(rule, evidence_type, proof_status)
+    requires_audio = rule in {"missing_hpf", "missing_compressor", "eq_clash"}
+    return {
+        **row,
+        "evidence_type": evidence_type,
+        "proof_status": proof_status,
+        "confidence": confidence,
+        "requires_audio_evidence_for_confirmation": requires_audio,
+        "mix_review_level": int(mix_review_level),
+    }
+
+
+def diagnose(snapshot, *, mix_review_level=MixReviewLevel.STATIC):
     """Run all rules on a snapshot. Returns findings ranked by severity +
     notes (e.g. 'play the project for level data'). PURE -- no writes."""
+    level = MixReviewLevel(int(mix_review_level or MixReviewLevel.STATIC))
     tracks = snapshot.get("tracks", [])
     template_context = snapshot.get("template_context") or _template_context_from_tracks(tracks)
     if template_context.get("matched"):
@@ -863,6 +935,14 @@ def diagnose(snapshot):
     findings += rule_ungrouped(tracks)
     findings += rule_eq_clash(tracks)
 
+    findings = [
+        _annotate_finding_evidence(
+            row,
+            evidence_mode=evidence_mode,
+            mix_review_level=level,
+        )
+        for row in findings
+    ]
     findings.sort(key=lambda f: (SEV_RANK.get(f["severity"], 9), f["rule"]))
     summary = {
         sev: sum(1 for f in findings if f["severity"] == sev) for sev in ("high", "medium", "low")
@@ -1448,7 +1528,7 @@ class PeakWatcher:
     def is_running(self):
         return self._thread is not None and self._thread.is_alive()
 
-    def start(self, bridge, indices, interval_ms=150, max_seconds=900):
+    def start(self, bridge, indices, interval_ms=150, max_seconds=900, close_on_finish=False):
         if self.is_running():
             return {"ok": False, "error": "a watch is already running"}
         self._stop.clear()
@@ -1462,30 +1542,37 @@ class PeakWatcher:
         self._started = _time.time()
         self._project_fingerprint = _watch_project_fingerprint(bridge)
         self._thread = threading.Thread(
-            target=self._run, args=(bridge, interval_ms / 1000.0, max_seconds), daemon=True
+            target=self._run,
+            args=(bridge, interval_ms / 1000.0, max_seconds, close_on_finish),
+            daemon=True,
         )
         self._thread.start()
         return {"ok": True, "watching": len(indices), "interval_ms": interval_ms}
 
-    def _run(self, bridge, interval_s, max_seconds):
+    def _run(self, bridge, interval_s, max_seconds, close_on_finish=False):
         from .. import protocol
 
-        deadline = _time.time() + max_seconds
-        while not self._stop.is_set() and _time.time() < deadline:
-            for i in self._indices:
-                if self._stop.is_set():
-                    break
-                try:
-                    v = bridge.call(protocol.CMD_MIXER_GET_PEAKS, {"track": i}).get("peak_max")
-                except Exception:
-                    v = None
-                if v is not None and v > 0:
-                    with self._lock:
-                        if v > self._max.get(i, 0.0):
-                            self._max[i] = v
-            with self._lock:
-                self._reads += 1
-            self._stop.wait(interval_s)
+        try:
+            deadline = _time.time() + max_seconds
+            while not self._stop.is_set() and _time.time() < deadline:
+                for i in self._indices:
+                    if self._stop.is_set():
+                        break
+                    try:
+                        v = bridge.call(protocol.CMD_MIXER_GET_PEAKS, {"track": i}).get("peak_max")
+                    except Exception:
+                        v = None
+                    if v is not None and v > 0:
+                        with self._lock:
+                            if v > self._max.get(i, 0.0):
+                                self._max[i] = v
+                with self._lock:
+                    self._reads += 1
+                self._stop.wait(interval_s)
+        finally:
+            if close_on_finish:
+                with contextlib.suppress(Exception):
+                    bridge.close()
 
     def stop(self):
         if self.is_running():

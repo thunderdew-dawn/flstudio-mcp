@@ -4,86 +4,165 @@
   "title": "MCP tool module: project_organizer",
   "source_snapshot": "agent-docs/machine/architecture-analysis.snapshot.json",
   "source_snapshot_sha256": "ff0d38588b91510a3073e81d885de38f9116cddfbcd95686cbf11c28a6db8d7f",
-  "generated_at": "2026-06-19",
+  "generated_at": "2026-07-03",
   "load_when": [
     "MCP tool implementation or registration changes in the project_organizer tool module",
     "safety annotations, doc safety, destructive hints, or protocol usage change for project_organizer tools"
   ],
   "summary": {
     "module": "project_organizer",
-    "tools_total": 5,
+    "tools_total": 11,
     "safety_class_counts": {
-      "read-only": 2,
-      "write-safe-required": 3
+      "read-only": 5,
+      "server-state": 2,
+      "write-safe-required": 4
     },
-    "destructive_hint_true_count": 0,
-    "first_line": 264
+    "destructive_hint_true_count": 1,
+    "first_line": 1351
   },
   "tools": [
     {
-      "contract_safety_class": "read-only",
-      "destructive_hint": null,
-      "evidence": "annotation readOnlyHint=True destructiveHint=None; helper_calls=_channel_index,_looks_default_channel_name; safetyClass='read-only'; doc_safety=True",
-      "has_safety_doc": true,
-      "line": 264,
       "name": "fl_analyze_project_organization",
+      "title": "Analyze Project Organization",
       "path": "src/fls_pilot/tools/project_organizer.py",
+      "line": 1351,
       "read_only_hint": true,
-      "safety_class_annotation": "read-only",
-      "status": "read-only",
-      "title": "Analyze Project Organization"
-    },
-    {
-      "contract_safety_class": "read-only",
       "destructive_hint": null,
-      "evidence": "annotation readOnlyHint=True destructiveHint=None; helper_calls=_channel_index,_looks_default_channel_name,_proposal_for_channel_routing,_proposal_for_rename,_suggest_channel_name; safetyClass='read-only'; doc_safety=True",
-      "has_safety_doc": true,
-      "line": 356,
-      "name": "fl_plan_project_cleanup",
-      "path": "src/fls_pilot/tools/project_organizer.py",
-      "read_only_hint": true,
       "safety_class_annotation": "read-only",
+      "contract_safety_class": "read-only",
+      "has_safety_doc": true,
       "status": "read-only",
-      "title": "Plan Project Cleanup"
+      "evidence": "annotation readOnlyHint=True destructiveHint=None; helper_calls=_channel_index,_looks_default_channel_name; safetyClass='read-only'; doc_safety=True"
     },
     {
-      "contract_safety_class": "write-safe-required",
-      "destructive_hint": false,
-      "evidence": "annotation readOnlyHint=False destructiveHint=False; uses safety layer; helper_calls=_apply_report,_channel_rename_entry,_color_write_entry,_mixer_color_entry,_proposal_for_channel_routing,_proposal_for_color,_proposal_for_rename; safetyClass='write-safe-required'; doc_safety=True",
+      "name": "fl_scan_project_organization",
+      "title": "Scan Project Organization",
+      "path": "src/fls_pilot/tools/project_organizer.py",
+      "line": 1439,
+      "read_only_hint": true,
+      "destructive_hint": null,
+      "safety_class_annotation": "read-only",
+      "contract_safety_class": "read-only",
       "has_safety_doc": true,
-      "line": 465,
+      "status": "read-only",
+      "evidence": "annotation readOnlyHint=True destructiveHint=None; helper_calls=fl_analyze_project_organization; safetyClass='read-only'; doc_safety=True"
+    },
+    {
+      "name": "fl_plan_project_cleanup",
+      "title": "Plan Project Cleanup",
+      "path": "src/fls_pilot/tools/project_organizer.py",
+      "line": 1447,
+      "read_only_hint": true,
+      "destructive_hint": null,
+      "safety_class_annotation": "read-only",
+      "contract_safety_class": "read-only",
+      "has_safety_doc": true,
+      "status": "read-only",
+      "evidence": "annotation readOnlyHint=True destructiveHint=None; helper_calls=_channel_index,_looks_default_channel_name,_organizer_validation_metadata,_organizer_validation_request,_proposal_for_channel_routing,_proposal_for_rename,_suggest_channel_name; safetyClass='read-only'; doc_safety=True"
+    },
+    {
+      "name": "fl_plan_project_organization",
+      "title": "Plan Project Organization",
+      "path": "src/fls_pilot/tools/project_organizer.py",
+      "line": 1568,
+      "read_only_hint": true,
+      "destructive_hint": null,
+      "safety_class_annotation": "read-only",
+      "contract_safety_class": "read-only",
+      "has_safety_doc": true,
+      "status": "read-only",
+      "evidence": "annotation readOnlyHint=True destructiveHint=None; helper_calls=_selected_target_template,_set_plan_hash,_step_to_proposed_change,_store_plan,build_template_alignment_plan; safetyClass='read-only'; doc_safety=True"
+    },
+    {
+      "name": "fl_update_organization_plan_decision",
+      "title": "Update Organization Plan Decision",
+      "path": "src/fls_pilot/tools/project_organizer.py",
+      "line": 1732,
+      "read_only_hint": false,
+      "destructive_hint": false,
+      "safety_class_annotation": "server-state",
+      "contract_safety_class": "server-state",
+      "has_safety_doc": true,
+      "status": "server-state",
+      "evidence": "annotation readOnlyHint=False destructiveHint=False; helper_calls=_merge_user_decisions,_refresh_plan_decisions,_reject_organization_apply,_set_plan_hash,_store_plan,build_template_alignment_plan; safetyClass='server-state'; doc_safety=True"
+    },
+    {
+      "name": "fl_get_organization_status",
+      "title": "Get Organization Status",
+      "path": "src/fls_pilot/tools/project_organizer.py",
+      "line": 1868,
+      "read_only_hint": true,
+      "destructive_hint": null,
+      "safety_class_annotation": "read-only",
+      "contract_safety_class": "read-only",
+      "has_safety_doc": true,
+      "status": "read-only",
+      "evidence": "annotation readOnlyHint=True destructiveHint=None; helper_calls=_organization_change_history,_stored_plan_status; safetyClass='read-only'; doc_safety=True"
+    },
+    {
+      "name": "fl_rollback_organization_change",
+      "title": "Rollback Organization Change",
+      "path": "src/fls_pilot/tools/project_organizer.py",
+      "line": 1922,
+      "read_only_hint": false,
+      "destructive_hint": true,
+      "safety_class_annotation": "server-state",
+      "contract_safety_class": "server-state",
+      "has_safety_doc": true,
+      "status": "server-state",
+      "evidence": "annotation readOnlyHint=False destructiveHint=True; helper_calls=_organization_change_history; safetyClass='server-state'; doc_safety=True"
+    },
+    {
       "name": "fl_apply_project_cleanup_step",
+      "title": "Apply Project Cleanup Step",
       "path": "src/fls_pilot/tools/project_organizer.py",
+      "line": 1961,
       "read_only_hint": false,
+      "destructive_hint": false,
       "safety_class_annotation": "write-safe-required",
+      "contract_safety_class": "write-safe-required",
+      "has_safety_doc": true,
       "status": "write-safe-required",
-      "title": "Apply Project Cleanup Step"
+      "evidence": "annotation readOnlyHint=False destructiveHint=False; uses safety layer; helper_calls=_apply_report,_channel_rename_entry,_color_write_entry,_mixer_color_entry,_proposal_for_channel_routing,_proposal_for_color,_proposal_for_rename; safetyClass='write-safe-required'; doc_safety=True"
     },
     {
-      "contract_safety_class": "write-safe-required",
+      "name": "fl_apply_organization_plan",
+      "title": "Apply Organization Plan",
+      "path": "src/fls_pilot/tools/project_organizer.py",
+      "line": 2118,
+      "read_only_hint": false,
       "destructive_hint": false,
-      "evidence": "annotation readOnlyHint=False destructiveHint=False; uses safety layer; helper_calls=_apply_report,_channel_rename_entry,_cleanup_proposal,_proposal_for_rename; safetyClass='write-safe-required'; doc_safety=True",
+      "safety_class_annotation": "write-safe-required",
+      "contract_safety_class": "write-safe-required",
       "has_safety_doc": true,
-      "line": 622,
+      "status": "write-safe-required",
+      "evidence": "annotation readOnlyHint=False destructiveHint=False; uses safety layer; helper_calls=_digest,_mark_plan_steps_applied,_plan_hash_payload,_prepare_step_writes,_reject_organization_apply,_step_to_proposed_change,_store_plan,_utc_timestamp; safetyClass='write-safe-required'; doc_safety=True"
+    },
+    {
       "name": "fl_apply_naming_standard",
+      "title": "Apply Naming Standard",
       "path": "src/fls_pilot/tools/project_organizer.py",
+      "line": 2329,
       "read_only_hint": false,
+      "destructive_hint": false,
       "safety_class_annotation": "write-safe-required",
+      "contract_safety_class": "write-safe-required",
+      "has_safety_doc": true,
       "status": "write-safe-required",
-      "title": "Apply Naming Standard"
+      "evidence": "annotation readOnlyHint=False destructiveHint=False; uses safety layer; helper_calls=_apply_report,_channel_rename_entry,_cleanup_proposal,_proposal_for_rename; safetyClass='write-safe-required'; doc_safety=True"
     },
     {
-      "contract_safety_class": "write-safe-required",
-      "destructive_hint": false,
-      "evidence": "annotation readOnlyHint=False destructiveHint=False; uses safety layer; helper_calls=_apply_report,_cleanup_proposal,_color_write_entry,_mixer_color_entry,_proposal_for_color; safetyClass='write-safe-required'; doc_safety=True",
-      "has_safety_doc": true,
-      "line": 699,
       "name": "fl_apply_color_standard",
+      "title": "Apply Color Standard",
       "path": "src/fls_pilot/tools/project_organizer.py",
+      "line": 2406,
       "read_only_hint": false,
+      "destructive_hint": false,
       "safety_class_annotation": "write-safe-required",
+      "contract_safety_class": "write-safe-required",
+      "has_safety_doc": true,
       "status": "write-safe-required",
-      "title": "Apply Color Standard"
+      "evidence": "annotation readOnlyHint=False destructiveHint=False; uses safety layer; helper_calls=_apply_report,_cleanup_proposal,_color_write_entry,_mixer_color_entry,_proposal_for_color; safetyClass='write-safe-required'; doc_safety=True"
     }
   ]
 }

@@ -6,6 +6,7 @@ These tools aggregate existing safe primitives into high-signal reports.
 from __future__ import annotations
 
 from fastmcp import FastMCP
+from typing import Any
 
 from .. import kb_policy, protocol
 from .. import project_templates as templates
@@ -22,6 +23,57 @@ def _find_duplicate_names(rows: list[dict], key: str) -> list[str]:
             continue
         counts[name] = counts.get(name, 0) + 1
     return sorted([name for name, c in counts.items() if c > 1])
+
+
+def _row_index(row: dict) -> int | None:
+    for key in ("i", "channel", "index"):
+        value = row.get(key)
+        if value is None:
+            continue
+        return _to_int(value)
+    return None
+
+
+def _to_int(value: Any) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError, OverflowError):
+        return None
+
+
+def _channel_routing_unassigned(
+    bridge,
+    channel_rows: list[dict],
+    routing_summary: list[dict],
+) -> list[dict]:
+    targets_by_channel: dict[int, Any] = {}
+    for row in routing_summary:
+        index = _row_index(row)
+        if index is None:
+            continue
+        target = _to_int(row.get("target_mixer_track"))
+        if target is None:
+            continue
+        targets_by_channel[index] = target
+
+    unassigned_channels: list[dict] = []
+    for row in channel_rows:
+        index = _row_index(row)
+        if index is None:
+            continue
+
+        target = targets_by_channel.get(index)
+        detail = None
+        if target is None:
+            detail = bridge.call(protocol.CMD_CHANNEL_GET, {"index": index})
+            if isinstance(detail, dict):
+                target = _to_int(detail.get("target_fx_track"))
+        if _to_int(target or 0) == 0:
+            name = str(row.get("name") or "")
+            if not name and isinstance(detail, dict):
+                name = str(detail.get("name") or "")
+            unassigned_channels.append({"index": index, "name": name})
+    return unassigned_channels
 
 
 def _suggest_pattern_name(index: int) -> str:
@@ -117,13 +169,11 @@ def register(mcp: FastMCP) -> None:
             bridge, protocol.CMD_CHANNEL_ROUTING_SUMMARY, "channels"
         ).get("channels", [])
         template_context = templates.classify_topology(mixer_tracks, routing, channel_routing)
-
-        unassigned_channels = []
-        for row in channels:
-            idx = int(row.get("i", 0))
-            detail = bridge.call(protocol.CMD_CHANNEL_GET, {"index": idx})
-            if int(detail.get("target_fx_track", 0)) == 0:
-                unassigned_channels.append({"index": idx, "name": detail.get("name", "")})
+        unassigned_channels = _channel_routing_unassigned(
+            bridge=bridge,
+            channel_rows=channels,
+            routing_summary=channel_routing,
+        )
 
         findings = []
         if unassigned_channels:
@@ -200,6 +250,12 @@ def register(mcp: FastMCP) -> None:
             metadata={
                 "project": project,
                 "template_context": templates.compact_context(template_context),
+                "scan_data": {
+                    "channels": channels,
+                    "patterns": patterns,
+                    "playlist_tracks": playlist_tracks,
+                    "routing": routing,
+                },
                 "details": {
                     "unassigned_channels": unassigned_channels,
                 },
@@ -244,15 +300,23 @@ def register(mcp: FastMCP) -> None:
         report = fl_project_health_report()
         findings = list(report.get("diagnostics", []))
         details = report.get("metadata", {}).get("details", {})
-        channels = fetch_all_pages(get_bridge(), protocol.CMD_CHANNEL_LIST, "channels").get(
-            "channels", []
-        )
-        patterns = fetch_all_pages(get_bridge(), protocol.CMD_PATTERN_LIST, "patterns").get(
-            "patterns", []
-        )
-        playlist_tracks = fetch_all_pages(
-            get_bridge(), protocol.CMD_PLAYLIST_LIST_TRACKS, "tracks"
-        ).get("tracks", [])
+        scan_data = report.get("metadata", {}).get("scan_data", {})
+        bridge = get_bridge()
+        channels = scan_data.get("channels")
+        patterns = scan_data.get("patterns")
+        playlist_tracks = scan_data.get("playlist_tracks")
+        if not isinstance(channels, list):
+            channels = fetch_all_pages(bridge, protocol.CMD_CHANNEL_LIST, "channels").get(
+                "channels", []
+            )
+        if not isinstance(patterns, list):
+            patterns = fetch_all_pages(bridge, protocol.CMD_PATTERN_LIST, "patterns").get(
+                "patterns", []
+            )
+        if not isinstance(playlist_tracks, list):
+            playlist_tracks = fetch_all_pages(
+                bridge, protocol.CMD_PLAYLIST_LIST_TRACKS, "tracks"
+            ).get("tracks", [])
 
         actions = []
         action_id = 1
